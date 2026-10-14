@@ -18,6 +18,7 @@ internal static class ShaderLabBindings
         source = ShaderPreprocessor.Run((shader.Manifest.colorSpace == "Gamma" ? "#define UNITY_COLORSPACE_GAMMA 1\n" : "")
             + string.Join("\n", shader.Manifest.keywords.Select(k => "#define " + k + " 1")) + "\n" + UnityHlslCompat.Macros + "\n" + source);
         source = ShaderLoopScopes.Adapt(source);
+        source = ShaderSamplerFunctions.Adapt(source);
         source = GroundDepthAdapter.Adapt(source, shader.Manifest);
         //共享包含会声明仅阴影变体使用的纹理；实际变体没有任何引用时不产生绑定。
         source = Regex.Replace(source, @"\b(?:uniform\s+)?(?:sampler2D|sampler3D)\s+(\w+)\s*;", m =>

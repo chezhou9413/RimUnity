@@ -1,8 +1,15 @@
+using System.Runtime.CompilerServices;
+
 namespace RimUnity.UI.Runtime;
 
 //文字测量、字号选择、行距和绘制共用排版结果。
 internal static partial class UguiTextRenderer
 {
+    private readonly record struct FitKey(string Content, int Font, FontStyle Style, bool Rich, bool Wrap,
+        float Spacing, Vector2 Bounds, float Scale, int Min, int Max);
+    private sealed class FitCache { internal FitKey Key; internal UguiTextLayout.Layout Layout; }
+    private static readonly ConditionalWeakTable<Text, FitCache> Fitted = new();
+
     //按实际绘制的字号、缩放和最佳适配规则提前生成字形。
     internal static void Warm(UguiRuntime.Entry entry, Text text)
     {
@@ -19,8 +26,15 @@ internal static partial class UguiTextRenderer
     //预热与绘制共用同一排版入口，避免最佳适配字号不同而再次扩充图集。
     private static UguiTextLayout.Layout Layout(Text text, UiTextStyle style, Rect bounds, float scale)
     {
-        if (text.resizeTextForBestFit) Fit(text, text, style, bounds, scale);
-        return UguiTextLayout.Build(text, style, bounds.width);
+        if (!text.resizeTextForBestFit) return UguiTextLayout.Build(text, style, bounds.width);
+        var key = new FitKey(text.text, text.font != null ? text.font.GameFontIndex : 1, style.fontStyle,
+            text.supportRichText, style.wordWrap, text.lineSpacing, bounds.size, scale,
+            text.resizeTextMinSize, text.resizeTextMaxSize);
+        FitCache cache = Fitted.GetOrCreateValue(text);
+        if (cache.Layout != null && cache.Key == key) return cache.Layout;
+        Fit(text, text, style, bounds, scale);
+        cache.Key = key;
+        return cache.Layout = UguiTextLayout.Build(text, style, bounds.width);
     }
 
     //布局组件取得的尺寸包括自定义行距，但不受自动字号缩放影响。

@@ -26,6 +26,8 @@ internal static class UiMaskData
         //先确定本次材质，再清空两类裁切计数，避免共用材质残留上一个控件的 RectMask2D。
         if (material == null && (count > 0 || (Current?.RectMasks.Length ?? 0) > 0)) material = DefaultMaterial();
         material = UiRectMaskData.Apply(material);
+        //Unity 的默认裁剪范围不限制像素；实际 Mask 和 RectMask2D 由 RimUnity 的覆盖率入口处理。
+        if (material != null && material.HasProperty("_ClipRect")) material.SetVector("_ClipRect", new Vector4(-32767, -32767, 32767, 32767));
         if (count == 0) { if (material != null && material.HasProperty("_UiMaskCount")) material.SetFloat("_UiMaskCount", 0); return material; }
         if (count > 8) throw new NotSupportedException("Mask 嵌套不能超过八层。");
         if (material == null)
@@ -34,6 +36,7 @@ internal static class UiMaskData
         }
         if (!material.HasProperty("_UiMaskCount")) throw new NotSupportedException("UI Shader 缺少 Mask 覆盖率入口：" + material.shader.name);
         material.SetFloat("_UiMaskCount", count);
+        UiMaskAtlas atlas = material.HasProperty("_UiMaskAtlas") || material.HasProperty("_UiMaskPixels") ? UiMaskAtlas.For(Current.Canvas) : null;
         for (int i = 0; i < count; i++)
         {
             Mask mask = masks[i]; var rect = mask.transform; Rect r = rect.rect;
@@ -72,8 +75,10 @@ internal static class UiMaskData
                 rows[i * 7 + 5] = new(border.x / selected.rect.width, border.y / selected.rect.height, border.z / selected.rect.width, border.w / selected.rect.height);
                 rows[i * 7 + 6] = new(1, maskImage.fillCenter ? 1 : 0, 0, 0);
             }
-            material.SetTexture("_UiMask" + i, texture);
+            if (atlas != null) atlas.SetRegion(i, texture);
+            else material.SetTexture("_UiMask" + i, texture);
         }
+        atlas?.Apply(material);
         buffer.SetData(rows); material.SetBuffer("_UiMasks", buffer);
         return material;
     }

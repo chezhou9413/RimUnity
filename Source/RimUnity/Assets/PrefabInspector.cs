@@ -70,7 +70,14 @@ public static class PrefabInspector
                 break;
             case "asset":
                 AssetRecord asset = manifest.assets.Single(a => a.id == value.text);
-                Type assetType = asset.type == "Prefab" ? typeof(GameObject) : TypeResolver.Resolve((asset.type == "TMP_FontAsset" ? "RimUnity.UI." : "RimUnity.") + asset.type);
+                Type assetType = asset.type switch
+                {
+                    "Prefab" => typeof(GameObject),
+                    "SpriteAtlas" => typeof(U2D.SpriteAtlas),
+                    "VideoClip" => typeof(Video.VideoClip),
+                    "TMP_FontAsset" => typeof(UI.TMP_FontAsset),
+                    _ => TypeResolver.Resolve(asset.type.Contains('.') ? asset.type : "RimUnity." + asset.type)
+                };
                 if (!type.IsAssignableFrom(assetType)) throw new InvalidDataException(path + "：资源引用类型不匹配。");
                 break;
             case "data": InspectMembers(type, value.fields, objects, manifest, path); break;

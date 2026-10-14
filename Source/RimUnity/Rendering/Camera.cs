@@ -5,15 +5,23 @@ public sealed class Camera : MonoBehaviour
 {
     internal static readonly System.Collections.Generic.HashSet<Camera> Active = new();
     public RenderTexture targetTexture { get; set; }
+    internal RenderTexture ScreenTarget;
     public Color backgroundColor { get; set; } = Color.black;
     public CameraClearFlags clearFlags { get; set; } = CameraClearFlags.SolidColor;
     public float depth { get; set; }
     public Rect rect { get; set; } = new(0, 0, 1, 1);
     private void OnEnable() => Active.Add(this);
-    private void OnDisable() => Active.Remove(this);
+    private void OnDisable() { Active.Remove(this); ReleaseAttachments(); }
     internal Rendering.DirectionalShadow Shadow;
-    private void OnDestroy() { Active.Remove(this); Shadow?.Dispose(); }
-    //仅显式目标纹理由 RimUnity 渲染，地图相机仍由宿主负责。
+    private void OnDestroy() { Active.Remove(this); ReleaseAttachments(); }
+    //隐藏相机只释放自身附件，外部指定的目标仍由调用者管理。
+    private void ReleaseAttachments()
+    {
+        Shadow?.Dispose(); Shadow = null;
+        if (ScreenTarget) Destroy(ScreenTarget);
+        ScreenTarget = null;
+    }
+    //独立相机绘制显式目标或屏幕附件，地图主相机仍由宿主负责。
     public void Render() => Rendering.CameraRenderer.Render(this);
     public static Camera main { get; set; }
     public static Camera current => main;

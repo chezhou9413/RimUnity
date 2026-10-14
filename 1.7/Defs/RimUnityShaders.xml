@@ -45,5 +45,6 @@
     <defName>RimUnity_SDF</defName><shaderProgram><vertexShaderFileName>RimUnity/UI.vert.glsl</vertexShaderFileName><fragmentShaderFileName>RimUnity/SDF.frag.glsl</fragmentShaderFileName><depthTest>false</depthTest></shaderProgram>
   </ShaderDef>
   <ShaderDef ParentName="RimUnity_ParticleBase"><defName>RimUnity_UIAdditive</defName><shaderProgram><vertexShaderFileName>RimUnity/UI.vert.glsl</vertexShaderFileName><depthTest>false</depthTest><blendDstFactor>One</blendDstFactor></shaderProgram></ShaderDef>
+  <ShaderDef ParentName="RimUnity_ParticleBase"><defName>RimUnity_UIPremultiply</defName><shaderProgram><vertexShaderFileName>RimUnity/UI.vert.glsl</vertexShaderFileName><depthTest>false</depthTest><blendSrcFactor>One</blendSrcFactor></shaderProgram></ShaderDef>
   <ShaderDef ParentName="RimUnity_ParticleBase"><defName>RimUnity_WorldSDF</defName><shaderProgram><fragmentShaderFileName>RimUnity/SDF.frag.glsl</fragmentShaderFileName></shaderProgram></ShaderDef>
 </Defs>

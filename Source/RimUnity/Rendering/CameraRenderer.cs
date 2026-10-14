@@ -11,7 +11,15 @@ internal static class CameraRenderer
     private static bool rendering;
     internal static void Render(Camera camera)
     {
-        if (camera.targetTexture == null) throw new InvalidOperationException("RimUnity 相机需要 targetTexture。");
+        RenderTexture target = camera.targetTexture;
+        if (!target)
+        {
+            if (camera == Camera.main) throw new InvalidOperationException("地图主相机由宿主渲染。");
+            if (camera.ScreenTarget && (camera.ScreenTarget.width != Screen.width || camera.ScreenTarget.height != Screen.height))
+            { RimUnity.Object.Destroy(camera.ScreenTarget); camera.ScreenTarget = null; }
+            camera.ScreenTarget ??= new RenderTexture(Screen.width, Screen.height, 24, (int)UnityEngine.Experimental.Rendering.GraphicsFormat.R8G8B8A8_UNorm);
+            target = camera.ScreenTarget;
+        }
         if (rendering) throw new InvalidOperationException("不能递归渲染离屏相机。");
         var renderer = UnityStubs.Rendering.CameraTextureRenderer.Current
             ?? throw new InvalidOperationException("宿主尚未提供离屏相机渲染服务。");
@@ -21,15 +29,17 @@ internal static class CameraRenderer
             Commands.Clear();
             DirectionalShadow.Prepare(camera);
             ShaderGlobals.SetCamera(camera);
-            Graphics.Capture(Commands, () => ParticleFrame.DrawScene(camera));
+            Graphics.Capture(Commands, () => { ParticleFrame.DrawScene(camera); UI.Runtime.UguiRuntime.DrawWorld(camera); });
+            if (camera.targetTexture == null) ScreenCameraMaterials.Prepare(Commands);
             var view = Matrix4x4.ToNumerics(camera.worldToCameraMatrix);
             var projection = Matrix4x4.ToNumerics(camera.projectionMatrix);
             var viewport = camera.rect;
             var color = camera.backgroundColor;
-            renderer.Render(camera.targetTexture.CaptureTarget, Commands, new CameraView(view, projection, projection * view, camera.cullingMask),
+            if (camera.targetTexture == null) { color.r *= color.a; color.g *= color.a; color.b *= color.a; }
+            renderer.Render(target.CaptureTarget, Commands, new CameraView(view, projection, projection * view, camera.cullingMask),
                 new UnityEngine.Rect(viewport.x, viewport.y, viewport.width, viewport.height),
                 camera.clearFlags == CameraClearFlags.SolidColor ? new UnityEngine.Color(color.r, color.g, color.b, color.a) : null);
-            camera.targetTexture.Resolve();
+            target.Resolve();
         }
         finally
         {

@@ -73,6 +73,14 @@ public class Object
         return result;
     }
     public static T[] FindObjectsByType<T>(FindObjectsSortMode sortMode) where T : Object => Runtime.NativeRuntime.FindObjects<T>(false, sortMode);
+    //父节点和世界变换在生命周期回调前一并设置。
+    public static T Instantiate<T>(T original, Vector3 position, Quaternion rotation, Transform parent) where T : Object
+    {
+        using var transaction = Runtime.NativeRuntime.DeferLifecycle();
+        T result = Instantiate(original, parent, false);
+        ((GameObject)(Object)result).transform.SetPositionAndRotation(position, rotation);
+        return result;
+    }
     public static T[] FindObjectsByType<T>(FindObjectsInactive inactive, FindObjectsSortMode sortMode) where T : Object => Runtime.NativeRuntime.FindObjects<T>(inactive == FindObjectsInactive.Include, sortMode);
 }
 

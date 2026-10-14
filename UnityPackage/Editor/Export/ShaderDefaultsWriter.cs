@@ -24,7 +24,9 @@ namespace RimUnity.Editor
                         value.kind = "vector"; value.vector = new[] { v.x, v.y, v.z, v.w }; break;
                     case ShaderPropertyType.Texture:
                         value.kind = "textureDefault"; value.text = shader.GetPropertyTextureDefaultName(i);
-                        result.Add(new MemberData { name = name + "_ST", value = new ValueData { kind = "vector", vector = new[] { 1f, 1f, 0f, 0f } } });
+                        //显式声明的同名向量保留材质值，不再追加自动缩放偏移默认项。
+                        if (shader.FindPropertyIndex(name + "_ST") < 0)
+                            result.Add(new MemberData { name = name + "_ST", value = new ValueData { kind = "vector", vector = new[] { 1f, 1f, 0f, 0f } } });
                         break;
                     case ShaderPropertyType.Int: value.kind = "integer"; value.number = material.GetInteger(name); break;
                     default: value.kind = "number"; value.number = material.GetFloat(name); break;

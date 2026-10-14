@@ -7,6 +7,11 @@ public static class Mathf
 {
     public const float PI = MathF.PI, Deg2Rad = PI / 180, Rad2Deg = 180 / PI, Infinity = float.PositiveInfinity;
     public const float Epsilon = float.Epsilon;
+    //饱和三次插值，端点速度为零。
+    public static float SmoothStep(float from, float to, float t)
+    {
+        t = Math.Clamp(t, 0, 1); return from + (to - from) * t * t * (3 - 2 * t);
+    }
     public static float Abs(float x) => MathF.Abs(x);
     public static int Abs(int x) => Math.Abs(x);
     public static float Sin(float x) => MathF.Sin(x);

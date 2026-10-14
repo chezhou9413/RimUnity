@@ -162,12 +162,17 @@ internal sealed class BloomPipeline : IDisposable
         //两个阶段共享管线，生命周期由宿主 Feature 的统一入口负责。
         public void OnRenderTargetRebuilt(IRenderTarget target) { }
         public void Dispose() { }
+        //非地图帧继续提交宿主场景，不能因没有 Bloom 快照而跳过最终画面。
         public void Record(in FrameContext ctx, object featurePayload)
         {
-            if (featurePayload is not BloomFrame settings) return;
+            if (prepare) owner.prepared = false;
+            if (featurePayload is not BloomFrame settings)
+            {
+                if (!prepare) owner.scene.Record(in ctx, featurePayload);
+                return;
+            }
             if (prepare)
             {
-                owner.prepared = false;
                 if (settings.Enabled && settings.Intensity > 0) owner.Prepare(in ctx, settings);
             }
             else owner.Composite(in ctx, settings);

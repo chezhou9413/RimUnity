@@ -3,6 +3,8 @@
   <ItemGroup>
     <EmbeddedResource Include="UiMasks.glsl" />
     <Compile Include="../Shared/ShaderColorSpace.cs" Link="ShaderColorSpace.cs" />
+    <Compile Include="../Shared/ShaderStorageLayout.cs" Link="ShaderStorageLayout.cs" />
+    <Compile Include="../Shared/ShaderBindingValidation.cs" Link="ShaderBindingValidation.cs" />
     <Reference Include="Waylith" HintPath="$(RimWorldDir)/Waylith.dll" />
     <Reference Include="Brutal.Slang" HintPath="$(RimWorldDir)/Brutal.Slang.dll" />
     <Reference Include="Brutal.Core.Common" HintPath="$(RimWorldDir)/Brutal.Core.Common.dll" />

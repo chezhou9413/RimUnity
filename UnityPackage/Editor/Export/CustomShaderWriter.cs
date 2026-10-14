@@ -22,20 +22,20 @@ namespace RimUnity.Editor
     internal static class CustomShaderWriter
     {
         //同一 Shader 在 UI／世界配置或关键字不同的情况下生成独立资源。
-        internal static CustomShaderExport Write(Material material, string directory, bool ui, string path, int pass = -1)
+        internal static CustomShaderExport Write(Material material, string directory, bool ui, string path, int pass = -1, bool cameraUi = false)
         {
             string tool = EditorPrefs.GetString("RimUnity.ShaderTool", "");
             string gameRoot = EditorPrefs.GetString("RimUnity.GameRoot", "");
-            return Write(material, directory, ui, path, tool, gameRoot, pass);
+            return Write(material, directory, ui, path, tool, gameRoot, pass, cameraUi);
         }
 
         //显式路径入口便于批量导出；源文件和工具不具备时准确说明缺失项。
-        internal static CustomShaderExport Write(Material material, string directory, bool ui, string path, string tool, string gameRoot, int pass = -1)
+        internal static CustomShaderExport Write(Material material, string directory, bool ui, string path, string tool, string gameRoot, int pass = -1, bool cameraUi = false)
         {
             string source = BuiltInSurfaceSource.Path(material);
             bool importedSource = source.EndsWith(".cfxrshader", StringComparison.OrdinalIgnoreCase);
             if ((!source.EndsWith(".shader", StringComparison.OrdinalIgnoreCase) && !importedSource) || !File.Exists(source))
-                throw new NotSupportedException(path + "：自定义转换需要可读取的 .shader 源文件：" + source);
+                throw new NotSupportedException(path + "：自定义转换需要可读取的 .shader 源文件：" + source + "（" + material.shader.name + "）");
             if (string.IsNullOrWhiteSpace(tool) || !File.Exists(tool) || !tool.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
                 throw new FileNotFoundException(path + "：请配置 RimUnity.ShaderTool 为离线工具 exe 路径。", tool);
             if (string.IsNullOrWhiteSpace(gameRoot) || !File.Exists(Path.Combine(gameRoot, "Waylith.dll")))
@@ -43,6 +43,7 @@ namespace RimUnity.Editor
             string profile = ui ? "ui" : "world";
             //换过 Shader 的材质会保留无效旧关键字，只提交当前程序声明的变体。
             string keywords = string.Join(",", material.shaderKeywords.Where(value => material.shader.keywordSpace.FindKeyword(value).isValid).OrderBy(value => value, StringComparer.Ordinal));
+            if (cameraUi) keywords = string.IsNullOrEmpty(keywords) ? "RIMUNITY_UI_MASKS" : keywords + ",RIMUNITY_UI_MASKS";
             string identity = source + "\n" + material.shader.name + "\n" + AssetDatabase.GetAssetDependencyHash(source) + "\n" + profile + "\n" + keywords + "\n" + pass + "\ncolor-v1:" + QualitySettings.activeColorSpace;
             string hash;
             using (SHA256 sha = SHA256.Create()) hash = BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(identity))).Replace("-", "").ToLowerInvariant();

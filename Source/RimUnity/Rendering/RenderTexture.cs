@@ -40,6 +40,13 @@ public sealed class RenderTexture : Texture
             0, 0, 0, CaptureTarget.width, CaptureTarget.height, Target.GpuTexture, 0, 0, 0, Target.width, Target.height, Brutal.VulkanApi.VkFilter.Linear);
     }
     //宿主负责等待附件释放，基类只解除包装引用。
+    internal void Evict()
+    {
+        Target.Release();
+        if (CaptureTarget != Target) CaptureTarget.Release();
+    }
+
+    //销毁包装时同时销毁所属的宿主对象。
     protected override void Release()
     {
         Target.Release();

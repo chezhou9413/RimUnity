@@ -38,6 +38,7 @@ internal static class HostFrame
         if (!ReferenceEquals(lastGame, Current.Game))
         {
             NativeRuntime.ClearScene(lastGame);
+            Assets.AssetLoader.EvictTextures();
             lastGame = Current.Game;
         }
         HostCamera.Synchronize();

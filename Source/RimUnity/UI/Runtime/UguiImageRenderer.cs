@@ -14,6 +14,7 @@ internal static partial class UguiImageRenderer
     {
         Vertices.Clear();
         Quad(entry, entry.Rect.rect, image.uvRect, color);
+        DrawEffects(entry, image);
         UiMeshSubmission.Draw(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Vertices), image.texture, image.material);
     }
 
@@ -65,6 +66,7 @@ internal static partial class UguiImageRenderer
             }
         }
         else Quad(entry, rect, uv, color);
+        DrawEffects(entry, image);
         UiMeshSubmission.Draw(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Vertices), texture, image.material);
     }
 

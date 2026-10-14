@@ -37,7 +37,10 @@ internal static class UiMeshSubmission
         {
             UiShaderStages.Prepare(material);
             Bind();
-            for (int i = 0; i < (UiMaskData.Current?.Masks.Length ?? 0); i++) NativeGuiHost.TextureReference(material.GetTexture("_UiMask" + i));
+            if ((UiMaskData.Current?.Masks.Length ?? 0) > 0 && material.HasProperty("_UiMaskAtlas"))
+                NativeGuiHost.TextureReference(material.GetTexture("_UiMaskAtlas"));
+            else if (!material.HasProperty("_UiMaskPixels"))
+                for (int i = 0; i < (UiMaskData.Current?.Masks.Length ?? 0); i++) NativeGuiHost.TextureReference(material.GetTexture("_UiMask" + i));
             material.SetTexture("_MainTex", texture);
             var engine = material.engineMaterial;
             resolveMaterial(engine, out var uniforms, out var resources, out _);

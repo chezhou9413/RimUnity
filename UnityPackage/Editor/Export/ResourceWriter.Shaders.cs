@@ -12,9 +12,9 @@ namespace RimUnity.Editor
     internal sealed partial class ResourceWriter
     {
         private readonly System.Collections.Generic.Dictionary<string, Newtonsoft.Json.Linq.JObject> shaderArrayProperties = new System.Collections.Generic.Dictionary<string, Newtonsoft.Json.Linq.JObject>();
-        internal string AddShader(Material material, bool ui, string path, int pass = -1, bool includeDefaults = false)
+        internal string AddShader(Material material, bool ui, string path, int pass = -1, bool includeDefaults = false, bool cameraUi = false)
         {
-            var exported = CustomShaderWriter.Write(material, directory, ui, path, pass);
+            var exported = CustomShaderWriter.Write(material, directory, ui, path, pass, cameraUi);
             ShaderData shader = ShaderStateWriter.Write(material, exported.Manifest, ui, path);
             if (includeDefaults) shader.defaults = ShaderDefaultsWriter.Read(material);
             foreach (string approximation in shader.approximations) Debug.LogWarning("[RimUnity] " + path + "：" + approximation);

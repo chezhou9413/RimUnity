@@ -13,6 +13,8 @@ namespace RimUnity.Editor
         private static readonly Dictionary<string, string[]> Members = new Dictionary<string, string[]>
         {
             ["UnityEngine.AudioSource"] = new[] { "clip", "playOnAwake", "loop", "mute", "volume", "pitch", "panStereo", "spatialBlend" },
+            ["UnityEngine.AudioListener"] = Array.Empty<string>(),
+            ["UnityEngine.Video.VideoPlayer"] = new[] { "clip", "url", "source", "renderMode", "targetTexture", "aspectRatio", "audioOutputMode", "playOnAwake", "waitForFirstFrame", "skipOnDrop", "isLooping", "playbackSpeed" },
             ["UnityEngine.Camera"] = new[] { "orthographic", "orthographicSize", "nearClipPlane", "farClipPlane", "fieldOfView", "cullingMask", "rect", "targetTexture", "backgroundColor", "clearFlags", "depth" },
             ["UnityEngine.Light"] = new[] { "type", "color", "intensity", "range", "spotAngle", "shadows", "shadowStrength", "shadowBias", "shadowNormalBias", "cullingMask" },
             ["UnityEngine.Canvas"] = new[] { "renderMode", "sortingOrder", "worldCamera", "scaleFactor", "referencePixelsPerUnit", "overrideSorting", "planeDistance" },
@@ -71,12 +73,14 @@ namespace RimUnity.Editor
                 audio.bypassEffects || audio.bypassListenerEffects || audio.bypassReverbZones || audio.ignoreListenerPause || audio.ignoreListenerVolume))
                 throw new NotSupportedException(path + "：AudioSource 当前支持无 Mixer 路由的二维界面音频，不支持空间音效或监听器绕过。");
             var data = new ComponentData { id = id, type = MapTypeName(original), enabled = !(component is Behaviour b) || b.enabled };
+            if (SpineWriter.Component(component, data, writer, path)) return data;
             if (component is TMPro.TextMeshProUGUI tmp) { TmpWriter.Component(tmp, data, writer, path); return data; }
             if (component is ParticleSystem particles) { ParticleWriter.Write(particles, data, writer, path); return data; }
             if (component is UnityEngine.Animation legacy) { LegacyEffectWriter.Animation(legacy, data, writer, path); return data; }
             if (component is UnityEngine.TrailRenderer trail) { LegacyEffectWriter.Trail(trail, data, writer, path); return data; }
             if (component is UnityEngine.LineRenderer line) { LegacyEffectWriter.Line(line, data, writer, path); return data; }
-            Validate(component, path, root);
+            Validate(component, path, root, writer.CameraUi);
+            if (component is UnityEngine.Video.VideoPlayer video) VideoWriter.Write(video, data, writer, path);
             if (component is TerrainCollider terrain) ParticlePhysicsWriter.Terrain(terrain, data, writer, path);
             if (component is Collider physicsCollider && physicsCollider.sharedMaterial != null)
                 data.members.Add(new MemberData { name = "sharedMaterial", value = MathValueWriter.Properties(physicsCollider.sharedMaterial, writer, path + ".sharedMaterial",
@@ -108,9 +112,8 @@ namespace RimUnity.Editor
             if (component is Graphic customGraphic && customGraphic.material != null && customGraphic.material != customGraphic.defaultMaterial)
             {
                 Canvas canvas = customGraphic.GetComponentInParent<Canvas>();
-                if (canvas != null && canvas.rootCanvas.renderMode != RenderMode.ScreenSpaceOverlay)
-                    throw new NotSupportedException(path + "：世界／相机画布的自定义 UI Shader 尚未接通。");
-                data.members.Add(new MemberData { name = "material", property = true, value = writer.Material(customGraphic.material, path + ".material", true) });
+                bool overlay = !writer.CameraUi && (canvas == null || canvas.rootCanvas.renderMode == RenderMode.ScreenSpaceOverlay);
+                data.members.Add(new MemberData { name = "material", property = true, value = writer.Material(customGraphic.material, path + ".material", overlay, !overlay) });
             }
             if (Members.TryGetValue(original, out string[] names))
             {
@@ -122,6 +125,9 @@ namespace RimUnity.Editor
                         data.members.Add(new MemberData { name = name, property = true, value = new ValueData { kind = "data", fields =
                             new[] { "left", "right", "top", "bottom" }.Select(n => writer.Property(padding, n, path)).ToList() } });
                     }
+                    else if (component is ParticleSystemRenderer uiParticles && (name == "sharedMaterial" || name == "trailMaterial")
+                        && uiParticles.GetComponentInParent<Canvas>() is Canvas parentCanvas && parentCanvas.rootCanvas.renderMode != RenderMode.ScreenSpaceOverlay)
+                        data.members.Add(new MemberData { name = name, property = true, value = writer.Material(name == "sharedMaterial" ? uiParticles.sharedMaterial : uiParticles.trailMaterial, path + "." + name, false, true) });
                     else data.members.Add(writer.Property(component, name, path));
                 }
                 if (component is Selectable selectable)
@@ -156,12 +162,12 @@ namespace RimUnity.Editor
         }
 
         //当前还未接通的非默认设置必须阻止导出，不能降级后假报成功。
-        private static void Validate(Component component, string path, bool root)
+        private static void Validate(Component component, string path, bool root, bool cameraUi)
         {
-            if (component is Shadow shadow && shadow.GetComponent<Text>() == null)
-                throw new NotSupportedException(path + "：Shadow 和 Outline 当前只支持普通 UI Text。");
-            if (component is Camera camera && (camera.targetTexture == null || camera.clearFlags != CameraClearFlags.SolidColor))
-                throw new NotSupportedException(path + "：离屏相机需要目标纹理与纯色清屏。");
+            if (component is Shadow shadow && shadow.GetComponent<Text>() == null && shadow.GetComponent<Image>() == null && shadow.GetComponent<RawImage>() == null)
+                throw new NotSupportedException(path + "：Shadow 和 Outline 需要 Text、Image 或 RawImage。");
+            if (component is Camera camera && camera.clearFlags != CameraClearFlags.SolidColor)
+                throw new NotSupportedException(path + "：相机目前需要纯色清屏。");
             if (component is MeshRenderer twoSided && twoSided.shadowCastingMode == UnityEngine.Rendering.ShadowCastingMode.TwoSided)
                 throw new NotSupportedException(path + "：双面投影需独立的阴影剔除状态。");
             if (component is Light localLight && (localLight.type != LightType.Directional || localLight.cookie != null))
@@ -179,7 +185,7 @@ namespace RimUnity.Editor
                 throw new NotSupportedException(path + "：EdgeCollider2D 相邻虚拟端点法线尚未接通。");
             if (component is MeshCollider meshCollider && !meshCollider.convex && meshCollider.attachedRigidbody != null && !meshCollider.attachedRigidbody.isKinematic)
                 throw new NotSupportedException(path + "：动态刚体的 MeshCollider 必须使用 Convex。");
-            if (component is ParticleSystemRenderer particle && particle.GetComponentInParent<Canvas>() != null && particle.sharedMaterials.Any(m => m != null && m.passCount > 1
+            if (!cameraUi && component is ParticleSystemRenderer particle && particle.GetComponentInParent<Canvas>() is Canvas particleCanvas && particleCanvas.rootCanvas.renderMode == RenderMode.ScreenSpaceOverlay && particle.sharedMaterials.Any(m => m != null && m.passCount > 1
                 && UnityEditor.AssetDatabase.GetAssetPath(m.shader).StartsWith("Assets/", StringComparison.Ordinal)))
                 throw new NotSupportedException(path + "：UI 粒子的自定义多 Pass 材质尚未接通。");
             if (component is SpriteRenderer sprite && (sprite.drawMode != SpriteDrawMode.Simple || sprite.maskInteraction != SpriteMaskInteraction.None))

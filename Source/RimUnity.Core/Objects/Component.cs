@@ -20,6 +20,14 @@ public class Component : Object
     public T[] GetComponentsInChildren<T>(bool includeInactive = false) => gameObject.GetComponentsInChildren<T>(includeInactive);
     public void GetComponentsInChildren<T>(bool includeInactive, List<T> results) => gameObject.GetComponentsInChildren(includeInactive, results);
     public T GetComponentInParent<T>(bool includeInactive = false) => gameObject.GetComponentInParent<T>(includeInactive);
+    //从自身到根节点依次收集，包含禁用对象时仍保留父子顺序。
+    public T[] GetComponentsInParent<T>(bool includeInactive = false)
+    {
+        var results = new List<T>();
+        for (Transform node = transform; node != null; node = node.parent)
+            if (includeInactive || node == transform || node.gameObject.activeInHierarchy) results.AddRange(node.GetComponents<T>());
+        return results.ToArray();
+    }
 
     //属性真正改变时通知所属对象，同值写入不使布局缓存失效。
     protected bool SetProperty<T>(ref T field, T value)

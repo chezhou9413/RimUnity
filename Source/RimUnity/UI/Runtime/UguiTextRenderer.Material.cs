@@ -16,9 +16,25 @@ internal static partial class UguiTextRenderer
         GlyphVertices.Clear();
         Material material = text.material;
         if (material != null) material.SetFloat("_ClTime", Time.unscaledTime);
-        float top = bounds.y + (bounds.height - layout.Size.y) * ((int)text.alignment / 3) * 0.5f;
-        foreach (UguiTextLayout.Line line in layout.Lines)
+        //截断模式先排除放不下的行，再计算对齐，末尾空行不能把可见文字向上挤。
+        int lineCount = layout.Lines.Length;
+        float height = layout.Size.y;
+        if (text.verticalOverflow == VerticalWrapMode.Truncate)
         {
+            lineCount = 0;
+            height = 0;
+            foreach (var line in layout.Lines)
+            {
+                float bottom = line.Top * text.lineSpacing + line.FirstLine;
+                if (bottom > bounds.height + 0.001f) break;
+                height = bottom;
+                lineCount++;
+            }
+        }
+        float top = bounds.y + (bounds.height - height) * ((int)text.alignment / 3) * 0.5f;
+        for (int row = 0; row < lineCount; row++)
+        {
+            UguiTextLayout.Line line = layout.Lines[row];
             float left = bounds.x + (bounds.width - line.Width) * ((int)text.alignment % 3) * 0.5f;
             for (int i = line.PieceStart; i < line.PieceStart + line.PieceCount; i++)
             {

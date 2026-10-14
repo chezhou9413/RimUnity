@@ -61,12 +61,17 @@ internal static class UnityHlslCompat
                 && path != "UnityStandardParticleInstancing.cginc" && path != "UnityStandardUtils.cginc" && path != "AutoLight.cginc" && path != "UnityLightingCommon.cginc"
                 && path != "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
                 && path != "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
+                && path != "Packages/com.unity.render-pipelines.core/ShaderLibrary/Color.hlsl"
                 && path != "Packages/com.unity.render-pipelines.core/ShaderLibrary/SpaceTransforms.hlsl")
                 throw new NotSupportedException("未适配的 Unity 包包含：" + path);
             return "";
         });
         source = Regex.Replace(source, @"\b(fixed|half)([1-4](?:x[1-4])?)?\b", "float$2");
         source = Regex.Replace(source, @"\bsampler2D_float\b", "sampler2D");
+        if (Regex.IsMatch(source, @"\bUnpackScaleNormal\s*\("))
+            source = "float3 UnpackScaleNormal(float4 packed, float scale) { float3 n=UnpackNormal(packed); n.xy*=scale; n.z=sqrt(1-saturate(dot(n.xy,n.xy))); return n; }\n" + source;
+        if (Regex.IsMatch(source, @"\bBlendNormals\s*\("))
+            source = "float3 BlendNormals(float3 first, float3 second) { return normalize(float3(first.xy+second.xy, first.z*second.z)); }\n" + source;
         //宿主 IMGUI 使用原生矩形裁剪，不提供 Unity 的裁剪纹理和视图变换。
         if (profile == "ui" && source.Contains("_GUIClipTexture"))
         {
@@ -182,9 +187,11 @@ internal static class UnityHlslCompat
         {
             string semantic = field.Groups[1].Value.ToUpperInvariant();
             if (semantic == "SV_POSITION" || semantic == "SV_TARGET" || semantic == "SV_TARGET0") continue;
-            if (!semantics.Any(s => semantic == s.Item1 || semantic == s.Item1 + "0") && semantic != "TEXCOORD")
+            if (!semantics.Any(s => semantic == s.Item1 || semantic == s.Item1 + "0") && semantic != "TEXCOORD" && !Regex.IsMatch(semantic, @"^TEXCOORD(?:[89]|1[0-9]|2[0-3])$"))
                 throw new NotSupportedException("未适配的 Shader 输入或输出语义：" + semantic);
         }
+        for (int channel = 8; channel < 24; channel++)
+            source = Regex.Replace(source, @"\b((?:float|int|uint)[1-4]?\s+\w+\s*:\s*TEXCOORD" + channel + @"\s*;)", "[[vk::location(" + (channel + 6) + ")]] $1");
         return annotations + source;
     }
 }

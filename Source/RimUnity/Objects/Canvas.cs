@@ -21,7 +21,14 @@ public class Canvas : MonoBehaviour
 
     //支持模组通过 Ugui.CreateObject 动态创建画布。
     private void OnEnable() => UI.Runtime.UguiRuntime.Register(this);
-    private void OnDestroy() => UI.Runtime.WorldUiSubmission.Release(this);
+    private void OnDisable() => ReleaseDrawing();
+    private void OnDestroy() => ReleaseDrawing();
+    //页面隐藏后不保留峰值网格批次和遮罩附件，再次显示时按需建立。
+    private void ReleaseDrawing()
+    {
+        UI.Runtime.WorldUiSubmission.Release(this);
+        UI.Runtime.UiMaskAtlas.Release(this);
+    }
 
     //让动态添加内容后需要立刻测量尺寸的调用者刷新布局。
     public static void ForceUpdateCanvases() => UI.Runtime.UguiRuntime.Prepare();

@@ -47,7 +47,11 @@ public static class TweenSettingsExtensions
     public static T SetLink<T>(this T tween, GameObject target, LinkBehaviour behaviour) where T : Tween
     { tween.link = target ?? throw new ArgumentNullException(nameof(target)); tween.linked = true; return tween; }
     public static T SetLoops<T>(this T tween, int loops, LoopType type) where T : Tween
-    { if (loops == 0 || loops < -1) throw new ArgumentOutOfRangeException(nameof(loops)); tween.loops = loops; return tween; }
+    {
+        if (loops == 0 || loops < -1) throw new ArgumentOutOfRangeException(nameof(loops));
+        if (tween is Sequence && type == LoopType.Yoyo) throw new NotSupportedException("顺序动画尚不支持反向回调。");
+        tween.loops = loops; tween.loopType = type; return tween;
+    }
     public static T OnComplete<T>(this T tween, Action callback) where T : Tween { tween.SetCompletion(callback); return tween; }
 }
 

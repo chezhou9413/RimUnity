@@ -23,7 +23,16 @@ public sealed partial class Shader : Object
     }
     public static Shader Find(string name) => ShaderRegistry.TryResolve(name, out var shader) ? FromEngineShader(name, shader) : null;
     public static int PropertyToID(string name) => ShaderPropertyId.GetOrCreate(name);
-    public bool HasProperty(int id) => EngineShader.HasProperty(id);
+    public bool HasProperty(int id)
+    {
+        if (EngineShader.HasProperty(id)) return true;
+        //宿主的普通属性清单不包含存储缓冲，扩展遮罩也需要通过属性查询识别。
+        foreach (var storage in EngineShader.MaterialLayout.StorageBufferSlots)
+            if (storage.PropertyId == id) return true;
+        foreach (var block in EngineShader.MaterialLayout.UniformBlocks)
+            foreach (var member in block.Members) if (member.PropertyId == id) return true;
+        return false;
+    }
     public void SetPasses(Shader[] passes)
     {
         if (passes == null || passes.Length == 0 || !ReferenceEquals(passes[0], this)) throw new ArgumentException("第一个 Pass 必须是当前 Shader。", nameof(passes));

@@ -17,12 +17,13 @@ namespace RimUnity.Editor
         private readonly Dictionary<Object, string> objects;
         private readonly ResourceWriter resources;
         private readonly HashSet<object> visiting = new HashSet<object>(ReferenceComparer.Instance);
+        internal bool CameraUi => resources.Options.cameraUi;
         internal ValueWriter(Dictionary<Object, string> objects, ResourceWriter resources)
         { this.objects = objects; this.resources = resources; }
 
         //UI 与世界材质分别导出，保留各自编译配置。
-        internal ValueData Material(Material material, string path, bool ui) =>
-            new ValueData { kind = "asset", text = resources.Add(material, path, ui) };
+        internal ValueData Material(Material material, string path, bool ui, bool cameraUi = false) =>
+            material == null ? new ValueData { kind = "null" } : new ValueData { kind = "asset", text = resources.Add(material, path, ui, cameraUi) };
 
         //错误路径包含层级、组件及字段，调用方不会提交失败产物。
         internal ValueData Write(object value, string path)

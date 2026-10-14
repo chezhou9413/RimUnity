@@ -11,9 +11,7 @@ $id = [Guid]::NewGuid().ToString('N')
 $stage = Join-Path $mods ".rimunity-deploy-$id"
 $backup = "E:\ModdevMics\Backups\RimUnity\Deploy-$id"
 & (Join-Path $PSScriptRoot 'Copy-RuntimePackage.ps1') -Destination $stage
-#保留 Steam 发布身份，替换整个发布目录以避免文件残留。
-$publishedId = Join-Path $destination 'About\PublishedFileId.txt'
-if (Test-Path -LiteralPath $publishedId) { Copy-Item -LiteralPath $publishedId -Destination (Join-Path $stage 'About\PublishedFileId.txt') }
+#发布身份随开发目录一起打包，替换整个发布目录以避免文件残留。
 if (Get-Process RimWorld,RimWorldWin64 -ErrorAction SilentlyContinue) { throw "游戏已启动，待部署文件保留在：$stage" }
 if (Test-Path -LiteralPath $destination) {
     [IO.Directory]::CreateDirectory((Split-Path $backup -Parent)) | Out-Null

@@ -27,7 +27,8 @@ internal static class CustomShaderLoader
             return Wrap(data, cached);
         string vertexPath = catalog.Resolve(data.vertexFile), fragmentPath = catalog.Resolve(data.fragmentFile);
         string vertex = File.ReadAllText(vertexPath), fragment = File.ReadAllText(fragmentPath);
-        var layout = ShaderMetadataParser.ExtractMaterialLayout(fragment, data.key, 2);
+        ShaderBindingValidation.Validate(vertex, fragment);
+        var layout = CustomShaderTextureLayout.BindTexelSizes(ShaderStorageLayout.Extract(fragment, data.key));
         var inputs = ShaderMetadataParser.ExtractVertexInputLayout(vertex, data.key);
         if (layout.HasErrors || inputs.HasErrors || ShaderMetadataParser.ValidateStageInterface(vertex, fragment, vertexPath, fragmentPath))
             throw new InvalidDataException("Shader 布局或阶段接口不合法：" + data.sourceName);

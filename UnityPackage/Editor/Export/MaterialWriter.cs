@@ -7,7 +7,7 @@ namespace RimUnity.Editor
     //仅映射语义明确的内置 Unlit；自定义源码必须经过独立编译流程。
     internal static class MaterialWriter
     {
-        internal static void Write(Material material, ResourceData data, ValueWriter writer, string path, ResourceWriter resources, bool ui)
+        internal static void Write(Material material, ResourceData data, ValueWriter writer, string path, ResourceWriter resources, bool ui, bool cameraUi = false)
         {
             void Put(string name, object value) => data.members.Add(new MemberData { name = name, value = writer.Write(value, path + "." + name) });
             string shader = material.shader.name;
@@ -16,7 +16,7 @@ namespace RimUnity.Editor
             bool legacyParticle = false;
             if (shader == "Unlit/Texture" || shader == "Unlit/Color") target = "RimUnity_Unlit";
             else if (shader == "Unlit/Transparent") target = "RimUnity_Transparent";
-            else if (shader == "UI/Unlit/Transparent") target = ui ? "RimUnity_UI" : "RimUnity_ParticleAlpha";
+            else if (shader == "UI/Unlit/Transparent" || shader == "UI/Default") target = ui ? "RimUnity_UI" : "RimUnity_ParticleAlpha";
             else if (shader == "Particles/Standard Unlit") target = StandardParticleMaterial.Target(material, path);
             else if (shader == "Legacy Shaders/Particles/Alpha Blended" || shader == "Particles/Alpha Blended" || shader == "Legacy Shaders/Particles/Additive" || shader == "Particles/Additive" || shader == "Mobile/Particles/Additive" || shader == "Mobile/Particles/Alpha Blended")
             {
@@ -43,14 +43,14 @@ namespace RimUnity.Editor
             }
             else
             {
-                WriteCustom(material, data, writer, path, resources, ui);
+                WriteCustom(material, data, writer, path, resources, ui, cameraUi);
                 resources.WriteMaterialArrays(material, data, writer, path);
                 return;
             }
             if (ui)
             {
                 if (target == "RimUnity_ParticleAdditive") target = "RimUnity_UIAdditive";
-                else if (target == "RimUnity_ParticleAlpha" || target == "RimUnity_Transparent") target = "RimUnity_UI";
+                else if (target == "RimUnity_ParticleAlpha" || target == "RimUnity_Transparent" || target == "RimUnity_UI") target = "RimUnity_UI";
                 else throw new NotSupportedException(path + "：该不透明材质的 UI 管线尚未接通。");
             }
             Put("shader", target);
@@ -72,7 +72,7 @@ namespace RimUnity.Editor
         }
 
         //自定义 Shader 保留每个公开属性与原始程序，内建 Lit 没有明文源时明确失败。
-        private static void WriteCustom(Material material, ResourceData data, ValueWriter writer, string path, ResourceWriter resources, bool ui)
+        private static void WriteCustom(Material material, ResourceData data, ValueWriter writer, string path, ResourceWriter resources, bool ui, bool cameraUi)
         {
             //Surface 的颜色程序由离线工具生成，自动光照 Pass 不作为额外颜色层重复绘制。
             string sourcePath = BuiltInSurfaceSource.Path(material);
@@ -81,7 +81,7 @@ namespace RimUnity.Editor
             bool builtInGraph = sourcePath.EndsWith(".shader", StringComparison.OrdinalIgnoreCase)
                 && System.IO.File.ReadAllText(sourcePath).Contains("BuiltInLitSubTarget");
             if (surface || builtInGraph)
-                data.members.Add(new MemberData { name = "shader", value = new ValueData { kind = "asset", text = resources.AddShader(material, ui, path, 0) } });
+                data.members.Add(new MemberData { name = "shader", value = new ValueData { kind = "asset", text = resources.AddShader(material, ui, path, 0, cameraUi: cameraUi) } });
             else if (material.passCount > 1)
             {
                 var passes = new System.Collections.Generic.List<ValueData>();
@@ -91,24 +91,23 @@ namespace RimUnity.Editor
                 int sourcePass = 0;
                 for (int i = 0; i < material.passCount; i++)
                 {
-                    // GrabPass occupies a Unity runtime slot but is represented by sceneGrab,
-                    // not a drawing program, in the source converter.
+                    //GrabPass 占据 Unity Pass 槽位，转换器通过 sceneGrab 表达它。
                     if (subshader.GetPass(i).IsGrabPass) continue;
                     int programPass = sourcePass++;
                     if (!material.GetShaderPassEnabled(material.GetPassName(i))) continue;
                     //无投影的 Renderer 不提交 ShadowCaster，不能把它当作第二个颜色 Pass。
                     if (IsShadowPass(material, i)) continue;
-                    passes.Add(new ValueData { kind = "asset", text = resources.AddShader(material, ui, path + ".pass[" + i + "]", programPass) });
+                    passes.Add(new ValueData { kind = "asset", text = resources.AddShader(material, ui, path + ".pass[" + i + "]", programPass, cameraUi: cameraUi) });
                 }
                 if (passes.Count == 0) throw new NotSupportedException(path + "：材质没有启用的颜色 Pass。");
                 if (ui && passes.Count > 1) throw new NotSupportedException(path + "：UI 自定义多颜色 Pass 尚未接通。");
                 data.members.Add(new MemberData { name = "shader", value = passes[0] });
                 data.members.Add(new MemberData { name = "shaderPasses", value = new ValueData { kind = "array", items = passes } });
             }
-            else data.members.Add(new MemberData { name = "shader", value = new ValueData { kind = "asset", text = resources.AddShader(material, ui, path) } });
+            else data.members.Add(new MemberData { name = "shader", value = new ValueData { kind = "asset", text = resources.AddShader(material, ui, path, cameraUi: cameraUi) } });
             void Put(string name, object value) => data.members.Add(new MemberData { name = name, value = writer.Write(value, path + "." + name) });
             var shader = material.shader;
-            for (int pass = 0; !ui && pass < material.passCount; pass++)
+            for (int pass = 0; !ui && !cameraUi && pass < material.passCount; pass++)
                 if (IsShadowPass(material, pass))
                 {
                     data.members.Add(new MemberData { name = "shadowCaster", value = new ValueData { kind = "asset",
@@ -137,7 +136,9 @@ namespace RimUnity.Editor
                         else if (material.shader.GetPropertyTextureDefaultName(i) == "bump")
                             data.members.Add(new MemberData { name = name, value = new ValueData { kind = "asset", text = resources.DefaultBumpTexture() } });
                         Vector2 scale = material.GetTextureScale(name), offset = material.GetTextureOffset(name);
-                        Put(name + "_ST", new Vector4(scale.x, scale.y, offset.x, offset.y));
+                        //显式声明的缩放偏移向量由属性分支读取，避免与自动生成的同名项重复。
+                        if (shader.FindPropertyIndex(name + "_ST") < 0)
+                            Put(name + "_ST", new Vector4(scale.x, scale.y, offset.x, offset.y));
                         break;
                     default: throw new NotSupportedException(path + "：材质属性类型未适配：" + name);
                 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using Waylith.Rendering;
 
@@ -9,7 +10,7 @@ namespace RimUnity.ShaderTool;
 //把 GPU 实际使用的成员偏移与宿主材质上传布局核对，防止编译成功但参数串位。
 internal static class ShaderUniformLayout
 {
-    //只检查材质 set 2 / binding 0；完全未使用而被优化掉的块无需上传。
+    //检查普通材质块及扩展存储块；完全未使用而被优化掉的块无需上传。
     internal static void Verify(byte[] code, MaterialLayout layout, string name)
     {
         var words = new uint[code.Length / 4];
@@ -39,11 +40,20 @@ internal static class ShaderUniformLayout
         foreach (var variable in variables)
         {
             if (!sets.TryGetValue(variable.Key, out uint set) || set != 2 ||
-                !bindings.TryGetValue(variable.Key, out uint binding) || binding != 0) continue;
-            uint structure = pointers[variable.Value];
-            for (uint member = 0; member < layout.UniformSlots.Length; member++)
+                !bindings.TryGetValue(variable.Key, out uint binding)) continue;
+            MaterialUniformSlot[] slots;
+            if (binding == 0) slots = layout.UniformSlots;
+            else
             {
-                var slot = layout.UniformSlots[member];
+                var storage = layout.StorageBufferSlots.FirstOrDefault(s => s.Binding == binding);
+                var block = layout.UniformBlocks.FirstOrDefault(b => b.PropertyId == storage.PropertyId);
+                if (block == null) continue;
+                slots = block.Members;
+            }
+            uint structure = pointers[variable.Value];
+            for (uint member = 0; member < slots.Length; member++)
+            {
+                var slot = slots[member];
                 if (!offsets.TryGetValue((structure, member), out uint offset))
                     throw new InvalidDataException($"{name}：GPU 材质块缺少成员 {slot.PropertyName}。");
                 if (offset != slot.Offset)

@@ -13,6 +13,7 @@ public class Tween
     internal bool linked;
     internal Sequence parent;
     internal int loops = 1, completedLoops;
+    internal LoopType loopType;
     private Ease ease = Ease.OutQuad;
     private readonly Action<float> apply;
     private readonly Action capture;
@@ -72,20 +73,23 @@ public class Tween
     {
         if (!started) { capture?.Invoke(); started = true; }
         float t = duration == 0 ? 1 : Math.Clamp(current / duration, 0, 1);
+        if (loopType == LoopType.Yoyo && (completedLoops & 1) != 0) t = 1 - t;
         t = ease switch
         {
             Ease.InQuad => t * t,
             Ease.OutQuad => 1 - (1 - t) * (1 - t),
             Ease.InSine => 1 - MathF.Cos(t * MathF.PI * .5f),
             Ease.OutCubic => 1 - MathF.Pow(1 - t, 3),
+            Ease.OutBack => 1 + 2.70158f * MathF.Pow(t - 1, 3) + 1.70158f * (t - 1) * (t - 1),
+            Ease.InOutSine => (1 - MathF.Cos(MathF.PI * t)) * .5f,
             _ => t
         };
         apply?.Invoke(t);
     }
-    internal virtual void ResetCycle() { position = 0; started = false; }
+    internal virtual void ResetCycle() { position = 0; }
 }
 
 //只提供当前界面实际使用的缓动和循环方式。
-public enum Ease { Linear, InQuad, OutQuad, InSine, OutCubic }
-public enum LoopType { Restart }
+public enum Ease { Linear, InQuad, OutQuad, InSine, OutCubic, OutBack, InOutSine }
+public enum LoopType { Restart, Yoyo }
 public enum LinkBehaviour { KillOnDisable }

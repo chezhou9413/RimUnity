@@ -16,11 +16,15 @@ internal static partial class UguiRuntime
     {
         internal ParticleSystem Particles;
         internal int Order;
+        //相机画布作为一个 UI 渲染层提交，子图形可以保留制作时的对象层。
+        internal int RenderLayer => Canvas.EffectiveMode == RenderMode.ScreenSpaceCamera
+            ? Canvas.rootCanvas.gameObject.layer : (Particles != null ? Particles.gameObject.layer : Rect.gameObject.layer);
         internal Mask[] Masks = System.Array.Empty<Mask>();
         internal RectMask2D[] RectMasks = System.Array.Empty<RectMask2D>();
     }
     private static readonly List<Canvas> Canvases = new();
     internal static readonly List<Entry> Entries = new();
+    internal static int PreparationVersion { get; private set; }
     private static readonly HashSet<Graphic> WarnedGraphics = new();
 
     //登记场景实例；资源模板不会进入绘制列表。
@@ -33,6 +37,7 @@ internal static partial class UguiRuntime
     //每次 UI 事件前刷新布局，活动状态、文本和填充量即时生效。
     internal static void Prepare()
     {
+        PreparationVersion++;
         Canvases.RemoveAll(c => c == null);
         WarnedGraphics.RemoveWhere(g => g == null);
         Canvases.Sort((a, b) => a.sortingOrder != b.sortingOrder ? a.sortingOrder.CompareTo(b.sortingOrder) : a.GetInstanceID().CompareTo(b.GetInstanceID()));
@@ -74,9 +79,18 @@ internal static partial class UguiRuntime
         }
         Mask stencil = rect.GetComponent<Mask>();
         foreach (Graphic graphic in rect.GetComponents<Graphic>())
-            if (graphic.enabled && (stencil == null || !stencil.MaskEnabled() || stencil.showMaskGraphic)) Entries.Add(new Entry(canvas, rect, graphic, alpha, raycast && graphic.raycastTarget && GroupsAllowRaycast(rect), clip));
+        {
+            if (!graphic.enabled || (stencil != null && stencil.MaskEnabled() && !stencil.showMaskGraphic)) continue;
+            var entry = new Entry(canvas, rect, graphic, alpha, raycast && graphic.raycastTarget, clip);
+            if (!IntersectsClip(entry)) continue;
+            if (entry.Raycast && !GroupsAllowRaycast(rect)) entry = entry with { Raycast = false };
+            Entries.Add(entry);
+        }
         var particles = rect.GetComponent<ParticleSystem>();
         if (particles != null && particles.enabled) Entries.Add(new Entry(canvas, rect, null, alpha, false, clip) { Particles = particles });
+        //Mask 的包围矩形只用于粗裁剪，圆角和透明像素仍由原来的遮罩处理。
+        if (stencil != null && stencil.MaskEnabled())
+            clip = IntersectClip(clip, Bounds(new Entry(canvas, rect, null, 1, false, clip)));
         RectMask2D mask = rect.GetComponent<RectMask2D>();
         if (mask != null && mask.enabled)
         {
@@ -121,6 +135,7 @@ internal static partial class UguiRuntime
     {
         if (Event.current.type != EventType.Repaint) return;
         Rendering.ShaderGlobals.Update();
+        ScreenCameraUi.Draw();
         //整帧字形先入图集，避免逐个 Text 绘制时反复扩容、复制和上传同一张图集。
         foreach (Entry entry in Entries)
             if (entry.Canvas.EffectiveMode == RenderMode.ScreenSpaceOverlay && entry.Graphic is Text text
@@ -160,6 +175,7 @@ internal static partial class UguiRuntime
                 if (graphic is RimUnity.UI.Image image) UguiImageRenderer.Draw(entry, image, tint);
                 else if (graphic is RawImage raw) UguiImageRenderer.DrawRaw(entry, raw, tint);
                 else if (graphic is TextMeshProUGUI tmp) TmpRenderer.Draw(entry, tmp, tint);
+                else if (graphic is MeshGraphic mesh) mesh.DrawMesh(entry, tint);
                 else if (graphic is RimUnity.UI.Text text)
                 {
                     Matrix4x4 matrix = entry.Rect.localToWorldMatrix;
@@ -211,6 +227,7 @@ internal static partial class UguiRuntime
     //只在当前鼠标位于有效 Graphic 的矩形内时命中，包括透明拖动层。
     internal static bool Contains(Entry entry, Vector2 point)
     {
+        if (!entry.Clip.Contains(point)) return false;
         Vector2 screen = new(point.x * Prefs.UIScale, Screen.height - point.y * Prefs.UIScale);
         foreach (var mask in entry.Masks) if (!RectTransformUtility.RectangleContainsScreenPoint(mask.transform, screen)) return false;
         foreach (var mask in entry.RectMasks)
@@ -220,7 +237,7 @@ internal static partial class UguiRuntime
             Rect r = rect.rect; r.xMin += mask.padding.x; r.yMin += mask.padding.y; r.xMax -= mask.padding.z; r.yMax -= mask.padding.w;
             if (!r.Contains(local)) return false;
         }
-        return entry.Clip.Contains(point) && RectTransformUtility.RectangleContainsScreenPoint(entry.Rect, screen);
+        return RectTransformUtility.RectangleContainsScreenPoint(entry.Rect, screen);
     }
 
     //进入 UI 根边界前处理覆盖层输入，在游戏绘制结束后绘制覆盖层。

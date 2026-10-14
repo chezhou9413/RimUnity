@@ -18,8 +18,12 @@ internal static class ShaderLabConverter
         string generatedGraph = BuiltInGraphLowering.Lower(File.ReadAllText(path));
         if (generatedGraph != null && profile != "world") throw new NotSupportedException("BuiltIn Lit Graph 需要世界绘制配置。");
         string source = generatedGraph ?? ExpandIncludes(path, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
-        source = UnlitSurfaceLowering.Lower(source);
-        ShaderLabSource shader = ShaderLabParser.Parse(source, profile, keywords, pass == -2 ? 0 : pass);
+        source = AseSurfaceLowering.Lower(source) ?? UnlitSurfaceLowering.Lower(source);
+        bool cameraUi = Array.IndexOf(keywords, "RIMUNITY_UI_MASKS") >= 0;
+        ShaderLabSource shader = ShaderLabParser.Parse(source, profile, Array.FindAll(keywords, k => k != "RIMUNITY_UI_MASKS"), pass == -2 ? 0 : pass);
+        if (cameraUi) shader.Manifest.keywords.Add("RIMUNITY_UI_MASKS");
+        //相机画布仍使用世界顶点入口，UI 裁剪保持屏幕像素覆盖率。
+        shader.Manifest.uiMasks = profile == "ui" || cameraUi || Regex.IsMatch(shader.Program, @"\b_ClipRect\b");
         if (pass == -2 || shader.Manifest.tags.GetValueOrDefault("LightMode") == "ShadowCaster") shader = ShadowCasterLowering.Lower(shader);
         if (colorSpace is not ("Gamma" or "Linear")) throw new ArgumentException("颜色空间必须为 Gamma 或 Linear。");
         shader.Manifest.colorSpace = colorSpace;

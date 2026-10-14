@@ -4,7 +4,7 @@ namespace RimUnity.UI.Runtime;
 //世界画布在场景快照冻结前提交，屏幕覆盖画布仍由 GUI 事件提交。
 internal static partial class UguiRuntime
 {
-    internal static void DrawWorld()
+    internal static void DrawWorld(Camera targetCamera = null)
     {
         bool any = false;
         foreach (var canvas in Canvases) if (canvas != null && canvas.isActiveAndEnabled && canvas.EffectiveMode != RenderMode.ScreenSpaceOverlay) { any = true; break; }
@@ -13,11 +13,15 @@ internal static partial class UguiRuntime
         foreach (var entry in Entries)
         {
             if (entry.Canvas.EffectiveMode == RenderMode.ScreenSpaceOverlay || entry.Clip.width <= 0 || entry.Clip.height <= 0) continue;
+            Camera owner = entry.Canvas.rootCanvas.worldCamera ?? Camera.main;
+            Camera drawing = targetCamera ?? Camera.main;
+            if (entry.Canvas.EffectiveMode == RenderMode.ScreenSpaceCamera && owner != drawing) continue;
+            if (drawing != null && (drawing.cullingMask & (1 << entry.RenderLayer)) == 0) continue;
             WorldUiSubmission.Current = entry;
             UiMaskData.Current = entry;
             try
             {
-                if (entry.Particles != null) { entry.Particles.GetComponent<ParticleSystemRenderer>()?.DrawUI(entry); continue; }
+                if (entry.Particles != null) { entry.Particles.GetComponent<ParticleSystemRenderer>()?.DrawCameraUI(entry, drawing); continue; }
                 var graphic = entry.Graphic;
                 if (graphic == null || !graphic.isActiveAndEnabled) continue;
                 Color tint = graphic.color; tint.a *= entry.Alpha;
@@ -28,6 +32,7 @@ internal static partial class UguiRuntime
                 if (graphic is RimUnity.UI.Image image) UguiImageRenderer.Draw(entry, image, tint);
                 else if (graphic is RawImage raw) UguiImageRenderer.DrawRaw(entry, raw, tint);
                 else if (graphic is TextMeshProUGUI tmp) TmpRenderer.Draw(entry, tmp, tint);
+                else if (graphic is MeshGraphic mesh) mesh.DrawMesh(entry, tint);
                 else if (graphic is RimUnity.UI.Text text)
                 {
                     UguiTextRenderer.DrawLocal(entry, text, tint);

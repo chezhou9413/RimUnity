@@ -64,6 +64,14 @@ internal sealed class AssetCatalog
     internal AssetRecord Find(string path) => paths.TryGetValue(path, out var record) ? record
         : throw new FileNotFoundException($"模组 {Manifest.owner} 没有 RimUnity 资源：{path}");
 
+    //离开存档时只回收可恢复的设备贴图，保留模板和材质的对象身份。
+    internal void EvictTextures()
+    {
+        foreach (var resource in resources.Values)
+            if (resource is Texture2D texture && !texture.isExternallyOwned) texture.CoreTexture.Evict();
+            else if (resource is RenderTexture target) target.Evict();
+    }
+
     //同一依赖只解码一次，并明确拒绝资源循环引用。
     internal RimUnity.Object Get(string id)
     {

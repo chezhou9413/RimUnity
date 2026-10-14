@@ -16,14 +16,18 @@ internal static class ShaderLabStages
     {
         string vertexPath = Path.Combine(directory, manifest.vertexFile), fragmentPath = Path.Combine(directory, manifest.fragmentFile);
         string vertex = File.ReadAllText(vertexPath), fragment = File.ReadAllText(fragmentPath);
-        if (manifest.profile == "ui") fragment = UiMaskAdapter.Apply(fragment);
+        //先共享原始材质块，避免遮罩为缺少片元材质的程序创建另一套字段布局。
+        Match originalVertexBlock = Block(vertex), originalFragmentBlock = Block(fragment);
+        if (originalVertexBlock != null && originalFragmentBlock == null) fragment = Insert(fragment, originalVertexBlock.Value);
+        if (originalFragmentBlock != null && originalVertexBlock == null) vertex = Insert(vertex, originalFragmentBlock.Value);
+        if (manifest.uiMasks) fragment = UiMaskAdapter.Apply(fragment, vertex);
         if (Regex.IsMatch(vertex + fragment, @"uniform\s+sampler2D\s+_CameraDepthTexture\b"))
             throw new NotSupportedException("此变体实际采样相机深度，Waylith 深度纹理绑定尚未接通；不会导出成白色默认纹理。");
         if (!Regex.IsMatch(vertex, @"\bgl_Position(?:\.[xyzw]+)?\s*=")) throw new InvalidDataException("顶点程序没有写出 SV_POSITION。");
         if (manifest.profile == "world" && Regex.IsMatch(fragment, @"uniform\s+block_RU_(CameraData|ObjectData)_"))
             throw new NotSupportedException("世界配置的对象模型和相机顶点块不能在片元阶段访问；请由顶点函数通过 varying 传递计算结果。");
         Match vertexBlock = Block(vertex), fragmentBlock = Block(fragment);
-        if (manifest.profile == "ui" && vertexBlock != null)
+        if (manifest.uiMasks && vertexBlock != null)
             vertex = vertex.Replace(vertexBlock.Value, vertexBlock.Value.Insert(vertexBlock.Value.IndexOf('}'),
                 "\nfloat _UiMaskCount; // @default = 0.0\nfloat _UiRectMaskCount; // @default = 0.0\n"));
         if (vertexBlock != null && fragmentBlock == null) fragment = Insert(fragment, vertexBlock.Value);
@@ -46,6 +50,8 @@ internal static class ShaderLabStages
             if (!vertexTextures.ContainsKey(item.Key)) vertex = Insert(vertex, item.Value.Value);
         if (manifest.colorSpace == "Linear" && manifest.tags.GetValueOrDefault("LightMode") != "ShadowCaster")
             (vertex, fragment) = RimUnity.Rendering.ShaderColorSpace.Convert(vertex, fragment);
+        (vertex, fragment) = RimUnity.Rendering.ShaderStorageLayout.Convert(vertex, fragment);
+        RimUnity.Rendering.ShaderBindingValidation.Validate(vertex, fragment);
         //此 API 的返回值表示发现错误，不能按 Try 风格反向解释。
         if (ShaderMetadataParser.ValidateStageInterface(vertex, fragment, vertexPath, fragmentPath))
             throw new InvalidDataException("顶点输出与片元输入不一致。");

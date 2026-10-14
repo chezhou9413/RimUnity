@@ -33,14 +33,15 @@ internal static class BloomHooks
     [HarmonyPatch]
     private static class Capture
     {
-        //CaptureFrame 在主线程构造本帧设置，原生合成只要求载荷非空。
-        private static MethodBase TargetMethod() => Method("CaptureFrame");
+        //挂接渲染器实际调用的接口入口，避免内部短方法已被内联而绕过补丁。
+        private static MethodBase TargetMethod() => Method("Waylith.Rendering.IRenderFeature.CaptureFrame");
         private static void Postfix(in FrameTiming timing, ref object __result)
         {
             var map = capturedMap; capturedMap = null;
-            if (__result == null) return;
+            //世界地图和创建星球没有同帧地图快照，保留宿主载荷与原生合成。
+            if (__result == null || map?.FrameNumber != timing.FrameNumber) return;
             var settings = RimUnityMod.Bloom.Snapshot() with { FrameNumber = timing.FrameNumber };
-            if (settings.Enabled && settings.Intensity > 0 && map?.FrameNumber == timing.FrameNumber)
+            if (settings.Enabled && settings.Intensity > 0)
                 settings = settings with { Draws = new HdrDrawFrame(map, settings.LayerMask, readOnlyDepth: true) };
             __result = settings;
         }

@@ -8,6 +8,7 @@ public sealed class ShaderLabManifest
     public int version { get; set; } = 1;
     public string shaderName { get; set; }
     public string profile { get; set; }
+    public bool uiMasks { get; set; }
     public string colorSpace { get; set; } = "Gamma";
     public string grabTexture { get; set; }
     public string vertexEntry { get; set; }

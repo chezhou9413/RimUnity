@@ -21,6 +21,9 @@ internal static class ResourceLoader
         RimUnity.Object result;
         switch (data.type)
         {
+            case "VideoClip":
+                result = new Video.VideoClip(catalog.Resolve(Get<string>("file")));
+                break;
             case "AudioClip":
                 result = AudioClip.LoadFromFile(catalog.Resolve(Get<string>("file")));
                 break;
@@ -63,15 +66,14 @@ internal static class ResourceLoader
                     numeric.wrapMode = Get<TextureWrapMode>("wrapMode"); numeric.filterMode = Get<FilterMode>("filterMode");
                     result = numeric; break;
                 }
-                Texture2D texture = new(2, 2, TextureFormat.RGBA32, false, Get<bool>("linear"));
-                if (!texture.LoadImage(File.ReadAllBytes(catalog.Resolve(Get<string>("file"))))) throw new InvalidDataException($"无法读取图片：{record.path}");
-                //宿主图片解码会重置为 sRGB，解码后恢复导出时的数值纹理标记。
-                var pixels = texture.CoreTexture.CpuData;
-                if (pixels.Linear != Get<bool>("linear"))
-                    texture.CoreTexture.ReplaceCpuData(texture.width, texture.height, pixels.Format, pixels.Levels, pixels.MipCount, Get<bool>("linear"));
+                Texture2D texture = Texture2D.LoadFile(catalog.Resolve(Get<string>("file")), Get<bool>("linear"),
+                    fields.ContainsKey("readable") && Get<bool>("readable"));
                 texture.wrapMode = Get<TextureWrapMode>("wrapMode");
                 texture.filterMode = Get<FilterMode>("filterMode");
                 result = texture;
+                break;
+            case "SpriteAtlas":
+                result = new U2D.SpriteAtlas(Get<Sprite[]>("sprites"));
                 break;
             case "Sprite":
                 result = Sprite.Create(Get<Texture2D>("texture"), Get<Rect>("rect"), Get<Vector2>("pivot"),
@@ -137,6 +139,11 @@ internal static class ResourceLoader
                     else material.SetFloat(entry.Key, (float)reader.Read(entry.Value, typeof(float)));
                 }
                 result = material;
+                break;
+            case "Spine.Unity.SkeletonDataAsset":
+            case "Spine.Unity.SpineAtlasAsset":
+                var spineAsset = ScriptableObject.CreateInstance(TypeResolver.Resolve(data.type));
+                reader.Apply(spineAsset, data.members); result = spineAsset;
                 break;
             default: throw new NotSupportedException($"资源类型尚未实现：{data.type} ({record.path})");
         }

@@ -1,0 +1,5 @@
+RimUnity.Spine 使用随 BAUIMIAN 工程提供的 Spine 4.2 spine-csharp 源码。
+版权归 Esoteric Software LLC；完整许可见 Spine-LICENSE.txt，原始源码保留许可头。
+
+Spine.Unity 命名空间下的资源与 UI 桥接代码由 RimUnity 实现，不包含 Unity 渲染后端。
+骨骼及图集按需解析，组件启用后才更新动画和提交网格。

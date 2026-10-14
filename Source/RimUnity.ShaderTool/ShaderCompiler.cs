@@ -18,8 +18,9 @@ internal static class ShaderCompiler
     internal static void Verify(string file)
     {
         string source = File.ReadAllText(file), name = Path.GetFileName(file);
+        RimUnity.Rendering.ShaderBindingValidation.Read(source, name);
         bool vertex = name.EndsWith(".vert.glsl", StringComparison.Ordinal);
-        var layout = ShaderMetadataParser.ExtractMaterialLayout(source, name, 2);
+        var layout = RimUnity.Rendering.ShaderStorageLayout.Extract(source, name);
         if (layout.HasErrors) throw new InvalidDataException(name + "：材质布局不合法。");
         if (vertex && ShaderMetadataParser.ExtractVertexInputLayout(source, name).HasErrors) throw new InvalidDataException(name + "：顶点布局不合法。");
         byte[] code = RuntimeShaderCompiler.Compile(source, name, "main", RuntimeShaderLanguage.Glsl, vertex ? RuntimeShaderStage.Vertex : RuntimeShaderStage.Fragment);

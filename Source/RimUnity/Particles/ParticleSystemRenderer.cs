@@ -172,10 +172,15 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
     {
         if (indices.Count == 0) return;
         if (uiEntry != null) { CaptureDiagnostics(mat, null); SubmitUI(mat); return; }
+        if (cameraUiEntry != null)
+        {
+            for (int i = 0; i < colors.Count; i++) { Color color = colors[i]; color.a *= cameraUiEntry.Alpha; colors[i] = color; }
+            UI.Runtime.UiMaskData.Apply(mat);
+        }
         target ??= new Mesh { name = "RimUnity Particle Batch", indexFormat = IndexFormat.UInt32 };
         target.Clear(); target.SetVertices(vertices); target.SetColors(colors); target.SetUVs(0, packedUV); target.SetUVs(1, custom1); target.SetUVs(2, custom2); target.SetTriangles(indices, 0); target.RecalculateBounds();
         target.SetNormals(normals); target.SetTangents(tangents);
         CaptureDiagnostics(mat, target);
-        RimUnity.Graphics.DrawMesh(target, Matrix4x4.identity, mat, gameObject.layer, 0, propertyBlock);
+        RimUnity.Graphics.DrawMesh(target, Matrix4x4.identity, mat, cameraUiEntry?.RenderLayer ?? gameObject.layer, 0, propertyBlock);
     }
 }

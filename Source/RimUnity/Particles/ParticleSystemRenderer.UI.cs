@@ -11,6 +11,14 @@ public sealed partial class ParticleSystemRenderer
     private UguiRuntime.Entry uiEntry;
     private readonly Dictionary<Material, Material> uiMaterials = new();
     private readonly List<GuiVertex> guiVertices = new();
+    private UguiRuntime.Entry cameraUiEntry;
+    //相机画布保留完整粒子顶点流，交由场景材质和深度附件处理。
+    internal void DrawCameraUI(UguiRuntime.Entry entry, Camera camera)
+    {
+        cameraUiEntry = entry;
+        try { Draw(entry.Particles, camera); }
+        finally { cameraUiEntry = null; }
+    }
     internal void DrawUI(UguiRuntime.Entry entry)
     {
         uiEntry = entry;

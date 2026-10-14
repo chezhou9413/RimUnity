@@ -12,11 +12,11 @@ public sealed class AudioClip : Object
     public int channels => Sound.Channels;
     public int frequency => Sound.Frequency;
     private AudioClip(IAudioSound sound) => Sound = sound;
-    public static AudioClip LoadFromFile(string path)
+    public static AudioClip LoadFromFile(string path, bool streaming = false)
     {
         Runtime.NativeRuntime.AssertThread();
         var backend = AudioBackend.Current ?? throw new InvalidOperationException("宿主音频后端尚未初始化。");
-        return new AudioClip(backend.LoadSound(Path.GetFullPath(path), streaming: false)) { name = Path.GetFileNameWithoutExtension(path) };
+        return new AudioClip(backend.LoadSound(Path.GetFullPath(path), streaming)) { name = Path.GetFileNameWithoutExtension(path) };
     }
     protected override void Release() => Sound.Release();
 }

@@ -12,7 +12,7 @@ internal static class UiShaderStages
     {
         var source = material.engineMaterial.Shader;
         if (source.PrecompiledStages != null) return;
-        if (source.Key is not ("RimUnity_UI" or "RimUnity_UIAdditive" or "RimUnity_SDF"))
+        if (source.Key is not ("RimUnity_UI" or "RimUnity_UIAdditive" or "RimUnity_UIPremultiply" or "RimUnity_SDF"))
             throw new NotSupportedException("UI 材质必须提供已经适配的顶点阶段：" + source.Key);
         if (!compiled.TryGetValue(source.Key, out var shader))
         {

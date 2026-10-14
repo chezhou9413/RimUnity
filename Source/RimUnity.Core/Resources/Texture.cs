@@ -31,7 +31,7 @@ public abstract class Texture : Object
     public static Texture FromNative(Waylith.Rendering.Texture native)
     {
         ArgumentNullException.ThrowIfNull(native);
-        return Wrappers.TryGetValue(native, out Texture value) ? value : new NativeTextureReference(native);
+        return Wrappers.TryGetValue(native, out Texture value) ? value : native is Waylith.Rendering.Texture2D image ? Texture2D.Borrow(image) : new NativeTextureReference(native);
     }
     private sealed class NativeTextureReference : Texture
     {

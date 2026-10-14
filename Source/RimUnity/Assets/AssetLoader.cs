@@ -11,6 +11,12 @@ public static partial class AssetLoader
 {
     private static readonly Dictionary<string, AssetCatalog> Catalogs = new(StringComparer.OrdinalIgnoreCase);
 
+    //场景结束后释放模板间接持有的显存，下一次使用时从磁盘恢复。
+    internal static void EvictTextures()
+    {
+        foreach (var catalog in Catalogs.Values) catalog.EvictTextures();
+    }
+
     //列出本模组指定资源类型的公开路径，供内容侧建立明确且无歧义的索引。
     public static string[] GetPaths(ModContentPack mod, string resourceType)
         => GetCatalog(Path.Combine(mod.RootDir, "1.7", "Data", "RimUnity")).Manifest.assets
@@ -20,6 +26,14 @@ public static partial class AssetLoader
     //按导出逻辑路径加载材质、贴图、动画或预制体模板。
     public static T Load<T>(ModContentPack mod, string path) where T : RimUnity.Object
         => LoadDirectory<T>(Path.Combine(mod.RootDir, "1.7", "Data", "RimUnity"), path);
+    //短期图片缓存独立持有纹理，调用者释放时不会销毁预制体共享的资源。
+    public static Texture2D LoadOwnedTexture(ModContentPack mod, string path)
+    {
+        var catalog = GetCatalog(Path.Combine(mod.RootDir, "1.7", "Data", "RimUnity"));
+        var record = catalog.Find(path);
+        if (record.type != "Texture2D") throw new InvalidDataException("独立贴图入口需要 Texture2D：" + path);
+        return (Texture2D)ResourceLoader.Load(catalog, record);
+    }
 
     //AB 入口保留包名与 Unity 工程路径，内容仍由明文清单加载。
     public static T LoadBundleAsset<T>(ModContentPack mod, string bundle, string assetPath) where T : RimUnity.Object

@@ -21,7 +21,7 @@ namespace RimUnity.Editor
                 {
                     string property = match.Groups[1].Value;
                     //Unity 在 Overlay 画布中把这个全局状态设为 Always，它不是材质属性。
-                    if (ui && property == "unity_GUIZTestMode") return "8";
+                    if (property == "unity_GUIZTestMode") return ui ? "8" : "4";
                     if (!material.HasProperty(property)) throw new InvalidOperationException(path + "：渲染状态引用不存在的属性：" + property);
                     return material.GetFloat(property).ToString(CultureInfo.InvariantCulture);
                 });

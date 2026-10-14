@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputPath>../../1.7/Assemblies/</OutputPath>
+    <AssemblyName>RimUnity.Spine</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../RimUnity/RimUnity.csproj" /></ItemGroup>
+</Project>

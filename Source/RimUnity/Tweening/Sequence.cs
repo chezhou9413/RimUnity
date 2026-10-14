@@ -7,6 +7,7 @@ namespace RimUnity.Tweening;
 public sealed class Sequence : Tween
 {
     private readonly List<(float start, Tween tween, Action callback)> items = new();
+    private float lastStart;
     internal Sequence() : base(0) { }
     public Sequence Append(Tween tween)
     {
@@ -15,7 +16,17 @@ public sealed class Sequence : Tween
             throw new InvalidOperationException("只能将未开始的独立补间加入顺序动画。");
         if (tween.loops != 1) throw new NotSupportedException("循环应设置在顺序动画上。");
         tween.parent = this; DOTween.Remove(tween);
-        items.Add((duration, tween, null)); duration += tween.duration;
+        lastStart = duration; items.Add((duration, tween, null)); duration += tween.duration;
+        return this;
+    }
+    //与最后追加的段同时开始，延长总时长但不改变其余并行动画的起点。
+    public Sequence Join(Tween tween)
+    {
+        ArgumentNullException.ThrowIfNull(tween);
+        if (started || tween.started || tween.parent != null || !tween.active || tween == this || tween.loops != 1)
+            throw new InvalidOperationException("只能合并尚未开始且不循环的独立动画。");
+        tween.parent = this; DOTween.Remove(tween);
+        items.Add((lastStart, tween, null)); duration = Math.Max(duration, lastStart + tween.duration);
         return this;
     }
     public Sequence AppendCallback(Action callback)
@@ -35,7 +46,7 @@ public sealed class Sequence : Tween
         foreach (var item in items)
         {
             if (!active) break;
-            if (current < item.start) break;
+            if (current < item.start) continue;
             if (item.callback != null)
             {
                 if (previous < item.start) item.callback();

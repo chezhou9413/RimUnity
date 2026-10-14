@@ -6,6 +6,7 @@
     <Reference Include="UnityStubs" HintPath="$(RimWorldDir)/UnityStubs.dll" />
     <Reference Include="RimWorld" HintPath="$(RimWorldDir)/RimWorld.dll" />
     <Reference Include="Waylith" HintPath="$(RimWorldDir)/Waylith.dll" />
+    <Reference Include="Waylith.VideoDecode" HintPath="$(RimWorldDir)/Waylith.VideoDecode.dll" />
     <Reference Include="0Harmony" HintPath="$(HarmonyPath)" />
     <Reference Include="Brutal.ImGui" HintPath="$(RimWorldDir)/Brutal.ImGui.dll" />
     <Reference Include="Brutal.Core.Numerics" HintPath="$(RimWorldDir)/Brutal.Core.Numerics.dll" />
@@ -16,6 +17,8 @@
     <Reference Include="Brutal.Vulkan.Abstractions" HintPath="$(RimWorldDir)/Brutal.Vulkan.Abstractions.dll" />
     <Compile Include="../../UnityPackage/Runtime/Serialization/*.cs" Link="Serialization/%(Filename)%(Extension)" />
     <Compile Include="../Shared/ShaderColorSpace.cs" Link="Rendering/ShaderColorSpace.cs" />
+    <Compile Include="../Shared/ShaderStorageLayout.cs" Link="Rendering/ShaderStorageLayout.cs" />
+    <Compile Include="../Shared/ShaderBindingValidation.cs" Link="Rendering/ShaderBindingValidation.cs" />
   </ItemGroup>
 </Project>
 

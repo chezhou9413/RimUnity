@@ -28,4 +28,23 @@ public static class UiTweenExtensions
         => Float(graphic, () => graphic.color.a,
             a => graphic.color = new(graphic.color.r, graphic.color.g, graphic.color.b, a), end, seconds);
     public static void DOKill(this Object target) => DOTween.KillTarget(target);
+    //缩放插值不钳制缓动结果，保留 Back 曲线的超调。
+    public static Tween DOScale(this Transform transform, Vector3 end, float seconds)
+    {
+        Vector3 start = default;
+        return new Tween(seconds, () => start = transform.localScale, t => transform.localScale = start + (end - start) * t) { target = transform };
+    }
+    public static Tween DOScale(this Transform transform, float end, float seconds) => DOScale(transform, Vector3.one * end, seconds);
+    public static Tween DOLocalMoveY(this Transform transform, float end, float seconds)
+        => Float(transform, () => transform.localPosition.y, y => transform.localPosition = new(transform.localPosition.x, y, transform.localPosition.z), end, seconds);
+    //默认旋转沿每个欧拉轴的最短角度运动。
+    public static Tween DOLocalRotate(this Transform transform, Vector3 end, float seconds)
+    {
+        Vector3 start = default, delta = default;
+        return new Tween(seconds, () =>
+        {
+            start = transform.localEulerAngles;
+            delta = new(Mathf.DeltaAngle(start.x, end.x), Mathf.DeltaAngle(start.y, end.y), Mathf.DeltaAngle(start.z, end.z));
+        }, t => transform.localRotation = Quaternion.Euler(start + delta * t)) { target = transform };
+    }
 }

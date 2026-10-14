@@ -9,6 +9,8 @@ namespace RimUnity.Editor
     public sealed class ExportOptions
     {
         public bool disableCastShadows, disableReceiveShadows, disableLightProbes, disableReflectionProbes;
+        //用于运行时才挂入相机画布的独立 UI 预制体，不改变源对象组件。
+        public bool cameraUi;
         internal bool MutatesRenderers => disableCastShadows || disableReceiveShadows || disableLightProbes || disableReflectionProbes;
         public Action<string> log;
 

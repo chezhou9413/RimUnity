@@ -4,7 +4,7 @@ using Verse;
 using RimUnity.UI;
 namespace RimUnity;
 
-//在覆盖画布中转换 Unity 屏幕坐标和 UI 局部坐标。
+//在画布中转换 Unity 屏幕坐标和 UI 局部坐标。
 public static class RectTransformUtility
 {
     //在指定根节点坐标系内合并所有活动矩形的四角。
@@ -37,7 +37,7 @@ public static class RectTransformUtility
         {
             camera ??= canvas.rootCanvas.worldCamera != null ? canvas.rootCanvas.worldCamera : Camera.main;
             if (camera == null) { localPoint = default; return false; }
-            Ray ray = camera.ScreenPointToRay(new Vector3(screenPoint.x, Screen.height - screenPoint.y));
+            Ray ray = camera.ScreenPointToRay(new Vector3(screenPoint.x, screenPoint.y));
             Vector3 normal = rect.rotation * Vector3.forward;
             float denominator = Vector3.Dot(ray.direction, normal);
             if (Mathf.Abs(denominator) < .000001f) { localPoint = default; return false; }
@@ -52,6 +52,12 @@ public static class RectTransformUtility
     //矩形命中采用相同的局部坐标换算。
     public static bool RectangleContainsScreenPoint(RectTransform rect, Vector2 screenPoint, Camera camera = null)
         => ScreenPointToLocalPointInRectangle(rect, screenPoint, camera, out Vector2 p) && rect.rect.Contains(p);
+    //先求屏幕射线与矩形平面的交点，再转换回世界位置。
+    public static bool ScreenPointToWorldPointInRectangle(RectTransform rect, Vector2 screenPoint, Camera camera, out Vector3 point)
+    {
+        bool hit = ScreenPointToLocalPointInRectangle(rect, screenPoint, camera, out var local);
+        point = hit ? rect.TransformPoint(local) : Vector3.zero; return hit;
+    }
 
     //把已经计算好的世界 UI 坐标转为当前 GUI 坐标。
     internal static Vector2 ToGui(Canvas canvas, Vector3 point)
@@ -59,6 +65,6 @@ public static class RectTransformUtility
         if (canvas.EffectiveMode == RenderMode.ScreenSpaceOverlay) return new Vector2(point.x * canvas.scaleFactor / Prefs.UIScale, (Screen.height - point.y * canvas.scaleFactor) / Prefs.UIScale);
         Camera camera = canvas.rootCanvas.worldCamera != null ? canvas.rootCanvas.worldCamera : Camera.main;
         Vector3 screen = camera.WorldToScreenPoint(point);
-        return new Vector2(screen.x, screen.y) / Prefs.UIScale;
+        return new Vector2(screen.x, Screen.height - screen.y) / Prefs.UIScale;
     }
 }
