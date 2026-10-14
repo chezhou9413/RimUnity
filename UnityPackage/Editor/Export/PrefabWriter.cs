@@ -16,9 +16,14 @@ namespace RimUnity.Editor
             if (string.IsNullOrEmpty(assetPath) || !PrefabUtility.IsPartOfPrefabAsset(prefab)) throw new ArgumentException("必须选择工程中的 Prefab 资产。");
             //FBX 导入模型本身就是只读对象树，不能传给只接收 .prefab 的 LoadPrefabContents。
             bool importedModel = PrefabUtility.GetPrefabAssetType(prefab) == PrefabAssetType.Model;
-            GameObject root = importedModel ? prefab : PrefabUtility.LoadPrefabContents(assetPath);
+            // Imported models have no LoadPrefabContents handle. Clone them when the
+            // export policy mutates render state; never alter the imported asset.
+            bool clonedModel = importedModel && resources.Options.MutatesRenderers;
+            GameObject root = importedModel ? (clonedModel ? Object.Instantiate(prefab) : prefab) : PrefabUtility.LoadPrefabContents(assetPath);
             try
             {
+                if (clonedModel) { root.name = prefab.name; root.hideFlags = HideFlags.HideAndDontSave; }
+                resources.Options.Prepare(root, assetPath);
                 var objects = new Dictionary<Object, string>();
                 Collect(root.transform, "root", objects);
                 var writer = new ValueWriter(objects, resources);
@@ -26,7 +31,7 @@ namespace RimUnity.Editor
                 Walk(root.transform, null, objects, writer, data);
                 return data;
             }
-            finally { if (!importedModel) PrefabUtility.UnloadPrefabContents(root); }
+            finally { if (clonedModel) Object.DestroyImmediate(root); else if (!importedModel) PrefabUtility.UnloadPrefabContents(root); }
         }
 
         //引用编号只依赖层级和组件槽位，不保存编辑器实例 ID。

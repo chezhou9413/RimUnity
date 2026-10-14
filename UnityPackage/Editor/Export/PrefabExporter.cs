@@ -14,7 +14,9 @@ namespace RimUnity.Editor
     public static class PrefabExporter
     {
         //一次导出可包含多个预制体，并共享依赖去重。
-        public static void Export(string modDirectory, params ExportRequest[] requests)
+        public static void Export(string modDirectory, params ExportRequest[] requests) => Export(modDirectory, new ExportOptions(), requests);
+
+        public static void Export(string modDirectory, ExportOptions options, params ExportRequest[] requests)
         {
             if (requests.Length == 0) throw new ArgumentException("至少选择一个预制体。");
             string about = Path.Combine(modDirectory, "About", "About.xml");
@@ -27,7 +29,7 @@ namespace RimUnity.Editor
             Directory.CreateDirectory(directory);
             string catalogFile = Path.Combine(root, "catalog.json");
             var records = new Dictionary<string, AssetRecord>();
-            var resources = new ResourceWriter(directory, generation, records);
+            var resources = new ResourceWriter(directory, generation, records, options);
             var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             try
             {

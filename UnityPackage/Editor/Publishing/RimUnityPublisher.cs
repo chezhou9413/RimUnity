@@ -23,7 +23,7 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
         IEnumerable<RimUnityWorkflow.Entry> selection, bool rebuild, Action<string> log)
     {
         var entries = selection.ToArray();
-        if (entries.Length == 0) throw new InvalidOperationException("请先选择资源。");
+        if (entries.Length == 0) throw new InvalidOperationException("没有可发布的入口。");
         string blockers = DescribeBlockers(entries);
         if (blockers != null) throw new InvalidOperationException(blockers);
         if (!File.Exists(profile.shaderTool) || !File.Exists(Path.Combine(profile.gameRoot, "Waylith.dll")))
@@ -86,7 +86,11 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
                 }
                 if (errors.Count != before) continue;
                 //同一目标一次导出，共享 GUID、材质与 Shader 变体缓存。
-                PrefabExporter.Export(target.Stage, requests.ToArray());
+                PrefabExporter.Export(target.Stage, new ExportOptions {
+                    disableCastShadows = profile.disableCastShadows, disableReceiveShadows = profile.disableReceiveShadows,
+                    disableLightProbes = profile.disableLightProbes, disableReflectionProbes = profile.disableReflectionProbes,
+                    log = log
+                }, requests.ToArray());
                 string compact = Path.Combine(target.Stage, "compact");
                 ExportStorage.CopyForPublish(target.Prepared, compact);
                 target.Prepared = compact;
@@ -106,16 +110,16 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
             foreach (var target in targets)
             {
                 target.HadOld = Directory.Exists(target.Live);
-                if (target.HadOld) Directory.Move(target.Live, target.Backup);
-                try { Directory.Move(target.Prepared, target.Live); target.Published = true; }
-                catch { if (target.HadOld) Directory.Move(target.Backup, target.Live); target.HadOld = false; throw; }
+                if (target.HadOld) MoveDirectory(target.Live, target.Backup);
+                try { MoveDirectory(target.Prepared, target.Live); target.Published = true; }
+                catch { if (target.HadOld) MoveDirectory(target.Backup, target.Live); target.HadOld = false; throw; }
                 log("已发布：" + target.Live);
             }
             committed = true;
             bool cleaned = true;
             foreach (var target in targets)
                 if (target.HadOld) cleaned &= TryDeleteOwned(target.Backup, Path.GetDirectoryName(target.Live), ".rimunity-old-", log);
-            log(rebuild ? "完整重建已发布；新清单只包含所选入口及依赖。" : "增量更新已发布；旧入口及其数据保留。");
+            log(rebuild ? "完整重建已发布；新清单只包含本次入口及依赖。" : "增量更新已发布；旧入口及其数据保留。");
             log(cleaned ? "替换前的旧目录已清理。" : "仍有旧版本目录未清理，具体路径见记录。");
         }
         catch
@@ -125,8 +129,8 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
                     if (target.Published)
                     {
                         //将新数据移回准备目录，再恢复旧版本。
-                        Directory.Move(target.Live, target.Prepared);
-                        if (target.HadOld) Directory.Move(target.Backup, target.Live);
+                        MoveDirectory(target.Live, target.Prepared);
+                        if (target.HadOld) MoveDirectory(target.Backup, target.Live);
                         target.Published = false;
                     }
             throw;
@@ -149,9 +153,9 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
     {
         var blocked = selection.Where(e => e.status != "pending").ToArray();
         if (blocked.Length == 0) return null;
-        return "以下 " + blocked.Length + " 个所选入口未通过检查，正式数据未替换：\n" +
+        return "以下 " + blocked.Length + " 个入口未通过检查，正式数据未替换：\n" +
             string.Join("\n", blocked.Select(e => e.path + "\n  原因：" + (string.IsNullOrWhiteSpace(e.error) ? e.status : e.error))) +
-            "\n请修复这些入口，或明确取消选择后再导出。";
+            "\n请修复这些入口后再导出。移出 AssetBundle 标签或手动入口后，它们不会进入本次发布。";
     }
 
     public static void Validate(string root)
@@ -201,6 +205,37 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
             if ((attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("数据目录包含链接：" + entry);
             if ((attributes & FileAttributes.Directory) != 0) EnsureNoLinks(entry);
         }
+    }
+    //优先整体重命名；Windows 长路径导致目录移动失败时逐项移动，失败则恢复。
+    private static void MoveDirectory(string source, string destination)
+    {
+        source = Path.GetFullPath(source);
+        destination = Path.GetFullPath(destination);
+        if (Directory.Exists(destination)) throw new IOException("目标目录已存在：" + destination);
+        try { Directory.Move(source, destination); return; }
+        catch (IOException) when (Directory.Exists(source)) { }
+        try { Relocate(source, destination); }
+        catch (Exception error)
+        {
+            if (Directory.Exists(destination))
+            {
+                try { Relocate(destination, source); }
+                catch (Exception rollback) { throw new IOException("移动目录失败，且未能把已挪走的内容放回：" + source, rollback); }
+                if (Directory.Exists(destination) && Directory.GetFileSystemEntries(destination).Length == 0) Directory.Delete(destination);
+            }
+            throw new IOException("无法移动目录：" + source, error);
+        }
+    }
+    private static void Relocate(string source, string destination)
+    {
+        Directory.CreateDirectory(destination);
+        foreach (string entry in Directory.GetFileSystemEntries(source))
+        {
+            string target = Path.Combine(destination, Path.GetFileName(entry));
+            if (Directory.Exists(entry)) MoveDirectory(entry, target);
+            else File.Move(entry, target);
+        }
+        Directory.Delete(source);
     }
     private static void CopyTree(string source, string target)
     {

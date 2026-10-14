@@ -21,12 +21,16 @@ internal static class ShaderLabStates
                 break;
             case "name": manifest.states["Name"] = tokens.String(); break;
             case "lod": manifest.states["LOD"] = tokens.Read(); break;
+            case "fog":
+                tokens.Expect("{");
+                if (!tokens.Read().Equals("Mode", StringComparison.OrdinalIgnoreCase)
+                    || !tokens.Read().Equals("Off", StringComparison.OrdinalIgnoreCase))
+                    throw new NotSupportedException("固定管线 Fog 当前仅支持显式 Mode Off；启用雾需要对应渲染实现。");
+                tokens.Expect("}");
+                break;
             case "lighting":
                 if (!tokens.Read().Equals("Off", StringComparison.OrdinalIgnoreCase))
                     throw new NotSupportedException("仅支持显式关闭固定管线光照的顶点／片元程序。");
-                break;
-            case "fog":
-                tokens.Expect("{"); tokens.Expect("Mode"); tokens.Expect("Off"); tokens.Expect("}");
                 break;
             case "cull": manifest.states["Cull"] = Value(tokens); break;
             case "ztest": manifest.states["ZTest"] = Value(tokens); break;

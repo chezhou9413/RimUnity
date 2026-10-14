@@ -95,6 +95,12 @@ internal static class ResourceLoader
                 {
                     if (entry.Value.kind == "asset" || entry.Value.kind == "null") material.SetTexture(entry.Key,
                         entry.Key == "_MainTex" && entry.Value.kind == "null" ? Texture2D.whiteTexture : (Texture)reader.Read(entry.Value, typeof(Texture)));
+                    else if (entry.Value.kind == "array")
+                    {
+                        if (entry.Value.type == "float") material.SetFloatArray(entry.Key, (float[])reader.Read(entry.Value, typeof(float[])));
+                        else if (entry.Value.type == "float4") material.SetVectorArray(entry.Key, (Vector4[])reader.Read(entry.Value, typeof(Vector4[])));
+                        else throw new NotSupportedException("材质数组类型尚未支持：" + entry.Value.type + " " + entry.Key);
+                    }
                     else if (entry.Value.kind == "vector") SetMaterialVector(material, entry.Key, (Vector4)reader.Read(entry.Value, typeof(Vector4)));
                     else if (entry.Value.kind == "integer") material.SetInt(entry.Key, (int)reader.Read(entry.Value, typeof(int)));
                     else material.SetFloat(entry.Key, (float)reader.Read(entry.Value, typeof(float)));

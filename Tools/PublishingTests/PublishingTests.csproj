@@ -6,6 +6,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../UnityPackage/Editor/Publishing/RimUnityPublisher.cs" Link="RimUnityPublisher.cs" />
+    <Compile Include="../../UnityPackage/Editor/Export/ExportStorage.cs" Link="ExportStorage.cs" />
+    <Compile Include="../../UnityPackage/Editor/Export/ExportJson.cs" Link="ExportJson.cs" />
     <Reference Include="Newtonsoft.Json" HintPath="$(UnityEditorDir)/Managed/Newtonsoft.Json.dll" />
   </ItemGroup>
 </Project>

@@ -15,11 +15,14 @@ internal static class ShaderLabConverter
     {
         string path = Path.GetFullPath(sourceFile);
         if (!path.EndsWith(".shader", StringComparison.OrdinalIgnoreCase)) throw new NotSupportedException("自动转换只接受 .shader 源文件；ShaderGraph 需先人工迁移。");
-        string source = ExpandIncludes(path, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        string generatedGraph = BuiltInGraphLowering.Lower(File.ReadAllText(path));
+        if (generatedGraph != null && profile != "world") throw new NotSupportedException("BuiltIn Lit Graph 需要世界绘制配置。");
+        string source = generatedGraph ?? ExpandIncludes(path, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
         source = UnlitSurfaceLowering.Lower(source);
         ShaderLabSource shader = ShaderLabParser.Parse(source, profile, keywords, pass);
         if (colorSpace is not ("Gamma" or "Linear")) throw new ArgumentException("颜色空间必须为 Gamma 或 Linear。");
         shader.Manifest.colorSpace = colorSpace;
+        if (generatedGraph != null) shader.Manifest.approximations.Add("BuiltIn Lit 使用地图太阳、月光与天空环境色；不使用 Unity 烘焙光照、局部灯光和反射探针。");
         if (colorSpace == "Linear") shader.Manifest.approximations.Add("程序按 Linear 计算后编码到宿主 UNorm 场景；透明叠加沿用宿主的 Gamma 混合，HDR 超出场景格式范围的部分仍会截断。");
         string adapted = ShaderLabBindings.Adapt(shader);
         Directory.CreateDirectory(directory);

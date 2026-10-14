@@ -48,6 +48,23 @@ public sealed class Material : Object
     public Vector2 mainTextureScale { get => GetTextureScale("_MainTex"); set => SetTextureScale("_MainTex", value); }
     public void SetFloat(string name, float value) => SetFloat(Shader.PropertyToID(name), value);
     public void SetFloat(int id, float value) => engineMaterial.SetFloat(id, value);
+    //材质数组直接写入设备参数，并使附加 Pass 在下次绘制时同步。
+    public void SetFloatArray(string name, float[] values) => SetFloatArray(Shader.PropertyToID(name), values);
+    public void SetFloatArray(int id, float[] values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        engineMaterial.SetFloatArray(id, values); passVersion = -1;
+    }
+    //向量逐分量转换，保留 Unity 数组顺序和完整精度。
+    public void SetVectorArray(string name, Vector4[] values) => SetVectorArray(Shader.PropertyToID(name), values);
+    public void SetVectorArray(int id, Vector4[] values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        Span<System.Numerics.Vector4> converted = values.Length <= 128
+            ? stackalloc System.Numerics.Vector4[values.Length] : new System.Numerics.Vector4[values.Length];
+        for (int i = 0; i < values.Length; i++) converted[i] = Vector4.ToNumerics(values[i]);
+        engineMaterial.SetVectorArray(id, converted); passVersion = -1;
+    }
     public float GetFloat(string name) => GetFloat(Shader.PropertyToID(name));
     public float GetFloat(int id) => engineMaterial.GetFloat(id);
     public void SetInt(string name, int value) => SetInt(Shader.PropertyToID(name), value);

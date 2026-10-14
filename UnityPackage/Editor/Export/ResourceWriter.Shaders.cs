@@ -11,6 +11,7 @@ namespace RimUnity.Editor
     //GLSL 和管线描述作为普通依赖写入当前事务，不依赖模组全局 Shaders 目录。
     internal sealed partial class ResourceWriter
     {
+        private readonly System.Collections.Generic.Dictionary<string, Newtonsoft.Json.Linq.JObject> shaderArrayProperties = new System.Collections.Generic.Dictionary<string, Newtonsoft.Json.Linq.JObject>();
         internal string AddShader(Material material, bool ui, string path, int pass = -1, bool includeDefaults = false)
         {
             var exported = CustomShaderWriter.Write(material, directory, ui, path, pass);
@@ -21,6 +22,7 @@ namespace RimUnity.Editor
             using (var sha = SHA256.Create()) hash = BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(shader)))).Replace("-", "").ToLowerInvariant();
             string id = exported.Id + "_" + hash;
             if (dependencies.Count > 0) dependencies.Peek().Add(id);
+            shaderArrayProperties[id] = exported.Manifest["arrays"] as Newtonsoft.Json.Linq.JObject;
             if (records.ContainsKey(id)) return id;
             shader.key = id;
             string folder = Path.GetFileName(exported.Directory);

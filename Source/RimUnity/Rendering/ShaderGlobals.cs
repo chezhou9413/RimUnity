@@ -2,7 +2,7 @@
 namespace RimUnity.Rendering;
 
 //统一提供 Unity 常用时间向量，不占用宿主 Frame 中的光照字段。
-internal static class ShaderGlobals
+internal static partial class ShaderGlobals
 {
     private static int frame = -1;
     private static readonly int TimeId = Shader.PropertyToID("_Time"), SinId = Shader.PropertyToID("_SinTime"), CosId = Shader.PropertyToID("_CosTime"), DeltaId = Shader.PropertyToID("unity_DeltaTime");
@@ -10,6 +10,7 @@ internal static class ShaderGlobals
     {
         if (frame == Time.frameCount) return;
         frame = Time.frameCount;
+        UpdateMapLighting();
         Camera camera = Camera.main;
         if (camera != null)
         {

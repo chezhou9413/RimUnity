@@ -43,7 +43,7 @@ internal static class UnityHlslCompat
         #define WorldSpaceViewDir(position) (_WorldSpaceCameraPos - mul(unity_ObjectToWorld, (position)).xyz)
         """;
     //Unity 包包含由小型兼容头替代，本地自定义包含由转换入口先展开。
-    internal static string Prepare(string source)
+    internal static string Prepare(string source, string vertexEntry = null)
     {
         //全屏图像程序使用与普通网格一致的顶点输入和投影入口。
         if (Regex.IsMatch(source, @"\b(?:vert_img|v2f_img)\b") && !Regex.IsMatch(source, @"\bstruct\s+v2f_img\b"))
@@ -76,6 +76,14 @@ internal static class UnityHlslCompat
         //旧 Cg 允许条件表达式直接作为语句，显式括号避免 Slang 将比较号解析成泛型。
         //起始缩进不能跨行，也不能把多行赋值中问号前的空白当成条件。
         source = Regex.Replace(source, @"(?m)^([ \t]*)(?=\S)(?!(?:return|if|else|while|for|switch)\b)([^;{}\r\n?=]+)\?\s*([^;{}\r\n:]+)\s*:\s*([^;{}\r\n]+);", "$1(($2) ? ($3) : ($4));");
+        if (vertexEntry == "vert_img" || Regex.IsMatch(source, @"\b(?:v2f_img|appdata_img|vert_img)\b"))
+        {
+            string image = "";
+            if (!Regex.IsMatch(source, @"\bstruct\s+appdata_img\b")) image += "struct appdata_img { float4 vertex : POSITION; float2 texcoord : TEXCOORD0; };\n";
+            if (!Regex.IsMatch(source, @"\bstruct\s+v2f_img\b")) image += "struct v2f_img { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; };\n";
+            if (!Regex.IsMatch(source, @"\bv2f_img\s+vert_img\s*\(")) image += "v2f_img vert_img(appdata_img v) { v2f_img o = (v2f_img)0; o.pos = UnityObjectToClipPos(v.vertex); o.uv = v.texcoord; return o; }\n";
+            source = image + source;
+        }
         return source;
     }
 

@@ -1,6 +1,6 @@
 {
   "name": "com.chezhou.rimunity",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "license": "MIT",
   "displayName": "RimUnity Exporter",
   "description": "Unity authoring and plaintext prefab export for RimWorld 1.7 Waylith.",

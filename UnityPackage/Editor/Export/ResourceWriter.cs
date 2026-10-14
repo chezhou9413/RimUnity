@@ -16,8 +16,9 @@ namespace RimUnity.Editor
         private readonly Dictionary<string, AssetRecord> records;
         private readonly HashSet<string> writing = new HashSet<string>();
         private readonly Stack<HashSet<string>> dependencies = new Stack<HashSet<string>>();
-        internal ResourceWriter(string directory, string relative, Dictionary<string, AssetRecord> records)
-        { this.directory = directory; this.relative = relative; this.records = records; }
+        internal readonly ExportOptions Options;
+        internal ResourceWriter(string directory, string relative, Dictionary<string, AssetRecord> records, ExportOptions options = null)
+        { this.directory = directory; this.relative = relative; this.records = records; Options = new ExportOptions { disableCastShadows = options?.disableCastShadows ?? false, disableReceiveShadows = options?.disableReceiveShadows ?? false, disableLightProbes = options?.disableLightProbes ?? false, disableReflectionProbes = options?.disableReflectionProbes ?? false, log = options?.log }; }
 
         //预制体和资源共用同一个依赖收集栈。
         internal void Begin() => dependencies.Push(new HashSet<string>());

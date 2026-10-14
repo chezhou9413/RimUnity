@@ -16,7 +16,7 @@ namespace RimUnity.Editor { public static class RimUnityWorkflow
     [Serializable] public sealed class Profile
     {
         public string repository, shaderTool, gameRoot;
-        public bool auditOnReload;
+        public bool auditOnReload, disableCastShadows, disableReceiveShadows, disableLightProbes, disableReflectionProbes;
         public Mapping[] mappings;
     }
     [Serializable] public sealed class Mapping { public string bundle, mod; }

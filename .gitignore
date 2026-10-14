@@ -15,3 +15,6 @@ Tools/**/obj/
 *.suo
 *.log
 UnityPackage/Tools~/
+
+Tools/PublishingTests/obj/
+Tools/PublishingTests/bin/

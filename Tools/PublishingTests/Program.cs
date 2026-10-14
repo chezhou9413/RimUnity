@@ -24,7 +24,7 @@ string Mod(string name, bool old = true)
     if (old)
     {
         string live = Path.Combine(mod, "1.7/Data/RimUnity"); Directory.CreateDirectory(live);
-        File.WriteAllText(Path.Combine(live, "old.json"), "{}");
+        File.WriteAllText(Path.Combine(live, "old.json"), "{\"members\":[{\"name\":\"file\",\"value\":{\"kind\":\"string\",\"text\":\"old-sidecar.png\"}}]}");
         File.WriteAllText(Path.Combine(live, "old-sidecar.png"), "old image");
         File.WriteAllText(Path.Combine(live, "catalog.json"), new JObject { ["formatVersion"] = 1,
             ["assets"] = new JArray(new JObject { ["id"] = "old", ["file"] = "old.json", ["path"] = "old", ["dependencies"] = new JArray() }) }.ToString());
@@ -45,7 +45,10 @@ Check(!Old(full) && File.Exists(Path.Combine(full, "1.7/Data/RimUnity/new.json")
 Check(!Directory.GetDirectories(Path.Combine(full, "1.7/Data"), ".rimunity-*").Any(), "owned stage and backup cleaned");
 string incremental = Mod("incremental");
 RimUnityPublisher.Export(profile, new[] { E(incremental) }, false, messages.Add);
-Check(Old(incremental), "incremental preserves prior entries and sidecars");
+var prior = JObject.Parse(File.ReadAllText(Path.Combine(incremental, "1.7/Data/RimUnity/old.json")));
+string priorPayload = (string)prior["members"][0]["value"]["text"];
+Check(File.ReadAllText(Path.Combine(incremental, "1.7/Data/RimUnity", priorPayload)) == "old image",
+    "incremental preserves prior entries and shared sidecars");
 string first = Mod("first"), second = Mod("second");
 string before = File.ReadAllText(Path.Combine(first, "1.7/Data/RimUnity/catalog.json"));
 Failure(() => RimUnityPublisher.Export(profile, new[] { E(first), E(second, "failure") }, true, messages.Add), "converter failure aborts entire publication");
@@ -74,4 +77,14 @@ RimUnityPublisher.Validate(vroot);
 Check(true, "Shader stage and descriptor paths use content root");
 File.WriteAllText(Path.Combine(vroot, "old.json"), "{\"vertexFile\":\"../escape.vert\"}");
 Failure(() => RimUnityPublisher.Validate(vroot), "path traversal rejected");
+profile.disableCastShadows = profile.disableReceiveShadows = profile.disableLightProbes = profile.disableReflectionProbes = true;
+RimUnityPublisher.Export(profile, new[] { E(Mod("renderer-options")) }, true, messages.Add);
+Check(PrefabExporter.LastOptions.disableCastShadows && PrefabExporter.LastOptions.disableReceiveShadows
+    && PrefabExporter.LastOptions.disableLightProbes && PrefabExporter.LastOptions.disableReflectionProbes,
+    "all renderer export policies reach the framework exporter");
+profile.disableCastShadows = profile.disableReceiveShadows = profile.disableLightProbes = profile.disableReflectionProbes = false;
+RimUnityPublisher.Export(profile, new[] { E(Mod("strict-options")) }, true, messages.Add);
+Check(!PrefabExporter.LastOptions.disableCastShadows && !PrefabExporter.LastOptions.disableReceiveShadows
+    && !PrefabExporter.LastOptions.disableLightProbes && !PrefabExporter.LastOptions.disableReflectionProbes,
+    "disabled policies remain strict on the next export");
 Console.WriteLine("All publication tests passed. Scratch data: " + run);

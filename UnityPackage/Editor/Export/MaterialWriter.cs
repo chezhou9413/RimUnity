@@ -44,6 +44,7 @@ namespace RimUnity.Editor
             else
             {
                 WriteCustom(material, data, writer, path, resources, ui);
+                resources.WriteMaterialArrays(material, data, writer, path);
                 return;
             }
             if (ui)
@@ -77,15 +78,21 @@ namespace RimUnity.Editor
             string sourcePath = UnityEditor.AssetDatabase.GetAssetPath(material.shader);
             bool unlitSurface = sourcePath.EndsWith(".shader", StringComparison.OrdinalIgnoreCase)
                 && System.Text.RegularExpressions.Regex.IsMatch(System.IO.File.ReadAllText(sourcePath), @"(?m)^\s*#pragma\s+surface\s+\w+\s+Unlit\b");
-            if (unlitSurface)
+            bool builtInGraph = sourcePath.EndsWith(".shader", StringComparison.OrdinalIgnoreCase)
+                && System.IO.File.ReadAllText(sourcePath).Contains("BuiltInLitSubTarget");
+            if (unlitSurface || builtInGraph)
                 data.members.Add(new MemberData { name = "shader", value = new ValueData { kind = "asset", text = resources.AddShader(material, ui, path, 0) } });
             else if (material.passCount > 1)
             {
                 var passes = new System.Collections.Generic.List<ValueData>();
                 var subshader = UnityEditor.ShaderUtil.GetShaderData(material.shader).ActiveSubshader;
+                if (subshader == null || subshader.PassCount != material.passCount)
+                    throw new InvalidOperationException(path + "：Unity 当前 SubShader 的 Pass 清单与材质不一致。");
                 int sourcePass = 0;
                 for (int i = 0; i < material.passCount; i++)
                 {
+                    // GrabPass occupies a Unity runtime slot but is represented by sceneGrab,
+                    // not a drawing program, in the source converter.
                     if (subshader.GetPass(i).IsGrabPass) continue;
                     int programPass = sourcePass++;
                     if (!material.GetShaderPassEnabled(material.GetPassName(i))) continue;
