@@ -5,9 +5,7 @@ using System.Text.RegularExpressions;
 
 namespace RimUnity.ShaderTool;
 
-// HLSL frontends differ on the lifetime of for-initializer variables. An explicit
-// block restores lexical lifetime for braced loops without renaming identifiers.
-// Run after preprocessing, so disabled branches and comments are already removed.
+//为循环加上独立作用域，保持初始化变量的词法生命周期。
 internal static class ShaderLoopScopes
 {
     internal static string Adapt(string source)
@@ -17,7 +15,7 @@ internal static class ShaderLoopScopes
         foreach (Match match in Regex.Matches(source, @"(?:\[\s*(?:unroll|loop|fastopt|allow_uav_condition)\b[^\]\r\n]*\]\s*)*\bfor\s*\("))
         {
             int close = Matching(source, source.IndexOf('(', match.Index), '(', ')');
-            if (close < 0) continue; // Keep malformed input for the compiler diagnostic.
+            if (close < 0) continue; //语法错误交给编译器报告。
             int body = close + 1;
             while (body < source.Length && char.IsWhiteSpace(source[body])) body++;
             if (body >= source.Length || source[body] != '{') continue;
@@ -41,7 +39,7 @@ internal static class ShaderLoopScopes
         int depth = 0;
         for (int index = start; index < source.Length; index++)
         {
-            // Preserve quoted preprocessor paths without interpreting their braces.
+            //引号内的路径不参与括号匹配。
             if (source[index] == '"' || source[index] == '\'')
             {
                 char quote = source[index];

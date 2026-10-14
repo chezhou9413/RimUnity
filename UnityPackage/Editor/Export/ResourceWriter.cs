@@ -151,6 +151,10 @@ namespace RimUnity.Editor
         private static byte[] TextureBytes(Texture2D texture, bool linear)
         {
             if (texture.isReadable && (texture.format == TextureFormat.RGBA32 || texture.format == TextureFormat.RGB24 || texture.format == TextureFormat.ARGB32)) return texture.EncodeToPNG();
+            //非可读或压缩贴图需要真实图形设备；空设备读回的像素不能作为成功产物发布。
+            if (SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null)
+                throw new InvalidOperationException(UnityEditor.AssetDatabase.GetAssetPath(texture) +
+                    "：此贴图需要图形设备读回，当前 Unity 使用 Null 设备。请移除 -nographics 后重新导出。");
             RenderTexture previous = RenderTexture.active;
             bool previousSrgb = GL.sRGBWrite;
             RenderTexture temporary = RenderTexture.GetTemporary(texture.width, texture.height, 0, RenderTextureFormat.ARGB32, linear ? RenderTextureReadWrite.Linear : RenderTextureReadWrite.sRGB);

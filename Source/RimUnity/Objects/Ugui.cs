@@ -1,6 +1,5 @@
 using System;
-using System.Reflection;
-using UnityEngine;
+using RimUnity.Runtime;
 
 namespace RimUnity;
 
@@ -10,24 +9,20 @@ public static class Ugui
     //同时用于明文加载器，避免创建重复的 Transform。
     internal static GameObject Create(string name, bool rect, bool token)
     {
-        var result = (GameObject)Constructor.Invoke(new object[] { name, rect ? new RectTransform() : new Transform(), token });
-        OwnedObjects.Register(result);
+        var result = new GameObject(name, rect ? new RectTransform() : new Transform(), token);
         return result;
     }
-
-    private static readonly ConstructorInfo Constructor = typeof(GameObject).GetConstructor(
-        BindingFlags.Instance | BindingFlags.NonPublic, null, new[] { typeof(string), typeof(Transform), typeof(bool) }, null)
-        ?? throw new MissingMethodException("目标游戏缺少带 Transform 参数的 GameObject 构造函数。");
 
     //添加组件会遵守引擎的普通动态创建生命周期。
     public static GameObject CreateObject(string name, params Type[] components)
     {
+        using var creation = NativeRuntime.DeferLifecycle();
         GameObject result = Create(name, true, false);
         foreach (Type type in components) result.AddComponent(type);
         return result;
     }
 
-    //补齐本机兼容层的父级组件查询。
+    //查询当前组件所在对象及其父级上的组件。
     public static T GetComponentInParent<T>(this Component component) where T : Component
         => GetComponentInParent<T>(component.gameObject);
 

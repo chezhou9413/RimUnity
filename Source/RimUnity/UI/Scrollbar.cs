@@ -1,6 +1,5 @@
 using RimUnity.EventSystems;
-using UnityEngine;
-using UnityEngine.Events;
+using RimUnity.Events;
 
 namespace RimUnity.UI;
 

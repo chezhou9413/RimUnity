@@ -1,4 +1,3 @@
-using UnityEngine;
 
 namespace RimUnity.Rendering;
 
@@ -12,7 +11,7 @@ internal static partial class ShaderGlobals
         if (frame == Time.frameCount) return;
         frame = Time.frameCount;
         UpdateMapLighting();
-        Camera camera = Verse.Current.CameraDriver?.MyCamera;
+        Camera camera = Camera.main;
         if (camera != null)
         {
             Vector3 position = camera.transform.position;

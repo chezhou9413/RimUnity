@@ -1,19 +1,44 @@
 # IMGUI 自定义材质
 
-独立材质导出时设置 `ExportRequest.ui = true`，生成宿主 GUI 使用的顶点程序。名称、参数、纹理和混合状态随材质写入清单，不需要手写 ShaderDef。
+## 导出材质
+
+独立材质导出时设置 `ExportRequest.ui = true`：
 
 ```csharp
 PrefabExporter.Export(modDirectory, new ExportRequest {
     asset = material,
     ui = true,
-    path = "Bundles/example/Assets/UI/Flow.mat"
+    path = "Materials/UIFlow"
 });
 ```
 
-矩形图片可继续使用游戏的 `Graphics.DrawTexture` 材质重载。任意四边形使用 `RimUnity.UI.ImmediateMesh.DrawQuad`，传入当前 GUI 分组内的四角坐标、各角 UV 和顶点色。该入口复用 RimUnity 的 UI 材质提交，逐次快照参数，服从当前 GUI 裁切栈；仅在 Repaint 提交。
+名称、参数、纹理和混合状态随材质写入清单，不需要手写 ShaderDef。
 
-Waylith 的 `GL.End` 普通图元入口不会执行自定义材质，`GL.Viewport` 也没有实现，因此不能只用 `Material.SetPass` 接通旧 GL 界面代码。
+## 加载与绘制
 
-Overlay 材质不使用场景深度。导出器识别 Unity 的 `unity_GUIZTestMode` 为 Always；不写深度的 LEqual 材质转换为 Always 并记录近似说明。深度写入及不支持的比较模式仍拒绝导出。
+先在游戏主线程加载材质：
 
-涅瓦莲研究连线使用该公共入口，保留原连续 UV、转角、波包、颜色及高亮参数。游戏内缩放、裁切和最终画面仍需实测。
+```csharp
+var material = RimUnity.Assets.AssetLoader.Load<RimUnity.Material>(
+    contentMod, "Materials/UIFlow");
+```
+
+在 IMGUI 的 Repaint 中绘制四边形：
+
+```csharp
+if (UnityEngine.Event.current.type == UnityEngine.EventType.Repaint)
+{
+    RimUnity.UI.ImmediateMesh.DrawQuad(material,
+        new RimUnity.Vector2(10, 10), new RimUnity.Vector2(110, 10),
+        new RimUnity.Vector2(110, 60), new RimUnity.Vector2(10, 60),
+        new RimUnity.Vector2(0, 1), new RimUnity.Vector2(1, 1),
+        new RimUnity.Vector2(1, 0), new RimUnity.Vector2(0, 0),
+        RimUnity.Color.white);
+}
+```
+
+四个顶点按边界顺序传入，坐标相对于当前 GUI 分组。绘制遵守当前裁切区域，UV 与颜色使用 RimUnity 类型。材质由加载器共享；需要独立参数时创建自己的材质副本，并在使用结束后销毁。
+
+## 材质要求
+
+Overlay 材质不使用场景深度。使用 Always 深度测试并关闭深度写入；导出器也接受不写深度的 LEqual 材质，并转换为 Always。其他不支持的深度模式会报告导出错误。

@@ -12,7 +12,7 @@ namespace RimUnity.Editor
             if (value is UnityEngine.UI.AnimationTriggers) return Properties(value, writer, path, "normalTrigger", "highlightedTrigger", "pressedTrigger", "selectedTrigger", "disabledTrigger");
             if (value is AnimationCurve) return Properties(value, writer, path, "keys", "preWrapMode", "postWrapMode");
             if (value is Keyframe) return Properties(value, writer, path, "time", "value", "inTangent", "outTangent", "inWeight", "outWeight", "weightedMode");
-            if (value is Gradient) return Properties(value, writer, path, "mode", "colorKeys", "alphaKeys");
+            if (value is Gradient) return Properties(value, writer, path, "mode", "colorSpace", "colorKeys", "alphaKeys");
             if (value is GradientColorKey) return Properties(value, writer, path, "time", "color");
             if (value is GradientAlphaKey) return Properties(value, writer, path, "time", "alpha");
             if (value is ParticleSystem.MinMaxCurve curve) return Curve(curve, writer, path);

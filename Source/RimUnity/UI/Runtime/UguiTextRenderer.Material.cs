@@ -1,8 +1,6 @@
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Brutal.ImGuiApi;
-using UnityEngine;
-using UnityStubs.Gui;
 
 namespace RimUnity.UI.Runtime;
 
@@ -12,11 +10,12 @@ internal static partial class UguiTextRenderer
     private static readonly List<GuiVertex> GlyphVertices = new();
 
     //字号和粗斜体字形与宿主排版使用相同字体，按行共享基线。
-    private static void MaterialText(UnityEngine.UI.Text text, Rect bounds, Color tint, UguiTextLayout.Layout layout, bool shadow)
+    private static void MaterialText(RimUnity.UI.Text text, Rect bounds, Color tint, UguiTextLayout.Layout layout, bool shadow)
     {
+        UguiTextLayout.Warm(layout);
         GlyphVertices.Clear();
         Material material = text.material;
-        material.SetFloat("_ClTime", Time.unscaledTime);
+        if (material != null) material.SetFloat("_ClTime", Time.unscaledTime);
         float top = bounds.y + (bounds.height - layout.Size.y) * ((int)text.alignment / 3) * 0.5f;
         foreach (UguiTextLayout.Line line in layout.Lines)
         {
@@ -45,7 +44,7 @@ internal static partial class UguiTextRenderer
                 }
             }
         }
-        Texture atlas = TextMeshProBackend.Current.GetAtlasTexture(layout.FontIndex);
+        Texture atlas = NativeFontAtlas.Capture();
         if (GlyphVertices.Count > 0 && atlas == null)
             throw new System.InvalidOperationException("文字图集尚未由宿主生成。");
         UiMeshSubmission.Draw(CollectionsMarshal.AsSpan(GlyphVertices), atlas, material);

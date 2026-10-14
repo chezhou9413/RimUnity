@@ -1,4 +1,3 @@
-using UnityEngine;
 
 namespace RimUnity.UI.Runtime;
 
@@ -8,7 +7,7 @@ internal static partial class UguiTextRenderer
     private static UguiRuntime.Entry localEntry;
     private static Rect localRect;
     private static bool localClip;
-    internal static void DrawLocal(UguiRuntime.Entry entry, UnityEngine.UI.Text text, Color tint)
+    internal static void DrawLocal(UguiRuntime.Entry entry, RimUnity.UI.Text text, Color tint)
     {
         Material previous = text.material;
         localEntry = entry; localRect = text is Text custom ? custom.ContentRect : entry.Rect.rect;
@@ -16,7 +15,7 @@ internal static partial class UguiTextRenderer
         text.material ??= UiMaskData.DefaultMaterial();
         try
         {
-            GUIStyle style = UguiRuntime.TextStyle(text);
+            UiTextStyle style = UguiRuntime.TextStyle(text);
             Draw(entry, text, style, new Rect(0, 0, localRect.width, localRect.height), tint, 1);
         }
         finally { localEntry = null; text.material = previous; }

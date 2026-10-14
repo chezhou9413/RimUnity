@@ -14,8 +14,8 @@ internal sealed class BloomPipeline : IDisposable
     private const int Levels = 5;
     private readonly CompositePass scene;
     private readonly PostEffectPass[] down = new PostEffectPass[Levels], up = new PostEffectPass[Levels - 1];
-    private readonly PostEffectPass combine;
-    private readonly BloomLayerTarget layers = new();
+    private readonly PostEffectPass combine, hdrCombine;
+    private readonly HdrDrawTarget layers = new("RimUnity.BloomLayers");
     private RenderTexture[][] targets;
     private bool prepared;
     private int width, height;
@@ -29,7 +29,8 @@ internal sealed class BloomPipeline : IDisposable
         for (int i = 0; i < Levels - 1; i++) up[i] = Make("Up" + i, "BloomUp", new[] { 0, 1 });
         var blend = new BlendState(true, BlendFactor.One, BlendFactor.One, BlendOp.Add, BlendFactor.Zero, BlendFactor.One, BlendOp.Add);
         combine = new PostEffectPass("RimUnity.Bloom.Composite", PathFor("BloomComposite"), new[] { 0, 1 }, blend, 16);
-        Passes = new IRenderPass[] { new Stage(this, true), scene, new Stage(this, false) };
+        hdrCombine = Make("HdrComposite", "HdrComposite", new[] { 0, 1 });
+        Passes = new IRenderPass[] { new Stage(this, true), new Stage(this, false) };
     }
 
     //原生后处理通道自行编译独立 GLSL，不使用 Unity Blit 的兼容占位实现。
@@ -64,16 +65,19 @@ internal sealed class BloomPipeline : IDisposable
         prepared = false;
         RenderTexture source = scene.Source?.Invoke(ctx.SubmissionFrameIndex);
         if (source == null) return;
-        if (settings.Draws == null || settings.Draws.Draws.Count == 0) return;
+        if (settings.Draws == null || settings.Draws.Frame.Draws.Count == 0) return;
         Ensure(in ctx, source);
-        var layerSource = layers.Record(in ctx, source, settings.Draws);
+        layers.Begin(in ctx, source, settings.FrameNumber, clear: true);
+        layers.BindDepth(in ctx, source);
+        layers.Record(in ctx, source, settings.Draws);
+        var layerSource = layers.Result;
         var frame = targets[ctx.SubmissionFrameIndex];
         float threshold = settings.Threshold <= .04045f ? settings.Threshold / 12.92f : MathF.Pow((settings.Threshold + .055f) / 1.055f, 2.4f);
         for (int i = 0; i < Levels; i++)
         {
             down[i].SetInput(0, i == 0 ? layerSource : frame[i - 1]); down[i].Output = frame[i];
-            //原材质输出显示颜色，浮点附件保留其 HDR 范围；预筛选只解码一次。
-            down[i].SetPushConstants(new Vector4(threshold, settings.SoftKnee, i == 0 ? 1 : 0, 0));
+            //选中层已经在线性浮点附件中完成透明叠加。
+            down[i].SetPushConstants(new Vector4(threshold, settings.SoftKnee, 0, 0));
             down[i].Record(in ctx, settings);
         }
         for (int i = Levels - 2; i >= 0; i--)
@@ -85,12 +89,22 @@ internal sealed class BloomPipeline : IDisposable
         prepared = true;
     }
 
-    //添加线性合成前后的显示颜色差，保留宿主自身的画面与 Alpha。
+    //浮点场景在最后一次合成才编码；普通场景继续沿用宿主的显示颜色路径。
     private void Composite(in FrameContext ctx, BloomFrame settings)
     {
-        if (targets == null || !prepared) return;
         RenderTexture source = scene.Source?.Invoke(ctx.SubmissionFrameIndex);
         if (source == null) return;
+        var hdr = HdrMapHooks.LinearScene(source, settings.FrameNumber);
+        if (hdr != null)
+        {
+            hdrCombine.SetInput(0, hdr);
+            hdrCombine.SetInput(1, prepared ? targets[ctx.SubmissionFrameIndex][Levels] : hdr);
+            hdrCombine.SetPushConstants(new Vector4(prepared ? settings.Intensity : 0, scene.Saturation, 0, 0));
+            hdrCombine.RecordInline(in ctx, ctx.RenderPass, ctx.SampleCount);
+            return;
+        }
+        scene.Record(in ctx, settings);
+        if (!prepared) return;
         combine.SetInput(0, source); combine.SetInput(1, targets[ctx.SubmissionFrameIndex][Levels]);
         combine.SetPushConstants(new Vector4(settings.Intensity, Gamma(source) ? 1 : 0, scene.Saturation, 0));
         combine.RecordInline(in ctx, ctx.RenderPass, ctx.SampleCount);
@@ -106,12 +120,13 @@ internal sealed class BloomPipeline : IDisposable
         foreach (var pass in down) pass.Output = null;
         foreach (var pass in up) pass.Output = null;
         combine.Invalidate();
+        hdrCombine.Invalidate();
     }
 
     //后处理实例结束时释放缓存及所有管线对象。
     public void Dispose()
     {
-        ReleaseTargets(); foreach (var pass in down) pass.Dispose(); foreach (var pass in up) pass.Dispose(); combine.Dispose();
+        ReleaseTargets(); foreach (var pass in down) pass.Dispose(); foreach (var pass in up) pass.Dispose(); combine.Dispose(); hdrCombine.Dispose();
     }
 
     //拆分在屏幕渲染之前和之内的两段，避免在一个 Vulkan RenderPass 中嵌套另一个。
@@ -125,8 +140,13 @@ internal sealed class BloomPipeline : IDisposable
         public void Dispose() { }
         public void Record(in FrameContext ctx, object featurePayload)
         {
-            if (featurePayload is not BloomFrame { Enabled: true, Intensity: > 0 } settings) return;
-            if (prepare) owner.Prepare(in ctx, settings); else owner.Composite(in ctx, settings);
+            if (featurePayload is not BloomFrame settings) return;
+            if (prepare)
+            {
+                owner.prepared = false;
+                if (settings.Enabled && settings.Intensity > 0) owner.Prepare(in ctx, settings);
+            }
+            else owner.Composite(in ctx, settings);
         }
     }
 }

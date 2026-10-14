@@ -29,14 +29,14 @@ MyContentMod/
 | `AssetLoader.LoadDirectory<T>(dataDirectory, path)` | 显式目录中的指定类型对象 |
 | `AssetLoader.LoadBundleAsset<T>(mod, bundle, assetPath)` | 按保留的 AB 包名与 Unity 工程路径读取明文资源 |
 
-所有泛型类型必须派生自宿主 `UnityEngine.Object`，且匹配导出记录的实际类型。
+所有泛型类型必须派生自 `RimUnity.Object`，且匹配导出记录的实际类型。
 
 ```csharp
 using RimUnity.Assets;
-using UnityEngine;
+using RimUnity;
 
 var template = PrefabLoader.Load(contentMod, "Effects/BasicBurst");
-var instance = UnityEngine.Object.Instantiate(template);
+var instance = RimUnity.Object.Instantiate(template);
 var material = AssetLoader.Load<Material>(contentMod, "Materials/Glow");
 var texture = AssetLoader.Load<Texture2D>(contentMod, "Textures/Noise");
 var shader = AssetLoader.Load<Shader>(contentMod, "Shaders/Dissolve");
@@ -44,7 +44,7 @@ var shader = AssetLoader.Load<Shader>(contentMod, "Shaders/Dissolve");
 
 这些逻辑路径仅为示例，必须在自己的 catalog 中存在。自动收集的依赖通常使用 `__assets/` 内部路径；需要被脚本稳定直接加载的材质、贴图或 Shader，应作为独立入口导出并指定逻辑路径。
 
-## AB 迁移入口
+## 按包名加载
 
 若使用 `BundleAssetExporter` 按 Unity 的 AssetBundle 标签导出：
 
@@ -53,15 +53,15 @@ var template = AssetLoader.LoadBundleAsset<GameObject>(
     contentMod, "myeffects", "Assets/Effects/Portal.prefab");
 ```
 
-其实际逻辑路径为 `Bundles/myeffects/Assets/Effects/Portal.prefab`。这里使用包名作为路径分组，不读取二进制 AssetBundle，也不能拿未导出的旧 AB 路径直接调用。批量粒子窗口采用另一种规则：`Assets/Effects/Portal.prefab` 对应 `Particles/Effects/Portal`；以最终 catalog 为准。
+其实际逻辑路径为 `Bundles/myeffects/Assets/Effects/Portal.prefab`。这里使用包名作为路径分组，不读取二进制 AssetBundle，也不能拿未导出的 AB 路径直接调用。批量粒子窗口采用另一种规则：`Assets/Effects/Portal.prefab` 对应 `Particles/Effects/Portal`；以最终 catalog 为准。
 
 ## 缓存、共享与销毁
 
 - 清单和资源按目录缓存，在进程生命周期中复用；相同依赖不因每次 Load 重建。
-- Prefab 模板保持失活；实例通过注册的克隆工厂重新建立对象、字段和引用，再恢复导出的活动状态。
+- Prefab 模板保持失活；实例保留导出的层级、字段、引用和活动状态。
 - 不修改或销毁加载器返回的共享材质、贴图和模板。需要实例材质参数时，优先使用渲染器的 MaterialPropertyBlock，或由业务创建并负责销毁独立 Material。
 - 在实例不再使用时销毁 GameObject；不要假设所有一次性粒子都会自动销毁根对象。
-- 编辑导出文件后重启游戏验证。当前没有 catalog 自动刷新、模板热重载或公开资源卸载接口。
+- 编辑导出文件后重启游戏生效。当前没有 catalog 自动刷新、模板热重载或公开资源卸载接口。
 
 ## 发布内容资源
 
@@ -81,5 +81,3 @@ var template = AssetLoader.LoadBundleAsset<GameObject>(
 | 资源类型不匹配 | `Load<T>` 的 T 是否与记录一致 |
 | Shader 编译／布局报错 | 工具与目标游戏版本、转换诊断、完整 GLSL／描述文件是否一起发布 |
 | 加载成功但不显示 | 实例活动状态、位置／缩放、材质 Alpha、层与绘制通道、暂停与发射条件 |
-
-加载成功不等于视觉还原。不要通过静默替换材质或忽略依赖异常掩盖问题。

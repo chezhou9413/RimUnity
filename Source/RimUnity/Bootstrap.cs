@@ -10,13 +10,16 @@ public sealed class RimUnityMod : Mod
     public static Rendering.BloomSettings Bloom { get; private set; }
     internal static string ShaderDirectory { get; private set; }
 
-    //Harmony 由依赖模组提供，不复制其程序集。
+    //安装帧调度、材质默认值和渲染回调。
     public RimUnityMod(ModContentPack content) : base(content)
     {
         OwnContent = content;
         ShaderDirectory = System.IO.Path.Combine(content.RootDir, "1.7", "Shaders", "RimUnity");
         Bloom = GetSettings<Rendering.BloomSettings>();
+        Rendering.MaterialColorSpace.Install();
+        Rendering.ShaderMaterialDefaults.Install();
         new Harmony("Chezhou.RimUnity").PatchAll(typeof(RimUnityMod).Assembly);
+        LongEventHandler.ExecuteWhenFinished(HostFrame.Install);
         Log.Message("[RimUnity] 运行时已加载；功能及验收状态见 Docs/Status.md。");
     }
 

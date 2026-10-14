@@ -6,11 +6,11 @@ namespace RimUnity.Rendering;
 //内置 Unlit 和粒子映射使用与离线转换器相同的颜色边界，不改全局游戏 Shader。
 internal static class MappedColorSpaceShader
 {
-    internal static UnityEngine.Shader Wrap(Shader source, bool linear)
+    internal static RimUnity.Shader Wrap(Waylith.Rendering.Shader source, bool linear)
     {
-        if (!linear) return UnityEngine.Shader.FromEngineShader(source.Key, source);
+        if (!linear) return RimUnity.Shader.FromEngineShader(source.Key, source);
         string key = source.Key + "_Linear";
-        if (ShaderRegistry.TryResolve(key, out var cached)) return UnityEngine.Shader.FromEngineShader(key, cached);
+        if (ShaderRegistry.TryResolve(key, out var cached)) return RimUnity.Shader.FromEngineShader(key, cached);
         var (vertex, fragment) = ShaderColorSpace.Convert(ShaderSourceLoader.ReadShaderSource(source.VertexShaderFileName),
             ShaderSourceLoader.ReadShaderSource(source.FragmentShaderFileName));
         var layout = ShaderMetadataParser.ExtractMaterialLayout(fragment, key, 2);
@@ -19,10 +19,11 @@ internal static class MappedColorSpaceShader
         var stages = new PrecompiledShaderStages(
             RuntimeShaderCompiler.Compile(vertex, key + ".vert.glsl", "main", RuntimeShaderLanguage.Glsl, RuntimeShaderStage.Vertex),
             RuntimeShaderCompiler.Compile(fragment, key + ".frag.glsl", "main", RuntimeShaderLanguage.Glsl, RuntimeShaderStage.Fragment), false);
-        var shader = new Shader(key, source.ShaderPath, source.Program, source.Keywords.ToArray(), layout, source.PipelineState,
+        var shader = new Waylith.Rendering.Shader(key, source.ShaderPath, source.Program, source.Keywords.ToArray(), layout, source.PipelineState,
             vertexInputLayout: source.VertexInputLayout, precompiledStages: stages);
         if (shader.HasErrors) throw new InvalidOperationException("Linear 材质注册失败：" + key);
         ShaderRegistry.Register(shader);
-        return UnityEngine.Shader.FromEngineShader(key, shader);
+        LinearShaderVariants.Register(shader, fragment);
+        return RimUnity.Shader.FromEngineShader(key, shader);
     }
 }

@@ -1,18 +1,15 @@
-//源自 ChezhouLib UGUI；迁移来源与第三方许可见 Docs/ThirdParty.md。
-using UnityEngine;
 
 using RimUnity.UI;
 namespace RimUnity;
 
 //保留 UGUI 锚点与尺寸语义，并让引擎继续管理父子关系、销毁和激活。
-public class RectTransform : UnityEngine.RectTransform
+public class RectTransform : Transform
 {
     public enum Axis { Horizontal, Vertical }
-    public Vector2 anchorMin { get; set; } = new Vector2(0.5f, 0.5f);
-    public Vector2 anchorMax { get; set; } = new Vector2(0.5f, 0.5f);
-    public new Vector2 pivot { get; set; } = new Vector2(0.5f, 0.5f);
-    public Vector2 sizeDelta { get; set; } = new Vector2(100f, 100f);
-    public Vector3 lossyScale => localToWorldMatrix.lossyScale;
+    public Vector2 anchorMin { get; set => SetProperty(ref field, value); } = new Vector2(0.5f, 0.5f);
+    public Vector2 anchorMax { get; set => SetProperty(ref field, value); } = new Vector2(0.5f, 0.5f);
+    public Vector2 pivot { get; set => SetProperty(ref field, value); } = new Vector2(0.5f, 0.5f);
+    public Vector2 sizeDelta { get; set => SetProperty(ref field, value); } = new Vector2(100f, 100f);
     private Vector2 anchored;
     private Vector3 lastLocalPosition;
     private Transform lastParent;
@@ -41,7 +38,7 @@ public class RectTransform : UnityEngine.RectTransform
         set { Vector2 delta = value - offsetMax; sizeDelta += delta; anchoredPosition += Vector2.Scale(delta, pivot); }
     }
 
-    public new Rect rect
+    public Rect rect
     {
         get
         {

@@ -1,9 +1,8 @@
-//源自 ChezhouLib UGUI；迁移来源与第三方许可见 Docs/ThirdParty.md。
-using UnityEngine.UI;
+using RimUnity.UI;
 
 namespace RimUnity.UI;
 
-//使用上游布局算法计算纵向列表，横向子类只改变排列轴。
+//计算纵向列表的尺寸与位置，横向子类使用相同算法和不同排列轴。
 public class VerticalLayoutGroup : HorizontalOrVerticalLayoutGroup
 {
     internal virtual bool Horizontal => false;

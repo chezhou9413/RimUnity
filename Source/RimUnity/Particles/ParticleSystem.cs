@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using UnityEngine;
 
 namespace RimUnity;
 
@@ -34,7 +33,7 @@ public sealed partial class ParticleSystem : MonoBehaviour
         if (main.playOnAwake) BeginPlayback();
     }
     private void OnDisable() { Active.Remove(this); ReleaseParticleLights(); }
-    private void OnDestroy() { Active.Remove(this); ReleaseShapeMesh(); ReleaseParticleLights(); GetComponent<ParticleSystemRenderer>()?.Release(); }
+    private void OnDestroy() { Active.Remove(this); ReleaseShapeMesh(); ReleaseParticleLights(); GetComponent<ParticleSystemRenderer>()?.ReleaseGeometry(); }
     //粒子全部模拟完成后更新地图照明，避免多个子步反复更新 GlowGrid。
     private void LateUpdate() => UpdateParticleLights();
     private void Update() => SimulateFrame();

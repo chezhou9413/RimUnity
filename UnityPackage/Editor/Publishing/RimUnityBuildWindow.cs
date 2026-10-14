@@ -132,7 +132,7 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
         onlyIssues = GUILayout.Toggle(onlyIssues, "仅看检查问题", EditorStyles.toolbarButton, GUILayout.Width(105));
         if (GUILayout.Button("刷新检查", EditorStyles.toolbarButton, GUILayout.Width(85))) RefreshEntries();
         GUILayout.EndHorizontal();
-        var visible = entries.Where(e => (!onlyIssues || e.status != "pending") &&
+        var visible = entries.Where(e => (!onlyIssues || e.status != "pending" || e.missingScripts > 0) &&
             (string.IsNullOrWhiteSpace(search) || (e.path + " " + e.bundle + " " + e.status).IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0)).ToArray();
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("选择当前结果")) foreach (var e in visible) selected.Add(e.path);
@@ -158,6 +158,7 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
                 GUILayout.EndHorizontal();
                 GUILayout.Label(entry.path, pathStyle);
                 if (!string.IsNullOrEmpty(entry.error)) EditorGUILayout.HelpBox(entry.error, MessageType.Warning);
+                if (entry.missingScripts > 0) EditorGUILayout.HelpBox("含 " + entry.missingScripts + " 个缺失脚本，将随资源记录警告。", MessageType.Warning);
                 GUILayout.EndVertical();
             }
         }
@@ -197,8 +198,8 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
             if (entry == null)
             {
                 entry = new RimUnityWorkflow.Entry { path = path, type = asset.GetType().FullName, status = "pending" };
-                if (asset is GameObject go && go.GetComponentsInChildren<Component>(true).Any(c => c == null))
-                { entry.status = "missing-script"; entry.error = "预制体含缺失脚本。"; }
+                if (asset is GameObject go)
+                    entry.missingScripts = go.GetComponentsInChildren<Component>(true).Count(c => c == null);
                 manual.Add(entry); entries.Add(entry);
             }
             entry.bundle = mapping.bundle; entry.mod = mapping.mod;

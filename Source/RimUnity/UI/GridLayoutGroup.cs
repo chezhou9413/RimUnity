@@ -1,11 +1,19 @@
 using System.Collections.Generic;
-using UnityEngine;
 
 namespace RimUnity.UI;
 
 //按固定行列或可用矩形布置网格，保留起始方向、角点和对齐方式。
-public class GridLayoutGroup : UnityEngine.UI.GridLayoutGroup
+public class GridLayoutGroup : LayoutGroup
 {
+    public enum Constraint { Flexible, FixedColumnCount, FixedRowCount }
+    public enum Axis { Horizontal, Vertical }
+    public enum Corner { UpperLeft, UpperRight, LowerLeft, LowerRight }
+    public Constraint constraint { get; set => SetProperty(ref field, value); }
+    public int constraintCount { get; set => SetProperty(ref field, value); } = 2;
+    public Axis startAxis { get; set => SetProperty(ref field, value); }
+    public Corner startCorner { get; set => SetProperty(ref field, value); }
+    public Vector2 cellSize { get; set => SetProperty(ref field, value); } = new(100, 100);
+    public Vector2 spacing { get; set => SetProperty(ref field, value); }
     private readonly List<RectTransform> children = new();
     private RectTransform Rect => (RectTransform)transform;
     private int ConstraintCount => Mathf.Max(1, constraintCount);

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using UnityEngine;
 using Verse;
 
 namespace RimUnity;
@@ -22,7 +21,7 @@ public sealed partial class ParticleSystem
         public bool enabled, useRandomDistribution = true, useParticleColor = true, sizeAffectsRange = true, alphaAffectsIntensity = true;
         public float ratio = 1;
         public int maxLights = 20;
-        public UnityEngine.Light light;
+        public Light light;
         public MinMaxCurve range = 1, intensity = 1;
         public float rangeMultiplier { get => range.curveMultiplier; set => range.curveMultiplier = value; }
         public float intensityMultiplier { get => intensity.curveMultiplier; set => intensity.curveMultiplier = value; }
@@ -46,7 +45,8 @@ public sealed partial class ParticleSystem
             Particle p = particles[i];
             bool chosen = lights.useRandomDistribution ? Random(p.randomSeed, 221) < ratio : ratio > 0 && (long)Math.Floor(p.identity * (double)ratio) != (long)Math.Floor((p.identity - 1) * (double)ratio);
             if (!chosen) continue;
-            IntVec3 cell = IntVec3.FromVector3(WorldPosition(p));
+            Vector3 position = WorldPosition(p);
+            IntVec3 cell = new(Mathf.FloorToInt(position.x), Mathf.FloorToInt(position.y), Mathf.FloorToInt(position.z));
             if (!cell.InBounds(lightMap)) continue;
             float age = Age(p), random = Random(p.randomSeed, 222);
             Color color = lights.light.color;
@@ -59,7 +59,8 @@ public sealed partial class ParticleSystem
             if (lights.sizeAffectsRange) radius *= Mathf.Abs(SizeAt(p).x * ParticleScale(p).x);
             radius = Mathf.Round(Mathf.Clamp(radius, 0, GlowGrid.MaxLightRadius) * 8) / 8;
             if (radius <= 0 || intensity <= 0) continue;
-            ColorInt value = new(color);
+            Color32 bytes = color;
+            ColorInt value = new(bytes.r, bytes.g, bytes.b, bytes.a);
             liveLights.Add(p.identity);
             if (mapLights.TryGetValue(p.identity, out var previous))
             {

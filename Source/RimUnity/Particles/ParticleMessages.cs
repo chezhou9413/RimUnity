@@ -1,11 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using UnityEngine;
 
 namespace RimUnity;
 
-//粒子专用回调按实际脚本类型缓存，不依赖宿主未实现的 SendMessage。
+//按脚本类型缓存粒子回调入口。
 internal static class ParticleMessages
 {
     private static readonly Dictionary<(Type, string, Type), MethodInfo> methods = new();

@@ -2,11 +2,11 @@
 
 ## 1. 准备两侧环境
 
-制作端使用 Unity 2022.3 LTS，支持 Built-in 或 URP 14 的已适配功能。游戏端使用 Windows x64、RimWorld 1.7 Waylith 和 .NET 10。功能边界见 [Status.md](Status.md)，不是所有 Unity／URP 特性都能转换。
+制作端使用 Unity 2022.3 LTS，支持 Built-in 或 URP 14 的指定功能。游戏端使用 Windows x64、RimWorld 1.7 Waylith 和 .NET 10。支持范围见 [功能说明](Status.md)。
 
-通过 Package Manager 的 **Add package from disk** 选择 `UnityPackage/package.json`，或安装打包得到的 TGZ。克隆源码不包含已编译 DLL，也没有附带测试工程和美术资源。
+通过 Package Manager 的 **Add package from disk** 选择 `UnityPackage/package.json`，或安装发布的 TGZ。从源码安装时需先构建运行时与 ShaderTool。
 
-框架维护者可在仓库根目录构建（替换自己的路径）：
+从源码安装可在仓库根目录构建（替换自己的路径）：
 
 ```powershell
 dotnet build ./Source/RimUnity/RimUnity.csproj -c Release `
@@ -17,7 +17,7 @@ dotnet build ./Source/RimUnity.ShaderTool/RimUnity.ShaderTool.csproj -c Release 
   -p:RimWorldDir='C:/Games/RimWorld'
 ```
 
-运行时输出到 `1.7/Assemblies`，离线工具输出到 `Tools/bin/ShaderTool`。工具运行时加载配置的游戏目录里的编译依赖；不要向公开仓库或发布包复制游戏 DLL。
+运行时的 `RimUnity.Core.dll` 和 `RimUnity.dll` 输出到 `1.7/Assemblies`，离线工具输出到 `Tools/bin/ShaderTool`。离线工具需要配置目标游戏安装目录。发布包不包含游戏 DLL。
 
 `Compile-Editor.ps1` 是可选的插件源码编译入口，需要指定 Unity Editor/Data 和一个已导入 UGUI／TMP 的 UnityProject。它不启动 Unity，不替代编辑器自身的包导入检查。
 
@@ -80,15 +80,15 @@ PrefabExporter.Export(modDirectory,
 
 这条命令会启动 Unity；不要针对已被另一个编辑器打开的同一工程执行。先创建报告目录。批次可能捕获单项错误后正常退出，因此不能只凭进程退出码判断全部成功，必须检查报告中的 `exported`、`degraded`、`error` 和 `warnings`。
 
-旧 AB 标签资源可由 `BundleAssetExporter.Export(modDirectory, reportFile, bundleNames)` 导出为 `Bundles/...` 入口。这是在 Unity 编辑器读取资产，不是把二进制 AB 放到游戏里加载。
+导出贴图时保留图形设备，不要添加 `-nographics`。非可读或压缩贴图需要 GPU 拷贝和读回；Windows 自动化可添加 `-force-d3d11`。当前设备为 Null 时，导出器会拒绝这类贴图并保留上一份成功产物。
+
+带 AB 标签的资源可由 `BundleAssetExporter.Export(modDirectory, reportFile, bundleNames)` 导出为 `Bundles/...` 入口。游戏加载导出的明文资源，不读取二进制 AB。
 
 ## 5. 游戏侧接入
 
 按 [API 快速接入](ApiQuickStart.md) 声明依赖、引用程序集并编译业务代码。在地图或界面需要资源时，通过所属 ModContentPack 和逻辑路径加载，实例化模板，并由拥有者负责停止及销毁。
 
 更新游戏资源前先退出游戏，复制业务 DLL、catalog 和全部引用文件后重新启动。没有运行时热重载。加载问题按 [资源载入](ResourceLoading.md) 检查。
-
-依次确认资源加载、播放／停止、重复实例、透明度、缩放、Layer Bloom 和销毁。编译、导出、实际游戏画面分别记录；框架没有内置调试面板，也不会替作者保证所有组件已等效。
 
 ## 6. 打包交付
 
@@ -100,6 +100,6 @@ PrefabExporter.Export(modDirectory,
 
 输出为框架 Mod ZIP 和 UPM TGZ，携带 MIT 及第三方许可。框架包不包含内容资源、Unity 工程、缓存、游戏程序集或测试素材。TGZ 包中 `Tools~/ShaderTool` 附带本项目工具，仍需配置本机游戏安装目录。
 
-内容模组需单独打包：自己的 About、LoadFolders、业务 DLL、Defs 和 `1.7/Data/RimUnity` 依赖闭包。不要把“只复制最新 generation”当作资源裁剪方法；旧入口可能仍引用之前的文件。框架与内容模组的版本、导出格式和实际游戏版本应一并记录。
+内容模组需单独打包：自己的 About、LoadFolders、业务 DLL、Defs 和 `1.7/Data/RimUnity` 全部依赖。不能只复制最新 generation，清单中的其他入口可能仍引用之前的文件。
 
 本仓库采用 MIT；内容模组的美术、字体和第三方插件按其各自许可证处理。

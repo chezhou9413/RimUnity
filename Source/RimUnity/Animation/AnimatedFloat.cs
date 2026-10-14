@@ -17,7 +17,7 @@ internal sealed class AnimatedFloat
     {
         this.path = path;
         scale = propertyPath.StartsWith("m_LocalScale.", StringComparison.Ordinal);
-        if (target is UnityEngine.GameObject go && propertyPath == "m_IsActive")
+        if (target is GameObject go && propertyPath == "m_IsActive")
         { read = () => go.activeSelf ? 1 : 0; write = value => go.SetActive(value > .5f); initial = read(); return; }
         //材质浮点参数不是 CLR 字段，绑定当前渲染器的实例材质，避免改动共享资源。
         if (propertyPath.StartsWith("material.", StringComparison.Ordinal))
@@ -25,7 +25,7 @@ internal sealed class AnimatedFloat
             string property = propertyPath[9..];
             if (property.Length == 0 || property.Contains('.'))
                 throw new NotSupportedException("当前只支持完整的材质浮点属性，不支持颜色或向量分量：" + propertyPath);
-            UnityEngine.Material material = target switch
+            Material material = target switch
             {
                 LineRenderer line => line.material,
                 TrailRenderer trail => trail.material,
@@ -33,7 +33,7 @@ internal sealed class AnimatedFloat
                 _ => throw new NotSupportedException("此动画目标尚未接通实例材质属性：" + target.GetType().FullName)
             };
             if (material == null) throw new InvalidOperationException("动画目标缺少材质：" + path);
-            int id = UnityEngine.Shader.PropertyToID(property);
+            int id = Shader.PropertyToID(property);
             if (!material.HasProperty(id)) throw new MissingMemberException("动画材质不存在属性：" + path + "/" + property);
             read = () => material.GetFloat(id); write = value => material.SetFloat(id, value);
             initial = read(); return;

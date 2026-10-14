@@ -1,6 +1,5 @@
 using RimUnity.EventSystems;
-using UnityEngine.Events;
-using UnityEngine;
+using RimUnity.Events;
 
 namespace RimUnity.UI;
 
@@ -9,7 +8,7 @@ public class Toggle : Selectable, IPointerClickHandler, ISubmitHandler
 {
     public enum ToggleTransition { None, Fade }
     public ToggleTransition toggleTransition { get; set; }
-    public UnityEngine.UI.Graphic graphic { get; set; }
+    public RimUnity.UI.Graphic graphic { get; set; }
     private ToggleGroup currentGroup;
     public ToggleGroup group
     {

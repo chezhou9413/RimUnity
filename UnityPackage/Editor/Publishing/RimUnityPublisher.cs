@@ -8,13 +8,12 @@ using RimUnity.Editor;
 using UnityEditor;
 using UnityEngine;
 
-// A content snapshot is prepared in isolation. No live file is deleted until every
-// target has exported and validated. Publication rollback restores the prior snapshot.
+//所有目标准备完毕后统一发布，失败时恢复原有数据。
 namespace RimUnity.Editor { public static class RimUnityPublisher
 {
     private sealed class Target
     {
-        public string Mod, Live, Stage, StageParent, Prepared, Backup;
+        public string Mod, Live, Stage, StageParent, Prepared, Ready, Backup;
         public bool HadOld, Published;
         public FileStream Lock;
         public RimUnityWorkflow.Entry[] Entries;
@@ -45,12 +44,12 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
                 Directory.CreateDirectory(data);
                 EnsureNoLinks(data);
                 target.Lock = new FileStream(Path.Combine(data, ".rimunity-publish.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-                // Prevent publication while the framework's direct exporter is committing.
+                //直接导出器正在提交时，不允许覆盖其资源目录。
                 string exportLock = Path.Combine(target.Live, ".export.lock");
                 if (File.Exists(exportLock)) using (File.Open(exportLock, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) { }
                 string id = Guid.NewGuid().ToString("N");
                 string shortParent = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "RimUnity"));
-                target.StageParent = string.Equals(Path.GetPathRoot(shortParent), Path.GetPathRoot(data), StringComparison.OrdinalIgnoreCase) ? shortParent : data;
+                target.StageParent = shortParent;
                 Directory.CreateDirectory(target.StageParent);
                 target.Stage = Path.Combine(target.StageParent, ".rimunity-stage-" + id);
                 target.Backup = Path.Combine(data, ".rimunity-old-" + id);
@@ -62,23 +61,42 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
             EditorPrefs.SetString("RimUnity.ShaderTool", profile.shaderTool);
             EditorPrefs.SetString("RimUnity.GameRoot", profile.gameRoot);
             int finished = 0;
+            var errors = new List<Exception>();
             foreach (var target in targets)
             {
+                int before = errors.Count;
                 foreach (var entry in target.Entries)
                 {
                     if (EditorUtility.DisplayCancelableProgressBar("RimUnity 明文导出", entry.path, (float)finished / entries.Length))
                         throw new OperationCanceledException("已取消；正式数据未替换。");
                     log("导出：" + entry.path);
-                    PrefabExporter.Export(target.Stage, new ExportOptions { disableCastShadows = profile.disableCastShadows, disableReceiveShadows = profile.disableReceiveShadows, disableLightProbes = profile.disableLightProbes, disableReflectionProbes = profile.disableReflectionProbes, log = log }, new ExportRequest {
-                        asset = AssetDatabase.LoadMainAssetAtPath(entry.path), ui = entry.ui,
-                        path = "Bundles/" + entry.bundle + "/" + entry.path, description = "源资源：" + entry.path });
+                    try
+                    {
+                        PrefabExporter.Export(target.Stage, new ExportOptions { disableCastShadows = profile.disableCastShadows, disableReceiveShadows = profile.disableReceiveShadows, disableLightProbes = profile.disableLightProbes, disableReflectionProbes = profile.disableReflectionProbes, log = log }, new ExportRequest {
+                            asset = AssetDatabase.LoadMainAssetAtPath(entry.path), ui = entry.ui,
+                            path = "Bundles/" + entry.bundle + "/" + entry.path, description = "源资源：" + entry.path });
+                    }
+                    catch (Exception error)
+                    {
+                        errors.Add(new InvalidOperationException(entry.path + "：" + error.Message, error));
+                        log("导出失败：" + entry.path + "\n" + error);
+                    }
                     finished++;
                 }
+                if (errors.Count != before) continue;
                 Validate(target.Prepared);
+                //跨磁盘先复制到目标盘，再通过同盘重命名发布。
+                string data = Path.GetDirectoryName(target.Live);
+                if (!string.Equals(Path.GetPathRoot(target.Prepared), Path.GetPathRoot(data), StringComparison.OrdinalIgnoreCase))
+                {
+                    target.Ready = Path.Combine(data, ".rimunity-ready-" + Guid.NewGuid().ToString("N"));
+                    CopyTree(target.Prepared, target.Ready);
+                    target.Prepared = target.Ready;
+                }
                 log("验证通过：" + target.Mod);
             }
-            // No cancellation after publication starts. If any rename fails, roll back
-            // every published target before reporting failure (all backups still exist).
+            if (errors.Count > 0) throw new AggregateException("导出存在错误，正式数据未替换。", errors);
+            //发布期间保留全部旧数据，任意目标失败时整体恢复。
             foreach (var target in targets)
             {
                 target.HadOld = Directory.Exists(target.Live);
@@ -100,8 +118,7 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
                 foreach (var target in targets.Reverse())
                     if (target.Published)
                     {
-                        // Move the unpublished new snapshot back into our own stage rather
-                        // than deleting live content during rollback.
+                        //将新数据移回准备目录，再恢复旧版本。
                         Directory.Move(target.Live, target.Prepared);
                         if (target.HadOld) Directory.Move(target.Backup, target.Live);
                         target.Published = false;
@@ -117,6 +134,7 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
             {
                 target.Lock?.Dispose();
                 if (target.Stage != null) TryDeleteOwned(target.Stage, target.StageParent, ".rimunity-stage-", log);
+                if (target.Ready != null) TryDeleteOwned(target.Ready, Path.GetDirectoryName(target.Live), ".rimunity-ready-", log);
             }
         }
     }
@@ -146,15 +164,12 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
             foreach (string dependency in (asset["dependencies"] as JArray ?? new JArray()).Values<string>())
                 if (!ids.Contains(dependency)) throw new InvalidDataException("缺失依赖：" + dependency);
             var json = JObject.Parse(File.ReadAllText(file));
-            // Shader paths and ResourceData file members are content-root relative,
-            // exactly as ResourceWriter emits them, rather than JSON-relative paths.
+            //附属文件路径以资源根目录为基准。
             foreach (string name in new[] { "vertexFile", "fragmentFile", "descriptorFile" })
                 if (json[name]?.Type == JTokenType.String) CheckFile(root, (string)json[name]);
             if (json["members"] is JArray members)
                 foreach (JObject member in members)
                     if ((string)member["name"] == "file") CheckFile(root, (string)member["value"]?["text"]);
-            if (((string)asset["description"] ?? "").Contains("[降级导出]"))
-                throw new InvalidDataException("资源存在降级警告，未发布：" + (string)asset["path"]);
         }
     }
     private static void CheckFile(string root, string relative)

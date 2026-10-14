@@ -1,9 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using UnityEngine;
-using UnityEngine.Rendering;
-using UnityStubs.Gui;
 using Verse;
 
 namespace RimUnity.UI.Runtime;
@@ -28,7 +25,7 @@ internal static class WorldUiSubmission
     internal static void Release(Canvas canvas)
     {
         if (!canvases.Remove(canvas, out var state)) return;
-        foreach (var batch in state.batches) { UnityEngine.Object.Destroy(batch.mesh); if (batch.material != null) UnityEngine.Object.Destroy(batch.material); }
+        foreach (var batch in state.batches) { RimUnity.Object.Destroy(batch.mesh); if (batch.material != null) RimUnity.Object.Destroy(batch.material); }
     }
     //GUI 几何通过所属矩形平面还原为三维顶点，透视校正在场景顶点阶段进行。
     internal static void Draw(ReadOnlySpan<GuiVertex> data, Texture texture, Material source)
@@ -42,7 +39,7 @@ internal static class WorldUiSubmission
             throw new NotSupportedException("世界 UI 材质尚未提供场景入口：" + source.shader.name);
         if (batch.material == null || batch.material.shader.name != key)
         {
-            if (batch.material != null) UnityEngine.Object.Destroy(batch.material);
+            if (batch.material != null) RimUnity.Object.Destroy(batch.material);
             if (!Waylith.Rendering.ShaderRegistry.TryResolve(key, out var shader)) throw new InvalidOperationException("世界 UI Shader 未注册：" + key);
             batch.material = new Material(Shader.FromEngineShader(key, shader));
         }
@@ -60,6 +57,6 @@ internal static class WorldUiSubmission
             batch.indices.Add(batch.vertices.Count); batch.vertices.Add(Current.Rect.TransformPoint(local)); batch.uv.Add(vertex.uv); batch.colors.Add(vertex.color);
         }
         batch.mesh.Clear(); batch.mesh.SetVertices(batch.vertices); batch.mesh.SetColors(batch.colors); batch.mesh.SetUVs(0, batch.uv); batch.mesh.SetTriangles(batch.indices, 0); batch.mesh.RecalculateBounds();
-        Graphics.DrawMesh(batch.mesh, Matrix4x4.identity, batch.material, Current.Rect.gameObject.layer, camera);
+        RimUnity.Graphics.DrawMesh(batch.mesh, Matrix4x4.identity, batch.material, Current.Rect.gameObject.layer);
     }
 }

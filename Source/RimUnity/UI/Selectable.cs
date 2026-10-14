@@ -1,5 +1,3 @@
-//源自 ChezhouLib UGUI；迁移来源与第三方许可见 Docs/ThirdParty.md。
-using UnityEngine;
 using RimUnity.EventSystems;
 namespace RimUnity.UI;
 
@@ -9,7 +7,7 @@ public abstract partial class Selectable : MonoBehaviour, IMoveHandler, ISelectH
     public enum Transition { None, ColorTint, SpriteSwap, Animation }
     public Transition transition { get; set; } = Transition.ColorTint;
     public bool interactable { get; set; } = true;
-    public UnityEngine.UI.Graphic targetGraphic { get; set; }
+    public RimUnity.UI.Graphic targetGraphic { get; set; }
     public Image image { get => targetGraphic as Image; set => targetGraphic = value; }
     internal bool Hovered, Held;
     private bool selected;

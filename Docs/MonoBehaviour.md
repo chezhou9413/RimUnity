@@ -1,12 +1,12 @@
 # MonoBehaviour 与常用方法
 
-RimUnity 的脚本仍继承 `UnityEngine.MonoBehaviour`。GameObject、Transform 和脚本生命周期由 RimWorld 1.7 的 Waylith 兼容层执行，RimUnity 负责还原明文预制体、绑定引用，并实现粒子、动画等组件。不是全部 Unity API 都已实现。
+游戏侧脚本继承 `RimUnity.MonoBehaviour`，使用 `RimUnity.GameObject`、`Transform` 和数学类型。RimUnity 负责对象树、字段与事件绑定、生命周期和协程；资源与绘制直接调用 Waylith。本文介绍常用 API，支持范围见 [功能说明](Status.md)。
 
-本文按当前 RimUnity 源码及本地 RimWorld 1.7.4976 接口整理；游戏升级后应重新核对宿主接口。程序集引用、导出和加载入口分别见 [API 快速接入](ApiQuickStart.md)、[工作流](Workflow.md) 和 [资源载入](ResourceLoading.md)。
+程序集引用、导出和加载入口分别见 [API 快速接入](ApiQuickStart.md)、[工作流](Workflow.md) 和 [资源载入](ResourceLoading.md)。
 
 ## 1. 制作端和游戏端如何共用脚本
 
-制作端使用 Unity 原生组件；游戏端保留脚本完整类型名，将需要桥接的组件改为 RimUnity 类型并重新编译。不要把 Unity 工程编译出来的旧 DLL 直接放进游戏。
+制作端使用 Unity 原生组件；游戏端保留脚本完整类型名，游戏侧组件使用 RimUnity 类型并编译为 .NET 10 程序集。
 
 例如，Unity 中创建如下预制体，将脚本挂在 `EffectRoot`，并将 `Fire` 的粒子组件拖入脚本的 `fire` 字段：
 
@@ -20,9 +20,10 @@ EffectRoot
 下面是可以同时维护制作端和游戏端的脚本。`RIMWORLD_1_7` 是内容模组自己的编译符号，需要在游戏侧项目的 `DefineConstants` 中设置，RimUnity 不会自动替使用方添加。
 
 ```csharp
-using UnityEngine;
 #if RIMWORLD_1_7
-using ParticleSystem = RimUnity.ParticleSystem;
+using RimUnity;
+#else
+using UnityEngine;
 #endif
 
 namespace MyMod.Effects
@@ -65,7 +66,7 @@ RimUnity.Assets.TypeResolver.Register(
 
 ## 2. 生命周期与初始化顺序
 
-加载器先建立全部节点和组件，再恢复字段、对象引用和事件，最后恢复活动状态；共享模板始终失活。实例的生命周期消息由宿主调度，不需要业务代码手动调用。
+加载器先建立全部节点和组件，再恢复字段、对象引用和事件，最后恢复活动状态；共享模板始终失活。实例的生命周期消息由 RimUnity 调度，不需要业务代码手动调用。
 
 | 方法 | 常见用途 |
 |---|---|
@@ -74,6 +75,7 @@ RimUnity.Assets.TypeResolver.Register(
 | `Start()` | 首次进入更新前的初始化，不用于每次对象池取出 |
 | `Update()` | 每帧更新视觉表现 |
 | `LateUpdate()` | 更新后调整跟随位置、挂点等 |
+| `FixedUpdate()` | 按 `Time.fixedDeltaTime` 推进的定步长更新，不是游戏 Tick |
 | `OnDisable()` | 取消事件订阅、停止该脚本持有的协程 |
 | `OnDestroy()` | 释放自身创建和拥有的资源 |
 
@@ -111,7 +113,7 @@ for (int i = 0; i < transform.childCount; i++)
 
 `transform.Find("Fire")` 只匹配直接子节点，不会递归搜索任意深度；跨层级写 `"Effects/Fire"`。`GetComponent<T>()` 只查当前对象，子树查询默认不包含未激活对象。查不到节点或单个组件时需要按资源契约处理，不应紧接着无条件访问其成员。
 
-宿主提供 `GameObject.Find(name)`，但它属于全局查找；同名实例无法据此可靠区分。优先从持有的实例根节点查找，或使用 Inspector 引用。常用引用在初始化时缓存，不要每帧搜索整个层级。
+`RimUnity.GameObject.Find(name)`，但它属于全局查找；同名实例无法据此可靠区分。优先从持有的实例根节点查找，或使用 Inspector 引用。常用引用在初始化时缓存，不要每帧搜索整个层级。
 
 ## 4. Transform、激活与动态组件
 
@@ -145,13 +147,13 @@ instance.SetActive(true);
 
 ```csharp
 var template = RimUnity.Assets.PrefabLoader.Load(contentMod, "Effects/Fire");
-var instance = UnityEngine.Object.Instantiate(template);
+var instance = RimUnity.Object.Instantiate(template);
 instance.transform.position = position;
 instance.SetActive(true);
 instance.GetComponent<MyMod.Effects.FireController>().PlayFire();
 
-//使用结束、拥有者销毁或地图退出时清理。
-UnityEngine.Object.Destroy(instance);
+//使用结束、拥有者销毁或地图退出时销毁实例。
+RimUnity.Object.Destroy(instance);
 ```
 
 这里要求预制体根节点挂有前面的 `FireController`。`"Effects/Fire"` 是导出逻辑路径，不是 JSON 文件名。不要激活、修改或销毁 `template`；多个实例共享加载的资源模板。当前只支持从加载得到的根模板克隆，不支持克隆运行实例或局部子树。
@@ -160,15 +162,15 @@ UnityEngine.Object.Destroy(instance);
 
 ## 6. 协程与时间
 
-当前宿主提供 `StartCoroutine(IEnumerator)`、`StopCoroutine(Coroutine)` 和 `StopAllCoroutines()`。已核对的等待类型包括 `yield return null`、`WaitForSeconds`、`WaitForEndOfFrame`、嵌套 IEnumerator 以及等待另一个 Coroutine。不要假定字符串方法名重载、`InvokeRepeating` 或所有 Unity YieldInstruction 都可用。
+RimUnity 提供 `StartCoroutine(IEnumerator)`、`StopCoroutine(Coroutine)`、`StopCoroutine(IEnumerator)` 和 `StopAllCoroutines()`。支持 `yield return null`、`WaitForSeconds`、`WaitForSecondsRealtime`、`WaitForEndOfFrame`、`WaitForFixedUpdate`、`WaitUntil`、`WaitWhile`、`CustomYieldInstruction`、嵌套 IEnumerator 以及等待另一个 Coroutine。不要假定字符串方法名重载、`InvokeRepeating` 或所有 Unity YieldInstruction 都可用。
 
 下面示例在启用后等待两帧，再执行自己的视觉初始化：
 
 ```csharp
 using System.Collections;
-using UnityEngine;
+using RimUnity;
 
-//示范协程的启动与显式清理。
+//启动和停止协程。
 public sealed class DeferredVisual : MonoBehaviour
 {
     //每次启用开始一个新的显示周期。
@@ -182,17 +184,17 @@ public sealed class DeferredVisual : MonoBehaviour
         //在这里执行自己的视觉逻辑。
     }
 
-    //宿主协程调度器不保证禁用对象时自动取消，主动结束自身协程。
+    //禁用脚本时主动结束自身协程。
     private void OnDisable() => StopAllCoroutines();
 
-    //销毁时同样清理，避免协程继续持有组件。
+    //销毁时停止协程，释放组件引用。
     private void OnDestroy() => StopAllCoroutines();
 }
 ```
 
-自定义 Mono 的 `Update`、`Time.deltaTime` 和 `WaitForSeconds` 使用宿主帧时间，**不能直接视为 RimWorld 的模拟时间**。游戏暂停不等于停止绘制帧；不要在视觉 Update 中按帧执行伤害、生产或消耗等游戏逻辑。此类业务应接入内容模组原本的 Tick 流程。
+自定义 Mono 的 `Update`、`Time.deltaTime` 和 `WaitForSeconds` 使用 RimUnity 帧时间，**不能直接视为 RimWorld 的模拟时间**。游戏暂停不等于停止绘制帧；不要在视觉 Update 中按帧执行伤害、生产或消耗等游戏逻辑。此类业务应接入内容模组原本的 Tick 流程。
 
-RimUnity 的粒子／Animator 有自己的游戏时间适配。粒子的 `main.useUnscaledTime`、Animator 的 `updateMode = RimUnity.AnimatorUpdateMode.UnscaledTime` 可选择非缩放时间；这不会改变其他自定义脚本或协程的时钟。当前宿主 `Time.timeScale` 设置是空实现，不应用它控制游戏暂停或倍速。
+RimUnity 的粒子／Animator 有自己的游戏时间适配。粒子的 `main.useUnscaledTime`、Animator 的 `updateMode = RimUnity.AnimatorUpdateMode.UnscaledTime` 可选择非缩放时间；这不会改变其他自定义脚本或协程的时钟。`RimUnity.Time.timeScale` 控制自定义 Mono 的缩放时钟和 `WaitForSeconds`，不改变 RimWorld 的暂停与倍速。对象失活或销毁会结束其协程；仅设置脚本 `enabled = false` 不会自动结束协程。
 
 ## 7. 常用桥接组件
 
@@ -202,16 +204,16 @@ RimUnity 的粒子／Animator 有自己的游戏时间适配。粒子的 `main.u
 | Animator | `RimUnity.Animator`：`Play("Idle")`、`CrossFade("Run", 0.2f)`、`SetFloat`、`SetBool`、`SetTrigger` |
 | 线段／拖尾 | `RimUnity.LineRenderer`、`RimUnity.TrailRenderer` |
 | 静态／骨骼绘制 | `RimUnity.MeshRenderer`、`RimUnity.SkinnedMeshRenderer` |
-| UGUI | `RimUnity.UI.Button`、`Image`、`Text` 等；见 [类型迁移](Usage.md) |
+| UGUI | `RimUnity.UI.Button`、`Image`、`Text` 等；见 [类型与脚本用法](Usage.md) |
 
-Animator 的状态名和参数名必须在导出的 Controller 中存在；`CrossFade` 的过渡时长使用归一化语义，需要秒数时使用 `CrossFadeInFixedTime`。基础状态机已实现，不等于 Humanoid、IK 等完整 Animator 功能。
+Animator 的状态名和参数名必须在导出的 Controller 中存在；`CrossFade` 的过渡时长使用归一化语义，需要秒数时使用 `CrossFadeInFixedTime`。不支持 Humanoid、IK 等完整 Animator 功能。
 
-粒子 `Play()` 默认包含子级及关联子发射器，不要无条件遍历所有子粒子逐个 Play。`SetActive(false)` 是关闭对象，`Pause()` 是粒子暂停，两者生命周期不同。完整能力和限制见 [粒子说明](ParticleQuickStart.md) 与 [当前状态](Status.md)。
+粒子 `Play()` 默认包含子级及关联子发射器，不要无条件遍历所有子粒子逐个 Play。`SetActive(false)` 是关闭对象，`Pause()` 是粒子暂停，两者生命周期不同。完整能力和限制见 [粒子说明](ParticleQuickStart.md) 与 [支持范围](Status.md)。
 
 ## 8. 接入检查
 
-- 自定义脚本程序集已加载，完整类型名唯一，组件引用换成正确的桥接类型。
+- 自定义脚本程序集已加载，完整类型名唯一，组件字段使用 RimUnity 类型。
 - Unity 端完成字段绑定；层级路径相对于脚本实际所在节点。
 - 加载、实例化、GetComponent 和组件修改都在游戏主线程执行，不放进后台 Task。
-- 只操作实例，事件和协程在禁用／销毁时清理；地图退出时释放属于该地图的表现对象。
-- 缺失方法以当前宿主和 RimUnity 源码为准，不能仅凭 Unity 原版文档推断兼容；编译通过也不代表游戏画面已验证。
+- 只操作实例，在禁用／销毁时解除事件订阅并停止需要结束的协程；地图退出时释放属于该地图的表现对象。
+- 使用本文列出的接口，其他 Unity API 请先查阅 [支持范围](Status.md)。

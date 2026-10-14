@@ -1,16 +1,14 @@
-//源自 ChezhouLib UGUI；迁移来源与第三方许可见 Docs/ThirdParty.md。
-using UnityEngine;
 
 using RimUnity.UI;
 namespace RimUnity;
 
 public enum RenderMode { ScreenSpaceOverlay, ScreenSpaceCamera, WorldSpace }
 
-//以屏幕覆盖方式承载兼容层控件；相机和世界画布须另行适配。
+//管理画布的显示模式、缩放和绘制顺序。
 public class Canvas : MonoBehaviour
 {
-    public RenderMode renderMode { get; set; }
-    public Camera worldCamera { get; set; }
+    public RenderMode renderMode { get; set => SetProperty(ref field, value); }
+    public Camera worldCamera { get; set => SetProperty(ref field, value); }
     public int sortingOrder { get; set; }
     public bool overrideSorting { get; set; }
     public float planeDistance { get; set; } = 100;
@@ -18,8 +16,8 @@ public class Canvas : MonoBehaviour
     public bool isRootCanvas => rootCanvas == this;
     internal RenderMode EffectiveMode => rootCanvas.renderMode;
     internal int EffectiveOrder => overrideSorting || isRootCanvas ? sortingOrder : rootCanvas.sortingOrder;
-    public float scaleFactor { get; set; } = 1f;
-    public float referencePixelsPerUnit { get; set; } = 100f;
+    public float scaleFactor { get; set => SetProperty(ref field, value); } = 1f;
+    public float referencePixelsPerUnit { get; set => SetProperty(ref field, value); } = 100f;
 
     //支持模组通过 Ugui.CreateObject 动态创建画布。
     private void OnEnable() => UI.Runtime.UguiRuntime.Register(this);

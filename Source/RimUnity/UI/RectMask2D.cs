@@ -1,5 +1,3 @@
-//源自 ChezhouLib UGUI；迁移来源与第三方许可见 Docs/ThirdParty.md。
-using UnityEngine;
 namespace RimUnity.UI;
 
 //矩形裁切区域在每次绘制前随变换重新计算。

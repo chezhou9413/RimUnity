@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using UnityEngine;
 
 namespace RimUnity;
 
@@ -34,7 +33,7 @@ public sealed partial class TrailRenderer : MonoBehaviour
         {
             Material value = sharedMaterial;
             if (value == null || ownedMaterials.Contains(value)) return value;
-            Material copy = new(value); Rendering.MaterialPasses.Copy(value, copy);
+            Material copy = new(value);
             sharedMaterials = (Material[])sharedMaterials.Clone(); sharedMaterials[0] = copy; ownedMaterials.Add(copy); return copy;
         }
         set => sharedMaterial = value;
@@ -114,6 +113,6 @@ public sealed partial class TrailRenderer : MonoBehaviour
     private void OnDestroy()
     {
         Active.Remove(this); if (batch != null) Destroy(batch);
-        foreach (Material value in ownedMaterials) { Rendering.MaterialPasses.Release(value); Destroy(value); }
+        foreach (Material value in ownedMaterials) Destroy(value);
     }
 }

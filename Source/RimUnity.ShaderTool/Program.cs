@@ -42,7 +42,10 @@ internal static class Program
         if (args[1] == "preprocess" && args.Length == 3) ShaderPreprocessor.Write(args[2]);
         else if (args[1] == "inspect" && args.Length == 4)
         {
-            Assembly library = AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.GetFullPath(args[2]));
+            string libraryPath = Path.GetFullPath(args[2]);
+            //静态资源检查使用目标模组随附的 Core，游戏目录不提供该程序集。
+            AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(Path.GetDirectoryName(libraryPath), "RimUnity.Core.dll"));
+            Assembly library = AssemblyLoadContext.Default.LoadFromAssemblyPath(libraryPath);
             library.GetType("RimUnity.Assets.PrefabInspector", true).GetMethod("ValidateDirectory").Invoke(null, new object[] { args[3] });
         }
         else if (args[1] == "verify")

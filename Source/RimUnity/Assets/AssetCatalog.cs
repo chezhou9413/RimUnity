@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using RimUnity.Serialization;
-using UnityEngine;
 
 namespace RimUnity.Assets;
 
@@ -15,7 +14,7 @@ internal sealed class AssetCatalog
     internal readonly string Root;
     internal readonly Manifest Manifest;
     private readonly Dictionary<string, AssetRecord> records;
-    private readonly Dictionary<string, UnityEngine.Object> resources = new();
+    private readonly Dictionary<string, RimUnity.Object> resources = new();
     private readonly HashSet<string> loading = new();
 
     //清单在首次加载时校验，失败直接报告内容模组及资源路径。
@@ -54,14 +53,14 @@ internal sealed class AssetCatalog
         ?? throw new FileNotFoundException($"模组 {Manifest.owner} 没有 RimUnity 资源：{path}");
 
     //同一依赖只解码一次，并明确拒绝资源循环引用。
-    internal UnityEngine.Object Get(string id)
+    internal RimUnity.Object Get(string id)
     {
         if (resources.TryGetValue(id, out var cached)) return cached;
         if (!records.TryGetValue(id, out var record)) throw new InvalidDataException($"未知资源 ID：{id}");
         if (!loading.Add(id)) throw new InvalidDataException($"资源依赖形成循环：{record.path}");
         try
         {
-            UnityEngine.Object value = record.type == "Prefab" ? PrefabBuilder.Template(this, Read<PrefabData>(record.file)) : ResourceLoader.Load(this, record);
+            RimUnity.Object value = record.type == "Prefab" ? PrefabBuilder.Template(this, Read<PrefabData>(record.file)) : ResourceLoader.Load(this, record);
             resources.Add(id, value);
             return value;
         }

@@ -16,6 +16,8 @@ public static class TypeResolver
     internal static Type Resolve(string name)
     {
         if (Aliases.TryGetValue(name, out Type alias)) return alias;
+        if (name.StartsWith("UnityEngine.", StringComparison.Ordinal))
+            throw new TypeLoadException($"资源仍包含制作端类型 {name}；请用当前导出器重新导出，脚本字段使用 RimUnity 类型。");
         Type[] found = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType(name, false)).Where(t => t != null).ToArray();
         if (found.Length != 1) throw new TypeLoadException($"类型 {name} 匹配 {found.Length} 项；请重新编译对应脚本或通过 TypeResolver.Register 指定类型。");
         return found[0];
@@ -25,7 +27,7 @@ public static class TypeResolver
     internal static Type Component(string name)
     {
         Type type = Resolve(name);
-        if (!typeof(UnityEngine.Component).IsAssignableFrom(type) || type.IsAbstract)
+        if (!typeof(RimUnity.Component).IsAssignableFrom(type) || type.IsAbstract)
             throw new TypeLoadException($"{name} 不是可实例化组件。");
         return type;
     }

@@ -1,16 +1,14 @@
-//源自 ChezhouLib UGUI；迁移来源与第三方许可见 Docs/ThirdParty.md。
 using System.Collections.Generic;
-using UnityEngine;
 namespace RimUnity.UI;
 
-//把上游布局算法所需的对象与尺寸接口连接到兼容层。
-public abstract class UguiLayoutGroup : UnityEngine.UI.LayoutGroup
+//收集布局子节点并计算尺寸、对齐和位置。
+public abstract class UguiLayoutGroup : LayoutGroup
 {
     protected RectTransform rectTransform => (RectTransform)transform;
     protected readonly List<RectTransform> rectChildren = new();
-    public bool childScaleWidth { get; set; }
-    public bool childScaleHeight { get; set; }
-    public bool reverseArrangement { get; set; }
+    public bool childScaleWidth { get; set => SetProperty(ref field, value); }
+    public bool childScaleHeight { get; set => SetProperty(ref field, value); }
+    public bool reverseArrangement { get; set => SetProperty(ref field, value); }
     //收集允许参与布局的活动子节点。
     protected void CollectChildren()
     {
@@ -25,8 +23,6 @@ public abstract class UguiLayoutGroup : UnityEngine.UI.LayoutGroup
         }
         if (reverseArrangement) rectChildren.Reverse();
     }
-    //配置由下一次布局计算使用。
-    protected void SetProperty<T>(ref T field, T value) => field = value;
     protected float GetTotalMinSize(int axis) => axis == 0 ? minWidth : minHeight;
     protected float GetTotalPreferredSize(int axis) => axis == 0 ? preferredWidth : preferredHeight;
     protected float GetTotalFlexibleSize(int axis) => axis == 0 ? flexibleWidth : flexibleHeight;

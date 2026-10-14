@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
-using UnityEngine;
-using UnityStubs.Gui;
-using Image = UnityEngine.UI.Image;
+using Image = RimUnity.UI.Image;
 
 namespace RimUnity.UI.Runtime;
 
@@ -22,7 +20,7 @@ internal static partial class UguiImageRenderer
     }
 
     //180 度使用两半矩形，360 度使用四个象限，遵守 Unity 的局部角度规则。
-    private static void RadialFilled(UguiRuntime.Entry entry, UnityEngine.UI.Image image, Rect rect, Rect uv, Color color, float amount)
+    private static void RadialFilled(UguiRuntime.Entry entry, RimUnity.UI.Image image, Rect rect, Rect uv, Color color, float amount)
     {
         if (image.fillMethod == Image.FillMethod.Radial90)
         {
@@ -88,7 +86,7 @@ internal static partial class UguiImageRenderer
     private static Rect SubRect(Rect rect, Rect fraction) => new(rect.min + Vector2.Scale(rect.size, fraction.min), Vector2.Scale(rect.size, fraction.size));
 
     //边框保持九宫格厚度，中间和各边按源精灵尺寸重复，末尾单元裁切 UV。
-    private static void Tiled(UguiRuntime.Entry entry, UnityEngine.UI.Image image, Sprite sprite, Rect rect, Rect uv, Color color)
+    private static void Tiled(UguiRuntime.Entry entry, RimUnity.UI.Image image, Sprite sprite, Rect rect, Rect uv, Color color)
     {
         float units = sprite.pixelsPerUnit / entry.Canvas.referencePixelsPerUnit * image.pixelsPerUnitMultiplier;
         if (!float.IsFinite(units) || units <= 0f) throw new InvalidOperationException("Image 的像素比例必须是有限正数。");

@@ -1,4 +1,3 @@
-using UnityEngine;
 
 namespace RimUnity.UI;
 
@@ -6,10 +5,10 @@ namespace RimUnity.UI;
 public partial class ScrollRect
 {
     public enum ScrollbarVisibility { Permanent, AutoHide, AutoHideAndExpandViewport }
-    public ScrollbarVisibility horizontalScrollbarVisibility { get; set; }
-    public ScrollbarVisibility verticalScrollbarVisibility { get; set; }
-    public float horizontalScrollbarSpacing { get; set; }
-    public float verticalScrollbarSpacing { get; set; }
+    public ScrollbarVisibility horizontalScrollbarVisibility { get; set => SetProperty(ref field, value); }
+    public ScrollbarVisibility verticalScrollbarVisibility { get; set => SetProperty(ref field, value); }
+    public float horizontalScrollbarSpacing { get; set => SetProperty(ref field, value); }
+    public float verticalScrollbarSpacing { get; set => SetProperty(ref field, value); }
     private bool NeedsHorizontal => horizontal && rawContentSize.x > viewBounds.width + 0.01f;
     private bool NeedsVertical => vertical && rawContentSize.y > viewBounds.height + 0.01f;
 

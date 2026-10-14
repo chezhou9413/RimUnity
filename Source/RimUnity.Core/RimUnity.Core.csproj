@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>RimUnity.Core</AssemblyName>
+    <OutputPath>../../1.7/Assemblies/</OutputPath>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Waylith" HintPath="$(RimWorldDir)/Waylith.dll" />
+    <Reference Include="Brutal.Core.Common" HintPath="$(RimWorldDir)/Brutal.Core.Common.dll" />
+    <Reference Include="Brutal.Core.Memory" HintPath="$(RimWorldDir)/Brutal.Core.Memory.dll" />
+    <Reference Include="Brutal.Core.Numerics" HintPath="$(RimWorldDir)/Brutal.Core.Numerics.dll" />
+  </ItemGroup>
+</Project>

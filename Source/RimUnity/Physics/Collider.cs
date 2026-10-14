@@ -1,10 +1,10 @@
-using UnityEngine;
 
 namespace RimUnity;
 
-//桥接碰撞器仍属于宿主 Collider，原生射线查询可使用同一几何。
-public abstract class Collider : UnityEngine.Collider
+//自有碰撞器复用粒子和简化刚体的几何查询。
+public abstract class Collider : MonoBehaviour
 {
+    public bool isTrigger { get; set; }
     internal abstract ParticlePhysicsShape Shape { get; }
     internal virtual bool Is2D => false;
     public PhysicMaterial sharedMaterial;
@@ -27,7 +27,7 @@ public abstract class Collider : UnityEngine.Collider
     }
 
     //射线距离由单位方向计算，避免调用方方向长度改变结果。
-    public override bool Raycast(Ray ray, out RaycastHit hitInfo, float maxDistance)
+    public virtual bool Raycast(Ray ray, out RaycastHit hitInfo, float maxDistance)
     {
         hitInfo = default;
         if (!enabled || !gameObject.activeInHierarchy || maxDistance < 0 || ray.direction.sqrMagnitude == 0) return false;
@@ -44,7 +44,7 @@ public abstract class Collider : UnityEngine.Collider
         }
         Vector3 delta = ray.direction.normalized * maxDistance;
         if (!Shape.Sweep(ray.origin, delta, 0, out float fraction, out Vector3 normal)) return false;
-        hitInfo = NativeRaycastHit.Create(this, ray.origin + delta * fraction, normal, fraction * maxDistance);
+        hitInfo = new RaycastHit { collider = this, point = ray.origin + delta * fraction, normal = normal, distance = fraction * maxDistance };
         return true;
     }
 }

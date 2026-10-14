@@ -1,12 +1,10 @@
-//源自 ChezhouLib UGUI；迁移来源与第三方许可见 Docs/ThirdParty.md。
 using RimUnity.EventSystems;
-using UnityEngine;
-using UnityEngine.Events;
+using RimUnity.Events;
 
 namespace RimUnity.UI;
 
 //处理拖动、滚轮、惯性和弹性边界，并与滚动条双向同步。
-public partial class ScrollRect : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IScrollHandler, UnityEngine.UI.ILayoutGroup
+public partial class ScrollRect : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IScrollHandler, RimUnity.UI.ILayoutGroup
 {
     public enum MovementType { Unrestricted, Elastic, Clamped }
     public RectTransform content, viewport;
@@ -28,6 +26,7 @@ public partial class ScrollRect : MonoBehaviour, IBeginDragHandler, IDragHandler
             if (horizontalBar != null) horizontalBar.onValueChanged.RemoveListener(SetHorizontal);
             horizontalBar = value;
             if (isActiveAndEnabled && horizontalBar != null) horizontalBar.onValueChanged.AddListener(SetHorizontal);
+            NotifyPropertyChanged();
         }
     }
     public Scrollbar verticalScrollbar
@@ -39,6 +38,7 @@ public partial class ScrollRect : MonoBehaviour, IBeginDragHandler, IDragHandler
             if (verticalBar != null) verticalBar.onValueChanged.RemoveListener(SetVertical);
             verticalBar = value;
             if (isActiveAndEnabled && verticalBar != null) verticalBar.onValueChanged.AddListener(SetVertical);
+            NotifyPropertyChanged();
         }
     }
     public Vector2 normalizedPosition

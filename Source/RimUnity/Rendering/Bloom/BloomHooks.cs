@@ -39,9 +39,9 @@ internal static class BloomHooks
         {
             var map = capturedMap; capturedMap = null;
             if (__result == null) return;
-            var settings = RimUnityMod.Bloom.Snapshot();
+            var settings = RimUnityMod.Bloom.Snapshot() with { FrameNumber = timing.FrameNumber };
             if (settings.Enabled && settings.Intensity > 0 && map?.FrameNumber == timing.FrameNumber)
-                settings = settings with { Draws = BloomLayerCapture.Capture(map, settings.LayerMask) };
+                settings = settings with { Draws = new HdrDrawFrame(map, settings.LayerMask, readOnlyDepth: true) };
             __result = settings;
         }
     }

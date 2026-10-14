@@ -8,7 +8,7 @@ using RimUnity.Editor;
 using UnityEditor;
 using UnityEngine;
 
-// Authoring/export integration only. Runtime compatibility belongs to RimUnity.
+//读取工程配置并收集待导出的资源入口。
 namespace RimUnity.Editor { public static class RimUnityWorkflow
 {
     public const string ProfilePath = "ProjectSettings/RimUnity.json";
@@ -52,8 +52,7 @@ namespace RimUnity.Editor { public static class RimUnityWorkflow
             if (!string.IsNullOrWhiteSpace(mapping.bundle))
             foreach (string path in AssetDatabase.GetAssetPathsFromAssetBundle(mapping.bundle))
                 if (!AssetDatabase.IsValidFolder(path)) selected[path] = mapping.bundle;
-        // Only AB roots and explicitly saved manual roots are entry points. The framework
-        // owns dependency traversal; neither folder membership nor references create roots.
+        //以资源包标签及手动选项作为入口，依赖由导出器收集。
         var preset = File.Exists(WindowPresetPath) ? JObject.Parse(File.ReadAllText(WindowPresetPath)) : new JObject();
         foreach (JObject item in preset["manual"] as JArray ?? new JArray())
             if (!string.IsNullOrWhiteSpace((string)item["path"])) selected[(string)item["path"]] = (string)item["bundle"];
@@ -75,8 +74,6 @@ namespace RimUnity.Editor { public static class RimUnityWorkflow
             {
                 var components = prefab.GetComponentsInChildren<Component>(true);
                 entry.missingScripts = components.Count(c => c == null);
-                if (entry.missingScripts > 0 && entry.status == "pending")
-                { entry.status = "missing-script"; entry.error = "缺失脚本需先恢复或适配；禁止删去组件后伪报完整导出"; }
                 entry.components = components.Where(c => c != null).Select(c => c.GetType().FullName).Distinct().OrderBy(n => n).ToArray();
                 entry.layers = components.OfType<Transform>().Select(t => t.gameObject.layer).Distinct().OrderBy(n => n).ToArray();
                 entry.shaders = components.OfType<Renderer>().SelectMany(r => r.sharedMaterials)
@@ -125,28 +122,13 @@ namespace RimUnity.Editor { public static class RimUnityWorkflow
         if (!File.Exists(profile.shaderTool) || !File.Exists(Path.Combine(profile.gameRoot, "Waylith.dll")))
             throw new InvalidOperationException("请先配置有效的 RimUnity ShaderTool 和 RimWorld 1.7 路径。");
         var entries = Discover(profile);
-        string oldTool = EditorPrefs.GetString("RimUnity.ShaderTool", ""), oldGame = EditorPrefs.GetString("RimUnity.GameRoot", "");
         try
         {
-            EditorPrefs.SetString("RimUnity.ShaderTool", profile.shaderTool);
-            EditorPrefs.SetString("RimUnity.GameRoot", profile.gameRoot);
-            foreach (var entry in entries)
-            {
-                if (entry.status != "pending") continue;
-                try
-                {
-                    PrefabExporter.Export(Path.Combine(profile.repository, entry.mod), new ExportOptions { disableCastShadows = profile.disableCastShadows, disableReceiveShadows = profile.disableReceiveShadows, disableLightProbes = profile.disableLightProbes, disableReflectionProbes = profile.disableReflectionProbes }, new ExportRequest {
-                        asset = AssetDatabase.LoadMainAssetAtPath(entry.path), ui = entry.ui,
-                        path = "Bundles/" + entry.bundle + "/" + entry.path, description = "源资源：" + entry.path });
-                    entry.status = "exported";
-                }
-                catch (Exception error) { entry.status = "failed"; entry.error = error.ToString(); Debug.LogException(error); }
-            }
+            RimUnityPublisher.Export(profile, entries, true, Debug.Log);
+            foreach (var entry in entries) entry.status = "exported";
         }
         finally
         {
-            EditorPrefs.SetString("RimUnity.ShaderTool", oldTool);
-            EditorPrefs.SetString("RimUnity.GameRoot", oldGame);
             Debug.Log("[RimUnity] 导出报告：" + Save(profile, entries, "export"));
         }
         int failures = entries.Count(e => e.status != "exported" && e.status != "excluded-by-profile");

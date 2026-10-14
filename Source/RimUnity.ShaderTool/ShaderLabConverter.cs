@@ -38,7 +38,7 @@ internal static class ShaderLabConverter
         Console.WriteLine("ShaderLab 转换完成：" + shader.Manifest.shaderName + " [" + profile + "]");
     }
 
-    //工程自身的包含按文件相对路径展开；Unity 包包含留给显式兼容层处理。
+    //工程包含按文件相对路径展开，Unity 包包含由对应的 HLSL 定义处理。
     private static string ExpandIncludes(string path, HashSet<string> stack)
     {
         if (!stack.Add(path)) throw new InvalidDataException("Shader 包含形成循环：" + path);

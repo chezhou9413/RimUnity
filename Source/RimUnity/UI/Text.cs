@@ -1,19 +1,23 @@
-//源自 ChezhouLib UGUI；迁移来源与第三方许可见 Docs/ThirdParty.md。
-using UnityEngine;
-using UnityEngine.UI;
+using RimUnity.UI;
 namespace RimUnity.UI;
 
 //沿用 Text 内容、字体和颜色属性，补充矩形、文字边距与换行设置。
-public class Text : UnityEngine.UI.Text, ILayoutElement
+public class Text : MaskableGraphic, ILayoutElement
 {
-    public new RectTransform rectTransform => (RectTransform)transform;
-    public bool wordWrap { get; set; } = true;
+    public string text { get; set => SetProperty(ref field, value); } = "";
+    public Font font { get; set => SetProperty(ref field, value); }
+    public int fontSize { get; set => SetProperty(ref field, value); } = 14;
+    public FontStyle fontStyle { get; set => SetProperty(ref field, value); }
+    public TextAnchor alignment { get; set => SetProperty(ref field, value); }
+    public bool supportRichText { get; set => SetProperty(ref field, value); } = true;
+    public float lineSpacing { get; set => SetProperty(ref field, value); } = 1f;
+    public bool wordWrap { get; set => SetProperty(ref field, value); } = true;
     public bool clipText { get; set; } = true;
     //边距顺序为左、上、右、下；负边距会扩大排版区域。
-    public Vector4 margin { get; set; }
-    public bool resizeTextForBestFit { get; set; }
-    public int resizeTextMinSize { get; set; } = 1;
-    public int resizeTextMaxSize { get; set; } = 40;
+    public Vector4 margin { get; set => SetProperty(ref field, value); }
+    public bool resizeTextForBestFit { get; set => SetProperty(ref field, value); }
+    public int resizeTextMinSize { get; set => SetProperty(ref field, value); } = 1;
+    public int resizeTextMaxSize { get; set => SetProperty(ref field, value); } = 40;
     public HorizontalWrapMode horizontalOverflow { get => wordWrap ? HorizontalWrapMode.Wrap : HorizontalWrapMode.Overflow; set => wordWrap = value == HorizontalWrapMode.Wrap; }
     public VerticalWrapMode verticalOverflow { get => clipText ? VerticalWrapMode.Truncate : VerticalWrapMode.Overflow; set => clipText = value == VerticalWrapMode.Truncate; }
     public float minWidth => 0f;

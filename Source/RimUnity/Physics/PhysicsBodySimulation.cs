@@ -1,5 +1,4 @@
 using System;
-using UnityEngine;
 
 namespace RimUnity;
 
@@ -11,8 +10,8 @@ internal static class PhysicsBodySimulation
     {
         if (frame == Time.frameCount) return;
         frame = Time.frameCount;
-        Rigidbody[] bodies = UnityEngine.Object.FindObjectsByType<Rigidbody>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
-        Collider[] colliders = UnityEngine.Object.FindObjectsByType<Collider>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        Rigidbody[] bodies = RimUnity.Object.FindObjectsByType<Rigidbody>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        Collider[] colliders = RimUnity.Object.FindObjectsByType<Collider>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
         float longest = 0;
         foreach (Rigidbody body in bodies)
         {

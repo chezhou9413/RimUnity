@@ -1,12 +1,10 @@
-//源自 ChezhouLib UGUI；迁移来源与第三方许可见 Docs/ThirdParty.md。
-using UnityEngine;
 namespace RimUnity.EventSystems;
 
-//保存接入模组的焦点状态；指针输入由 CL 画布统一处理。
-public class EventSystem : UnityEngine.EventSystems.EventSystem
+//管理输入焦点并向控件分发事件。
+public class EventSystem : MonoBehaviour
 {
     private static EventSystem instance;
-    public new static EventSystem current => instance;
+    public static EventSystem current => instance;
     public bool sendNavigationEvents { get; set; } = true;
     public int pixelDragThreshold { get; set; } = 10;
     public GameObject currentSelectedGameObject { get; private set; }
@@ -38,7 +36,7 @@ public class EventSystem : UnityEngine.EventSystems.EventSystem
         finally { alreadySelecting = false; }
     }
     //查询桥接画布的实际命中结果。
-    public new bool IsPointerOverGameObject() => UI.Runtime.UguiPointer.IsOverUi;
+    public bool IsPointerOverGameObject() => UI.Runtime.UguiPointer.IsOverUi;
     //同一焦点对象上的活动组件依次接收事件。
     internal static bool Send<T>(GameObject target, System.Action<T> call)
     {

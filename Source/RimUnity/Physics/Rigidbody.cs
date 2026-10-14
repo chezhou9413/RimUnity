@@ -1,5 +1,4 @@
 using System;
-using UnityEngine;
 
 namespace RimUnity;
 
@@ -12,7 +11,7 @@ public enum RigidbodyConstraints
     FreezePosition = 14, FreezeRotation = 112, FreezeAll = 126
 }
 
-//刚体积分与粒子碰撞共享真实速度和惯量，不依赖宿主缺失的 Rigidbody 类型。
+//刚体积分与粒子碰撞共享速度和惯量。
 public class Rigidbody : MonoBehaviour
 {
     public float mass = 1, drag, angularDrag = .05f, maxAngularVelocity = 7;

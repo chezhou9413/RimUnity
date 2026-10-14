@@ -1,5 +1,4 @@
 using System;
-using UnityEngine;
 using Verse;
 
 namespace RimUnity.UI.Runtime;
@@ -42,7 +41,7 @@ internal static class UiMaskData
             rows[i * 4 + 1] = new Vector4(inverse.m10, inverse.m11, inverse.m13, 0);
             rows[i * 4 + 2] = new Vector4(inverse.m30, inverse.m31, inverse.m33, 0);
             Texture texture = Texture2D.whiteTexture; Rect uv = new(0, 0, 1, 1);
-            if (mask.graphic is UnityEngine.UI.Image image)
+            if (mask.graphic is RimUnity.UI.Image image)
             {
                 var sprite = image.overrideSprite != null ? image.overrideSprite : image.sprite;
                 if (sprite != null) { texture = sprite.texture; uv = new Rect(sprite.textureRect.x / texture.width, sprite.textureRect.y / texture.height, sprite.textureRect.width / texture.width, sprite.textureRect.height / texture.height); }

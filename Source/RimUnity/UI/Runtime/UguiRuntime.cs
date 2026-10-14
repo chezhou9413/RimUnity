@@ -1,13 +1,11 @@
-//源自 ChezhouLib UGUI；迁移来源与第三方许可见 Docs/ThirdParty.md。
 using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
 using RimWorld;
 using UnityEngine;
-using UnityEngine.UI;
+using RimUnity.UI;
 using Verse;
-using UnityStubs.Gui;
-using Graphic = UnityEngine.UI.Graphic;
+using Graphic = RimUnity.UI.Graphic;
 
 namespace RimUnity.UI.Runtime;
 
@@ -24,12 +22,11 @@ internal static partial class UguiRuntime
     private static readonly List<Canvas> Canvases = new();
     internal static readonly List<Entry> Entries = new();
     private static readonly HashSet<Graphic> WarnedGraphics = new();
-    private static readonly PropertyInfo AssetToken = AccessTools.Property(typeof(GameObject), "IsAssetToken");
 
     //登记场景实例；资源模板不会进入绘制列表。
     internal static void Register(Canvas canvas)
     {
-        if ((bool)AssetToken.GetValue(canvas.gameObject)) return;
+        if (canvas.gameObject.IsAssetToken) return;
         if (!Canvases.Contains(canvas)) Canvases.Add(canvas);
     }
 
@@ -124,10 +121,8 @@ internal static partial class UguiRuntime
     {
         if (Event.current.type != EventType.Repaint) return;
         Rendering.ShaderGlobals.Update();
-        Color color = GUI.color, content = GUI.contentColor;
         try
         {
-            GUI.contentColor = Color.white;
             foreach (Entry entry in Entries)
             {
                 if (entry.Canvas.EffectiveMode != RenderMode.ScreenSpaceOverlay) continue;
@@ -136,14 +131,14 @@ internal static partial class UguiRuntime
                 if (entry.Particles != null)
                 {
                     if (entry.Clip.width <= 0 || entry.Clip.height <= 0) continue;
-                    GuiBackend.Current.PushClipRect(entry.Clip);
+                    NativeGuiHost.PushClip(entry.Clip);
                     try { entry.Particles.GetComponent<ParticleSystemRenderer>()?.DrawUI(entry); }
-                    finally { GuiBackend.Current.PopClipRect(); }
+                    finally { NativeGuiHost.PopClip(); }
                     continue;
                 }
                 if (graphic == null || !graphic.isActiveAndEnabled) continue;
                 if (entry.Clip.width <= 0 || entry.Clip.height <= 0) continue;
-                GuiBackend.Current.PushClipRect(entry.Clip);
+                NativeGuiHost.PushClip(entry.Clip);
                 try
                 {
                 Color tint = graphic.color;
@@ -157,10 +152,10 @@ internal static partial class UguiRuntime
                     if (WarnedGraphics.Add(graphic)) Log.Error("[RimUnity] 自定义 UI 材质没有可用的 Waylith Shader：" + graphic.gameObject.name);
                     continue;
                 }
-                if (graphic is UnityEngine.UI.Image image) UguiImageRenderer.Draw(entry, image, tint);
+                if (graphic is RimUnity.UI.Image image) UguiImageRenderer.Draw(entry, image, tint);
                 else if (graphic is RawImage raw) UguiImageRenderer.DrawRaw(entry, raw, tint);
                 else if (graphic is TextMeshProUGUI tmp) TmpRenderer.Draw(entry, tmp, tint);
-                else if (graphic is UnityEngine.UI.Text text)
+                else if (graphic is RimUnity.UI.Text text)
                 {
                     Matrix4x4 matrix = entry.Rect.localToWorldMatrix;
                     if (Mathf.Abs(matrix.m01) > 0.0001f || Mathf.Abs(matrix.m10) > 0.0001f || matrix.m00 <= 0 || matrix.m11 <= 0)
@@ -168,8 +163,7 @@ internal static partial class UguiRuntime
                         UguiTextRenderer.DrawLocal(entry, text, tint);
                         continue;
                     }
-                    GUI.color = tint;
-                    GUIStyle style = TextStyle(text);
+                    UiTextStyle style = TextStyle(text);
                     float scale = entry.Canvas.scaleFactor / Prefs.UIScale * Mathf.Abs(entry.Rect.lossyScale.y);
                     style.fontSize = Mathf.Max(1, Mathf.RoundToInt(text.fontSize * scale));
                     Rect bounds = Bounds(entry, text is Text custom ? custom.ContentRect : entry.Rect.rect);
@@ -179,22 +173,19 @@ internal static partial class UguiRuntime
                     finally { text.material = previousMaterial; }
                 }
                 }
-                finally { GuiBackend.Current.PopClipRect(); }
+                finally { NativeGuiHost.PopClip(); }
             }
         }
-        finally { GUI.color = color; GUI.contentColor = content; UiMaskData.Current = null; }
+        finally { UiMaskData.Current = null; }
     }
 
     //同一文字样式用于测量和绘制，不修改 Verse.Text 的全局状态。
-    internal static GUIStyle TextStyle(UnityEngine.UI.Text text)
+    internal static UiTextStyle TextStyle(RimUnity.UI.Text text)
     {
-        GUIStyle style = new()
+        UiTextStyle style = new()
         {
-            font = text.font, fontSize = text.fontSize, fontStyle = text.fontStyle, alignment = text.alignment,
-            richText = text.supportRichText, wordWrap = text is not Text custom || custom.wordWrap,
-            clipping = text is Text { clipText: false } ? TextClipping.Overflow : TextClipping.Clip
+            fontSize = text.fontSize, fontStyle = text.fontStyle, wordWrap = text.wordWrap
         };
-        style.normal.textColor = Color.white;
         return style;
     }
 

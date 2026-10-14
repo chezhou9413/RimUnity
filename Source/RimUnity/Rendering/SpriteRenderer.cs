@@ -1,8 +1,7 @@
-using UnityEngine;
 
 namespace RimUnity;
 
-//使用导出的精灵三角网格驱动宿主 MeshRenderer，保留锚点、顶点色和翻转。
+//绘制精灵三角网格，保留锚点、顶点色和翻转。
 public sealed class SpriteRenderer : MonoBehaviour
 {
     public Sprite sprite;
@@ -44,7 +43,7 @@ public sealed class SpriteRenderer : MonoBehaviour
             var vertices = new Vector3[geometry.Positions.Length];
             var colors = new Color[vertices.Length];
             var normals = new Vector3[vertices.Length];
-            //兼容层 Sprite.pivot 保存的是归一化锚点，与导出载荷一致。
+            //Sprite.pivot 使用与导出数据一致的归一化坐标。
             Vector2 pivot = sprite.pivot;
             for (int i = 0; i < vertices.Length; i++)
             {
@@ -61,9 +60,8 @@ public sealed class SpriteRenderer : MonoBehaviour
         }
         if (previousMaterial != sharedMaterial)
         {
-            if (materialInstance != null) { Rendering.MaterialPasses.Release(materialInstance); Destroy(materialInstance); }
+            if (materialInstance != null) Destroy(materialInstance);
             materialInstance = new Material(sharedMaterial);
-            Rendering.MaterialPasses.Copy(sharedMaterial, materialInstance);
             renderer.sharedMaterial = materialInstance;
             previousMaterial = sharedMaterial;
             spriteChanged = true;
@@ -75,6 +73,6 @@ public sealed class SpriteRenderer : MonoBehaviour
     private void OnDestroy()
     {
         if (mesh != null) Destroy(mesh);
-        if (materialInstance != null) { Rendering.MaterialPasses.Release(materialInstance); Destroy(materialInstance); }
+        if (materialInstance != null) Destroy(materialInstance);
     }
 }

@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Reflection;
 using RimUnity.Serialization;
-using UnityEngine;
 
 namespace RimUnity.Assets;
 
@@ -12,8 +11,8 @@ namespace RimUnity.Assets;
 internal sealed class ValueReader
 {
     private readonly AssetCatalog catalog;
-    private readonly IReadOnlyDictionary<string, UnityEngine.Object> objects;
-    internal ValueReader(AssetCatalog catalog, IReadOnlyDictionary<string, UnityEngine.Object> objects)
+    private readonly IReadOnlyDictionary<string, RimUnity.Object> objects;
+    internal ValueReader(AssetCatalog catalog, IReadOnlyDictionary<string, RimUnity.Object> objects)
     { this.catalog = catalog; this.objects = objects; }
 
     //按目标字段真实类型恢复数值，整数使用文本保存以避免精度丢失。
@@ -50,7 +49,7 @@ internal sealed class ValueReader
     }
 
     //引用类型不匹配时直接指出需要调整的脚本引用。
-    private static object Checked(UnityEngine.Object value, Type type)
+    private static object Checked(RimUnity.Object value, Type type)
         => type.IsInstanceOfType(value) ? value : throw new InvalidCastException($"导出引用 {value.GetType().FullName} 不能赋给 {type.FullName}；请使用 RimUnity 对应类型。");
 
     //常用 Unity 值类型保留原有 API 和内存布局。

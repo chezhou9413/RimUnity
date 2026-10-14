@@ -1,5 +1,4 @@
 using System;
-using UnityEngine;
 
 namespace RimUnity;
 
@@ -25,5 +24,5 @@ public sealed class AnimationEvent
     public float time, floatParameter;
     public string functionName, stringParameter;
     public int intParameter;
-    public UnityEngine.Object objectReferenceParameter;
+    public RimUnity.Object objectReferenceParameter;
 }

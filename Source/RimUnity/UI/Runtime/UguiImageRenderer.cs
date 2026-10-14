@@ -1,9 +1,6 @@
-//源自 ChezhouLib UGUI；迁移来源与第三方许可见 Docs/ThirdParty.md。
 using System;
 using System.Collections.Generic;
-using UnityEngine;
-using UnityStubs.Gui;
-using Image = UnityEngine.UI.Image;
+using Image = RimUnity.UI.Image;
 
 namespace RimUnity.UI.Runtime;
 
@@ -21,7 +18,7 @@ internal static partial class UguiImageRenderer
     }
 
     //图片保持原有精灵、颜色、九宫格和填充参数。
-    internal static void Draw(UguiRuntime.Entry entry, UnityEngine.UI.Image image, Color color)
+    internal static void Draw(UguiRuntime.Entry entry, RimUnity.UI.Image image, Color color)
     {
         Selectable button = image.GetComponentInParent<Selectable>();
         Sprite sprite = button != null && button.targetGraphic == image && button.StateSprite != null ? button.StateSprite :
@@ -72,7 +69,7 @@ internal static partial class UguiImageRenderer
     }
 
     //九宫格边框按精灵 PPU、画布参考值和倍率换算为 UI 单位。
-    private static void Sliced(UguiRuntime.Entry entry, UnityEngine.UI.Image image, Sprite sprite, Rect r, Rect uv, Color color)
+    private static void Sliced(UguiRuntime.Entry entry, RimUnity.UI.Image image, Sprite sprite, Rect r, Rect uv, Color color)
     {
         Vector4 b = sprite.border;
         float units = sprite.pixelsPerUnit / entry.Canvas.referencePixelsPerUnit * image.pixelsPerUnitMultiplier;

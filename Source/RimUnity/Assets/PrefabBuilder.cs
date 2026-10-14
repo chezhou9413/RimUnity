@@ -3,12 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using RimUnity.Serialization;
-using UnityEngine;
-using Waylith.UnityCompat;
+using RimUnity.Runtime;
 
 namespace RimUnity.Assets;
 
-//在引擎克隆事务内恢复整个对象图，随后由引擎统一执行生命周期。
+//恢复完整对象图后统一执行脚本生命周期。
 internal static class PrefabBuilder
 {
     //模板始终失活，资源对象不会产生 Awake、输入或渲染。
@@ -19,15 +18,15 @@ internal static class PrefabBuilder
         foreach (var node in data.nodes)
             foreach (var component in node.components) TypeResolver.Component(component.type);
         GameObject template = Build(catalog, data, true);
-        UnityRuntime.Current.World.RegisterCloneFactory(template, () => Build(catalog, data, false));
-        OwnedObjects.MarkTemplate(template);
+        template.RegisterCloneFactory(() => Build(catalog, data, false));
         return template;
     }
 
     //先建全部对象，再建组件、绑定字段，最后恢复激活状态。
     private static GameObject Build(AssetCatalog catalog, PrefabData data, bool token)
     {
-        var objects = new Dictionary<string, UnityEngine.Object>(StringComparer.Ordinal);
+        using var creation = NativeRuntime.DeferLifecycle();
+        var objects = new Dictionary<string, RimUnity.Object>(StringComparer.Ordinal);
         var components = new List<(Component instance, ComponentData data)>();
         var created = new List<GameObject>();
         GameObject root = null;
@@ -77,7 +76,7 @@ internal static class PrefabBuilder
         }
         catch
         {
-            foreach (GameObject go in created) if (go != null) UnityEngine.Object.DestroyImmediate(go);
+            foreach (GameObject go in created) if (go != null) RimUnity.Object.DestroyImmediate(go);
             throw;
         }
     }

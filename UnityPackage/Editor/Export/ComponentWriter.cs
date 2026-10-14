@@ -7,7 +7,7 @@ using UnityEngine.UI;
 
 namespace RimUnity.Editor
 {
-    //每个内置组件都要经过明确适配，不让空实现的 UnityStubs 混入成功包。
+    //逐项检查内置组件的导出支持范围。
     internal static class ComponentWriter
     {
         private static readonly Dictionary<string, string[]> Members = new Dictionary<string, string[]>
@@ -144,18 +144,9 @@ namespace RimUnity.Editor
         //公开映射以便事件的 Unity 对象参数一并调整。
         internal static string MapTypeName(string type)
         {
-            if (type == "UnityEngine.Animation" || type == "UnityEngine.AnimationState" || type == "UnityEngine.TrailRenderer" || type == "UnityEngine.LineRenderer") return type.Replace("UnityEngine.", "RimUnity.");
             if (type == "TMPro.TextMeshProUGUI") return "RimUnity.UI.TextMeshProUGUI";
-            if (type == "UnityEngine.SpriteRenderer") return "RimUnity.SpriteRenderer";
-            if (type == "UnityEngine.Collider" || type == "UnityEngine.SphereCollider" || type == "UnityEngine.BoxCollider" || type == "UnityEngine.CapsuleCollider" || type == "UnityEngine.MeshCollider" || type == "UnityEngine.Rigidbody" || type == "UnityEngine.PhysicMaterial") return type.Replace("UnityEngine.", "RimUnity.");
-            if (type == "UnityEngine.ParticleSystemForceField" || type == "UnityEngine.WindZone") return type.Replace("UnityEngine.", "RimUnity.");
-            if (type == "UnityEngine.EdgeCollider2D" || type == "UnityEngine.TerrainCollider" || type == "UnityEngine.TerrainData") return type.Replace("UnityEngine.", "RimUnity.");
-            if (type == "UnityEngine.Collider2D" || type == "UnityEngine.BoxCollider2D" || type == "UnityEngine.CircleCollider2D" || type == "UnityEngine.CapsuleCollider2D" || type == "UnityEngine.PolygonCollider2D" || type == "UnityEngine.Rigidbody2D" || type == "UnityEngine.PhysicsMaterial2D"
-                || type == "UnityEngine.CapsuleDirection2D" || type == "UnityEngine.ForceMode2D" || type == "UnityEngine.RigidbodyType2D" || type == "UnityEngine.RigidbodyConstraints2D") return type.Replace("UnityEngine.", "RimUnity.");
-            if (type == "UnityEngine.MeshRenderer") return "RimUnity.MeshRenderer";
-            if (type == "UnityEngine.Canvas" || type == "UnityEngine.CanvasGroup" || type == "UnityEngine.RectTransform" || type == "UnityEngine.ParticleSystem" || type == "UnityEngine.ParticleSystemRenderer" || type == "UnityEngine.Animator" || type == "UnityEngine.SkinnedMeshRenderer") return type.Replace("UnityEngine.", "RimUnity.");
-            if (Members.ContainsKey(type) && type.StartsWith("UnityEngine.UI.", StringComparison.Ordinal)) return type.Replace("UnityEngine.UI.", "RimUnity.UI.");
-            if (type == "UnityEngine.EventSystems.EventSystem" || type == "UnityEngine.EventSystems.EventTrigger") return type.Replace("UnityEngine.EventSystems.", "RimUnity.EventSystems.");
+            if (type == "TMPro.TMP_FontAsset") return "RimUnity.UI.TMP_FontAsset";
+            if (type.StartsWith("UnityEngine.", StringComparison.Ordinal)) return "RimUnity." + type.Substring("UnityEngine.".Length);
             return type;
         }
 

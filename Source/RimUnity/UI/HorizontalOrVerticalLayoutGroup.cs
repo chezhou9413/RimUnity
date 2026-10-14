@@ -1,9 +1,7 @@
-//源自 ChezhouLib UGUI；迁移来源与第三方许可见 Docs/ThirdParty.md。
 //Copyright (c) 2014-2015, Unity Technologies. MIT 许可见 ThirdParty/UGUI/LICENSE。
-using UnityEngine;
 namespace RimUnity.UI
 {
-    //移植自 Unity uGUI 2017.1 MIT 版本，保留最小、期望和弹性尺寸分配。
+    //按最小、期望和弹性尺寸分配布局空间。
     public abstract class HorizontalOrVerticalLayoutGroup : UguiLayoutGroup
     {
         [SerializeField] protected float m_Spacing = 0;

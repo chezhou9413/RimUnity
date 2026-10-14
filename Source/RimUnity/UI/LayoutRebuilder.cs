@@ -1,4 +1,3 @@
-//源自 ChezhouLib UGUI；迁移来源与第三方许可见 Docs/ThirdParty.md。
 namespace RimUnity.UI;
 
 //供动态生成列表的模组立即刷新布局。

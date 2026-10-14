@@ -50,7 +50,7 @@ namespace RimUnity.Editor
             Module("lights", system.lights, "enabled", "ratio", "useRandomDistribution", "light", "useParticleColor", "sizeAffectsRange", "alphaAffectsIntensity", "range", "intensity", "maxLights");
         }
 
-        //网格保持资源引用，精灵另带原始几何，避免宿主 Sprite 缺少顶点接口。
+        //网格保存资源引用，精灵同时保存原始几何数据。
         private static void WriteShape(ParticleSystem.ShapeModule shape, ComponentData data, ValueWriter writer, string path)
         {
             var value = MathValueWriter.Properties(shape, writer, path + ".shape", "enabled", "shapeType", "radius", "radiusThickness", "angle", "length", "arc", "arcSpread", "radiusSpread", "donutRadius", "boxThickness", "position", "rotation", "scale", "randomDirectionAmount", "sphericalDirectionAmount", "randomPositionAmount", "alignToDirection", "arcMode", "arcSpeed", "radiusMode", "radiusSpeed");

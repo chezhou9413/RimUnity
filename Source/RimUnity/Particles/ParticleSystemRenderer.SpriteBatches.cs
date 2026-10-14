@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using UnityEngine;
 
 namespace RimUnity;
 
@@ -41,7 +40,7 @@ public sealed partial class ParticleSystemRenderer
     {
         if (!spriteMaterials.TryGetValue(texture, out Material material))
         {
-            material = new Material(sharedMaterial); Rendering.MaterialPasses.Copy(sharedMaterial, material);
+            material = new Material(sharedMaterial);
             spriteMaterials.Add(texture, material);
         }
         if (preparedSpriteTextures.Add(texture)) { material.CopyPropertiesFromMaterial(sharedMaterial); material.mainTexture = texture; }
@@ -56,7 +55,7 @@ public sealed partial class ParticleSystemRenderer
     {
         foreach (Mesh item in spriteBatches) if (item != null) Destroy(item);
         spriteBatches.Clear();
-        foreach (Material item in spriteMaterials.Values) { Rendering.MaterialPasses.Release(item); Destroy(item); }
+        foreach (Material item in spriteMaterials.Values) Destroy(item);
         spriteMaterials.Clear();
     }
 }

@@ -40,7 +40,7 @@ namespace RimUnity.Editor
             records.Add(id, new AssetRecord { id = id, type = "Texture2D", name = data.name, path = "__assets/" + id, file = relative + "/" + id + ".json" });
             return id;
         }
-        // Unity's unassigned Cube property is a gray cube, not a 2D white image.
+        //未赋值的 Cube 属性使用六面灰色纹理。
         internal string DefaultGrayCube()
         {
             const string id = "RimUnity_DefaultGrayCube";

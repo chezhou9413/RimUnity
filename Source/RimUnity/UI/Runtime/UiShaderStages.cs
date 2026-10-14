@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using UnityEngine;
 using Waylith.Rendering;
 
 namespace RimUnity.UI.Runtime;
@@ -8,8 +7,8 @@ namespace RimUnity.UI.Runtime;
 //宿主 GUI 仅对 PrecompiledStages 使用材质的顶点程序和混合状态。
 internal static class UiShaderStages
 {
-    private static readonly Dictionary<string, UnityEngine.Shader> compiled = new(StringComparer.Ordinal);
-    internal static void Prepare(UnityEngine.Material material)
+    private static readonly Dictionary<string, RimUnity.Shader> compiled = new(StringComparer.Ordinal);
+    internal static void Prepare(RimUnity.Material material)
     {
         var source = material.engineMaterial.Shader;
         if (source.PrecompiledStages != null) return;
@@ -26,7 +25,7 @@ internal static class UiShaderStages
                 pipelineState: source.PipelineState, vertexInputLayout: source.VertexInputLayout, precompiledStages: stages);
             if (adapted.HasErrors) throw new InvalidOperationException("UI Shader 布局不合法：" + source.Key);
             ShaderRegistry.Register(adapted);
-            shader = UnityEngine.Shader.FromEngineShader(source.Key, adapted); compiled.Add(source.Key, shader);
+            shader = RimUnity.Shader.FromEngineShader(source.Key, adapted); compiled.Add(source.Key, shader);
         }
         material.shader = shader;
     }

@@ -29,7 +29,10 @@ namespace RimUnity.Editor
             shader.vertexFile = relative + "/" + folder + "/" + (string)exported.Manifest["vertexFile"];
             shader.fragmentFile = relative + "/" + folder + "/" + (string)exported.Manifest["fragmentFile"];
             shader.descriptorFile = relative + "/" + folder + "/shader.json";
-            string file = "s_" + CustomShaderWriter.CompactHash(hash) + ".json";
+            //程序身份和材质状态一起决定文件名，避免不同程序覆盖同一描述。
+            string fileHash;
+            using (var sha = SHA256.Create()) fileHash = BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(id))).Replace("-", "").ToLowerInvariant();
+            string file = "s_" + CustomShaderWriter.CompactHash(fileHash) + ".json";
             ExportJson.Write(Path.Combine(directory, file), shader);
             records.Add(id, new AssetRecord { id = id, name = material.shader.name, description = ui ? "UI GLSL" : "世界 GLSL", path = "__assets/" + id, file = relative + "/" + file, type = "Shader" });
             return id;

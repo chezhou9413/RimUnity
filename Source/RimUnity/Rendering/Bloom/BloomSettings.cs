@@ -1,4 +1,3 @@
-using UnityEngine;
 using Verse;
 
 namespace RimUnity.Rendering;
@@ -50,17 +49,17 @@ public sealed class BloomSettings : ModSettings
     }
 
     //使用标准布局处理中文行高，滑块不占用标签区域。
-    internal void Draw(Rect rect)
+    internal void Draw(UnityEngine.Rect rect)
     {
         var listing = new Listing_Standard();
         listing.Begin(rect);
         listing.CheckboxLabeled("启用手动选择层的 Bloom 泛光", ref enabled);
         listing.Label("内容模组接管的层由其自身设置控制；这里控制其他层，强度参数共用。默认不选层；普通地表通常在 0 层，不建议勾选。");
-        Rect layers = listing.GetRect(8 * 26);
+        UnityEngine.Rect layers = listing.GetRect(8 * 26);
         for (int layer = 0; layer < 32; layer++)
         {
             bool selected = (layerMask & (1 << layer)) != 0;
-            Widgets.CheckboxLabeled(new Rect(layers.x + (layer / 8) * layers.width / 4, layers.y + (layer % 8) * 26,
+            Widgets.CheckboxLabeled(new UnityEngine.Rect(layers.x + (layer / 8) * layers.width / 4, layers.y + (layer % 8) * 26,
                 layers.width / 4 - 12, 24), $"Layer {layer}", ref selected);
             if (selected) layerMask |= 1 << layer; else layerMask &= ~(1 << layer);
         }
@@ -77,7 +76,8 @@ public sealed class BloomSettings : ModSettings
 internal sealed record BloomFrame(bool Enabled, float Threshold, float Intensity, float SoftKnee, float Scatter) : System.IDisposable
 {
     internal int LayerMask { get; init; }
-    internal Waylith.Rendering.MeshDrawFrame Draws { get; init; }
+    internal int FrameNumber { get; init; }
+    internal HdrDrawFrame Draws { get; init; }
     //快照独占筛选后的绘制项，释放时不触碰地图本身的绘制缓存。
     public void Dispose() => Draws?.Dispose();
 }

@@ -7,9 +7,9 @@ namespace RimUnity.Rendering;
 //ShaderDef 未暴露 BlendOp，减法粒子在资源加载时创建明确的管线变体。
 internal static class StandardParticleShader
 {
-    private static readonly Dictionary<string, Shader> cache = new();
+    private static readonly Dictionary<string, Waylith.Rendering.Shader> cache = new();
 
-    internal static UnityEngine.Shader Resolve(Shader source, bool linear = false)
+    internal static RimUnity.Shader Resolve(Waylith.Rendering.Shader source, bool linear = false)
     {
         if (source.Key != "RimUnity_StandardParticle5" && source.Key != "RimUnity_StandardParticle5Back")
             return MappedColorSpaceShader.Wrap(source, linear);
@@ -22,7 +22,7 @@ internal static class StandardParticleShader
             RuntimeShaderCompiler.Compile(ShaderSourceLoader.ReadShaderSource(source.VertexShaderFileName), source.VertexShaderFileName, "main", RuntimeShaderLanguage.Glsl, RuntimeShaderStage.Vertex),
             RuntimeShaderCompiler.Compile(ShaderSourceLoader.ReadShaderSource(source.FragmentShaderFileName), source.FragmentShaderFileName, "main", RuntimeShaderLanguage.Glsl, RuntimeShaderStage.Fragment), false);
         string key = source.Key + "_ReverseSubtract";
-        var shader = new Shader(key, source.ShaderPath, source.Program, materialLayout: source.MaterialLayout,
+        var shader = new Waylith.Rendering.Shader(key, source.ShaderPath, source.Program, materialLayout: source.MaterialLayout,
             pipelineState: pipeline, vertexInputLayout: source.VertexInputLayout, precompiledStages: stages);
         if (shader.HasErrors) throw new InvalidOperationException("减法粒子 Shader 注册失败：" + key);
         ShaderRegistry.Register(shader);

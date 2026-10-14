@@ -8,12 +8,13 @@ public sealed partial class ParticleSystem
 {
     private bool prewarmPending;
 
-    //恢复暂停时保持粒子状态；新播放只登记预热，由整组准备完毕后执行。
+    //正在播放时不改变时间与位置；恢复暂停保留原有的发射状态。
     private void BeginPlayback()
     {
+        if (playing && !paused) return;
         bool fresh = !playing && !paused;
-        if (fresh) ResetPlayback();
-        playing = emitting = true; paused = false; started = true;
+        if (fresh) { ResetPlayback(); emitting = true; }
+        playing = true; paused = false; started = true;
         previousPosition = transform.position; clock.Reset();
         if (fresh) prewarmPending = main.prewarm && main.loop && count == 0;
     }
@@ -21,6 +22,7 @@ public sealed partial class ParticleSystem
     //恢复事件粒子的积分，但不启动子发射器独立的常规发射时钟。
     private void ResumeSubEmitter()
     {
+        if (started && !paused) return;
         if (!started) ResetPlayback();
         started = true; paused = false;
         previousPosition = transform.position; clock.Reset();

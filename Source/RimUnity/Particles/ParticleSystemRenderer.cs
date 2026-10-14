@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.Rendering;
 
 namespace RimUnity;
 
@@ -48,8 +46,8 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
     }
 
     //网格缓存随组件销毁，不持有已卸载实例。
-    internal void Release() { if (batch != null) Destroy(batch); if (trailBatch != null) Destroy(trailBatch); batch = trailBatch = null; ReleaseSpriteBatches(); meshGeometry.Clear(); foreach (var material in uiMaterials.Values) Destroy(material); uiMaterials.Clear(); }
-    private void OnDestroy() => Release();
+    internal void ReleaseGeometry() { if (batch != null) Destroy(batch); if (trailBatch != null) Destroy(trailBatch); batch = trailBatch = null; ReleaseSpriteBatches(); meshGeometry.Clear(); foreach (var material in uiMaterials.Values) Destroy(material); uiMaterials.Clear(); }
+    private void OnDestroy() => ReleaseGeometry();
     internal void Draw(ParticleSystem system, Camera camera)
     {
         if (!enabled || !gameObject.activeInHierarchy) return;
@@ -158,8 +156,6 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
         target ??= new Mesh { name = "RimUnity Particle Batch", indexFormat = IndexFormat.UInt32 };
         target.Clear(); target.SetVertices(vertices); target.SetColors(colors); target.SetUVs(0, packedUV); target.SetUVs(1, custom1); target.SetUVs(2, custom2); target.SetTriangles(indices, 0); target.RecalculateBounds();
         target.SetNormals(normals); target.SetTangents(tangents);
-        Material[] passes = Rendering.MaterialPasses.Get(mat);
-        if (passes == null) Graphics.DrawMesh(target, Matrix4x4.identity, mat, gameObject.layer, camera, 0, propertyBlock);
-        else foreach (Material pass in passes) Graphics.DrawMesh(target, Matrix4x4.identity, pass, gameObject.layer, camera, 0, propertyBlock);
+        RimUnity.Graphics.DrawMesh(target, Matrix4x4.identity, mat, gameObject.layer, 0, propertyBlock);
     }
 }

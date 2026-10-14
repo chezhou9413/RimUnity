@@ -1,15 +1,32 @@
-//源自 ChezhouLib UGUI；迁移来源与第三方许可见 Docs/ThirdParty.md。
 namespace RimUnity.UI;
 
 //沿用引擎的 Image 属性，同时暴露具有完整尺寸属性的矩形。
-public class Image : UnityEngine.UI.Image
+public class Image : MaskableGraphic
 {
-    public new RectTransform rectTransform => (RectTransform)transform;
+    public enum Type { Simple, Sliced, Tiled, Filled }
+    public enum FillMethod { Horizontal, Vertical, Radial90, Radial180, Radial360 }
+    public enum OriginHorizontal { Left, Right }
+    public enum OriginVertical { Bottom, Top }
+    public enum Origin90 { BottomLeft, TopLeft, TopRight, BottomRight }
+    public enum Origin180 { Bottom, Left, Top, Right }
+    public enum Origin360 { Bottom, Right, Top, Left }
+    public Sprite sprite { get; set => SetProperty(ref field, value); }
+    public Sprite overrideSprite { get; set => SetProperty(ref field, value); }
+    public Type type { get; set => SetProperty(ref field, value); }
+    public FillMethod fillMethod { get; set; }
+    public float fillAmount { get; set; } = 1f;
+    public bool fillClockwise { get; set; } = true;
+    public int fillOrigin { get; set; }
+    public bool preserveAspect { get; set; }
+    public bool fillCenter { get; set; } = true;
+    public bool useSpriteMesh { get; set; }
+    public float pixelsPerUnitMultiplier { get; set => SetProperty(ref field, value); } = 1f;
+    public override Texture mainTexture => (overrideSprite != null ? overrideSprite : sprite)?.texture;
 
     //按精灵像素与画布参考比例设置原生尺寸。
-    public new void SetNativeSize()
+    public void SetNativeSize()
     {
-        UnityEngine.Sprite s = overrideSprite != null ? overrideSprite : sprite;
+        Sprite s = overrideSprite != null ? overrideSprite : sprite;
         if (s == null) return;
         Canvas canvas = this.GetComponentInParent<Canvas>();
         float ratio = s.pixelsPerUnit / (canvas != null ? canvas.referencePixelsPerUnit : 100f);

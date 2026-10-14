@@ -1,5 +1,3 @@
-//源自 ChezhouLib UGUI；迁移来源与第三方许可见 Docs/ThirdParty.md。
-using UnityEngine;
 
 namespace RimUnity.EventSystems;
 
@@ -25,7 +23,7 @@ public class PointerEventData : BaseEventData
 //记录原始按下的图形节点，供遮罩背景判断点击来源。
 public struct RaycastResult { public GameObject gameObject; }
 
-//对应 UGUI 指针与拖动回调；使用方在 1.7 中通过别名接入。
+//指针与拖动事件回调接口。
 public interface IPointerDownHandler { void OnPointerDown(PointerEventData eventData); }
 public interface IPointerUpHandler { void OnPointerUp(PointerEventData eventData); }
 public interface IPointerClickHandler { void OnPointerClick(PointerEventData eventData); }

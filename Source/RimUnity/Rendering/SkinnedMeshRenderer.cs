@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.Rendering;
 using ShaderRegistry = Waylith.Rendering.ShaderRegistry;
 
 namespace RimUnity;
@@ -68,7 +66,7 @@ public sealed partial class SkinnedMeshRenderer : MonoBehaviour
                 adapted = new Material(Shader.FromEngineShader(shaderName, shader)); materials.Add(material, adapted);
             }
             adapted.CopyPropertiesFromMaterial(material);
-            Graphics.DrawMesh(gpuMesh, transform.localToWorldMatrix, adapted, gameObject.layer, camera, i, properties);
+            RimUnity.Graphics.DrawMesh(gpuMesh, transform.localToWorldMatrix, adapted, gameObject.layer, i, properties);
         }
     }
 }

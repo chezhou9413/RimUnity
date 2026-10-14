@@ -1,27 +1,26 @@
 using System;
 using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.UI;
+using RimUnity.UI;
 
 namespace RimUnity.UI;
 
 //TMP 使用自己的图集、排版和 SDF 材质，不退化为普通 Text。
 public sealed partial class TextMeshProUGUI : MaskableGraphic, ILayoutElement
 {
-    public string text { get; set; } = "";
-    public TMP_FontAsset font { get; set; }
-    public float fontSize { get; set; } = 36;
-    public float fontSizeMin { get; set; } = 18;
-    public float fontSizeMax { get; set; } = 72;
-    public bool enableAutoSizing { get; set; }
-    public bool enableWordWrapping { get; set; } = true;
-    public bool richText { get; set; } = true;
-    public bool enableKerning { get; set; } = true;
-    public TextOverflowModes overflowMode { get; set; }
-    public int alignment { get; set; } = 257;
-    public float characterSpacing { get; set; }
-    public float lineSpacing { get; set; }
-    public Vector4 margin { get; set; }
+    public string text { get; set => SetProperty(ref field, value); } = "";
+    public TMP_FontAsset font { get; set => SetProperty(ref field, value); }
+    public float fontSize { get; set => SetProperty(ref field, value); } = 36;
+    public float fontSizeMin { get; set => SetProperty(ref field, value); } = 18;
+    public float fontSizeMax { get; set => SetProperty(ref field, value); } = 72;
+    public bool enableAutoSizing { get; set => SetProperty(ref field, value); }
+    public bool enableWordWrapping { get; set => SetProperty(ref field, value); } = true;
+    public bool richText { get; set => SetProperty(ref field, value); } = true;
+    public bool enableKerning { get; set => SetProperty(ref field, value); } = true;
+    public TextOverflowModes overflowMode { get; set => SetProperty(ref field, value); }
+    public int alignment { get; set => SetProperty(ref field, value); } = 257;
+    public float characterSpacing { get; set => SetProperty(ref field, value); }
+    public float lineSpacing { get; set => SetProperty(ref field, value); }
+    public Vector4 margin { get; set => SetProperty(ref field, value); }
     public Color faceColor { get; set; } = Color.white;
     public Color outlineColor { get; set; } = Color.black;
     public float outlineWidth { get; set; }

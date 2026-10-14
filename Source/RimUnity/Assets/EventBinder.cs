@@ -12,7 +12,7 @@ internal static class EventBinder
 {
     //支持零到四个动态参数以及 Unity 的常用常量参数模式。
     internal static void Bind(object ev, IEnumerable<EventCallData> calls, ValueReader reader,
-        IReadOnlyDictionary<string, UnityEngine.Object> objects)
+        IReadOnlyDictionary<string, RimUnity.Object> objects)
     {
         MethodInfo add = ev.GetType().GetMethod("AddListener");
         Type delegateType = add.GetParameters()[0].ParameterType;

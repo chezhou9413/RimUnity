@@ -1,4 +1,3 @@
-using UnityEngine;
 
 namespace RimUnity.UI.Runtime;
 
@@ -26,10 +25,10 @@ internal static partial class UguiRuntime
                 if (toggle != null && toggle.graphic == graphic) tint.a *= toggle.GraphicAlpha;
                 var selectable = graphic.GetComponentInParent<Selectable>();
                 if (selectable != null && selectable.targetGraphic == graphic) tint *= selectable.Tint;
-                if (graphic is UnityEngine.UI.Image image) UguiImageRenderer.Draw(entry, image, tint);
+                if (graphic is RimUnity.UI.Image image) UguiImageRenderer.Draw(entry, image, tint);
                 else if (graphic is RawImage raw) UguiImageRenderer.DrawRaw(entry, raw, tint);
                 else if (graphic is TextMeshProUGUI tmp) TmpRenderer.Draw(entry, tmp, tint);
-                else if (graphic is UnityEngine.UI.Text text)
+                else if (graphic is RimUnity.UI.Text text)
                 {
                     UguiTextRenderer.DrawLocal(entry, text, tint);
                 }

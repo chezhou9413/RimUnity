@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using UnityEngine;
 using Verse;
 
 namespace RimUnity.Assets;
@@ -12,19 +11,19 @@ public static class AssetLoader
     private static readonly Dictionary<string, AssetCatalog> Catalogs = new(StringComparer.OrdinalIgnoreCase);
 
     //按导出逻辑路径加载材质、贴图、动画或预制体模板。
-    public static T Load<T>(ModContentPack mod, string path) where T : UnityEngine.Object
+    public static T Load<T>(ModContentPack mod, string path) where T : RimUnity.Object
         => LoadDirectory<T>(Path.Combine(mod.RootDir, "1.7", "Data", "RimUnity"), path);
 
     //AB 入口保留包名与 Unity 工程路径，内容仍由明文清单加载。
-    public static T LoadBundleAsset<T>(ModContentPack mod, string bundle, string assetPath) where T : UnityEngine.Object
+    public static T LoadBundleAsset<T>(ModContentPack mod, string bundle, string assetPath) where T : RimUnity.Object
         => Load<T>(mod, "Bundles/" + bundle + "/" + assetPath.Replace('\\', '/'));
 
     //工具使用明确的内容目录，不跨模组搜索同名资源。
-    public static T LoadDirectory<T>(string dataDirectory, string path) where T : UnityEngine.Object
+    public static T LoadDirectory<T>(string dataDirectory, string path) where T : RimUnity.Object
     {
         AssetCatalog catalog = GetCatalog(dataDirectory);
         var record = catalog.Find(path);
-        UnityEngine.Object value = catalog.Get(record.id);
+        RimUnity.Object value = catalog.Get(record.id);
         if (value is not T typed) throw new InvalidDataException($"{path} 是 {value.GetType().FullName}，不能作为 {typeof(T).FullName} 加载。");
         return typed;
     }

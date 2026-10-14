@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using RimUnity.Assets;
-using UnityEngine;
 
 namespace RimUnity;
 
@@ -31,7 +30,7 @@ public sealed partial class Animator
                 if (target == null) throw new InvalidOperationException("动画节点不存在：" + track.path);
                 if (track.property.StartsWith("m_LocalRotation.", StringComparison.Ordinal))
                 { BindRotation(motion.clip, track, target); continue; }
-                object component = track.type == "UnityEngine.GameObject" ? target.gameObject : target.GetComponent(TypeResolver.Component(track.type));
+                object component = track.type == "RimUnity.GameObject" ? target.gameObject : target.GetComponent(TypeResolver.Component(track.type));
                 if (component == null) throw new InvalidOperationException("动画目标组件不存在：" + track.path + "/" + track.type);
                 string key = track.path + "|" + track.type + "|" + track.property;
                 if (!poses.TryGetValue(key, out var binding)) poses.Add(key, binding = new AnimatedFloat(component, track.property, track.path));
@@ -133,7 +132,7 @@ public sealed partial class Animator
                 else if (args.Length == 1)
                 {
                     Type type = args[0].ParameterType;
-                    object value = type == typeof(float) ? ev.floatParameter : type == typeof(int) ? ev.intParameter : type == typeof(string) ? ev.stringParameter : type == typeof(AnimationEvent) ? ev : typeof(UnityEngine.Object).IsAssignableFrom(type) ? ev.objectReferenceParameter : throw new NotSupportedException("动画事件参数类型不支持：" + type);
+                    object value = type == typeof(float) ? ev.floatParameter : type == typeof(int) ? ev.intParameter : type == typeof(string) ? ev.stringParameter : type == typeof(AnimationEvent) ? ev : typeof(RimUnity.Object).IsAssignableFrom(type) ? ev.objectReferenceParameter : throw new NotSupportedException("动画事件参数类型不支持：" + type);
                     method.Invoke(component, new[] { value }); found = true;
                 }
             }

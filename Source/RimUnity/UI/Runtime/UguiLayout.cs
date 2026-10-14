@@ -1,7 +1,5 @@
-//源自 ChezhouLib UGUI；迁移来源与第三方许可见 Docs/ThirdParty.md。
 using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.UI;
+using RimUnity.UI;
 
 namespace RimUnity.UI.Runtime;
 
@@ -25,12 +23,12 @@ internal static class UguiLayout
                     (axis == 0 ? element.flexibleWidth : element.flexibleHeight);
                 candidatePriority = element.layoutPriority;
             }
-            else if (component is UnityEngine.UI.Image image)
+            else if (component is RimUnity.UI.Image image)
             {
                 value = kind == 2 ? -1f : kind == 0 ? 0f : ImagePreferredSize(image)[axis];
                 candidatePriority = 0;
             }
-            else if (component is UnityEngine.UI.Text text)
+            else if (component is RimUnity.UI.Text text)
             {
                 value = kind == 2 ? -1f : kind == 0 ? 0f : TextPreferredSize(text, rect)[axis];
                 candidatePriority = 0;
@@ -105,22 +103,21 @@ internal static class UguiLayout
     }
 
     //换行高度使用父布局已经分配的宽度。
-    private static Vector2 TextPreferredSize(UnityEngine.UI.Text text, RectTransform rect)
+    private static Vector2 TextPreferredSize(RimUnity.UI.Text text, RectTransform rect)
     {
-        GUIStyle style = UguiRuntime.TextStyle(text);
-        Vector2 size = style.CalcSize(new GUIContent(text.text));
-        if (text is Text { wordWrap: true }) size.y = style.CalcHeight(new GUIContent(text.text), Mathf.Max(1f, rect.rect.width));
+        Vector2 size = UguiTextRenderer.Measure(text, -1, false);
+        if (text.wordWrap) size.y = UguiTextRenderer.Measure(text, Mathf.Max(1f, rect.rect.width), true).y;
         return size;
     }
 
     //图片使用画布像素比例，九宫格和平铺只要求容纳边框。
-    private static Vector2 ImagePreferredSize(UnityEngine.UI.Image image)
+    private static Vector2 ImagePreferredSize(RimUnity.UI.Image image)
     {
         Sprite sprite = image.overrideSprite ?? image.sprite;
         if (sprite == null) return Vector2.zero;
         Canvas canvas = image.GetComponentInParent<Canvas>();
         float ratio = sprite.pixelsPerUnit / (canvas != null ? canvas.referencePixelsPerUnit : 100f);
-        Vector2 size = image.type == UnityEngine.UI.Image.Type.Sliced || image.type == UnityEngine.UI.Image.Type.Tiled
+        Vector2 size = image.type == RimUnity.UI.Image.Type.Sliced || image.type == RimUnity.UI.Image.Type.Tiled
             ? new Vector2(sprite.border.x + sprite.border.z, sprite.border.y + sprite.border.w)
             : sprite.rect.size;
         return size / ratio;

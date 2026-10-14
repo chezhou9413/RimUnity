@@ -1,9 +1,8 @@
-using UnityEngine;
 
 namespace RimUnity.UI;
 
 //直接显示贴图，可通过 uvRect 选取区域。
-public class RawImage : UnityEngine.UI.MaskableGraphic
+public class RawImage : RimUnity.UI.MaskableGraphic
 {
     public Texture texture { get; set; }
     public Rect uvRect { get; set; } = new(0, 0, 1, 1);

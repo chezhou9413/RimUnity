@@ -1,12 +1,10 @@
-//源自 ChezhouLib UGUI；迁移来源与第三方许可见 Docs/ThirdParty.md。
 using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.Events;
+using RimUnity.Events;
 namespace RimUnity.EventSystems;
 
 public enum EventTriggerType { PointerEnter, PointerExit, PointerDown, PointerUp, PointerClick, Drag, Drop, Scroll, UpdateSelected, Select, Deselect, Move, InitializePotentialDrag, BeginDrag, EndDrag, Submit, Cancel }
 
-//把业务代码登记的指针、拖动和焦点回调接入兼容层分发。
+//分发业务代码登记的指针、拖动和焦点回调。
 public class EventTrigger : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler,
     IPointerDownHandler, IPointerUpHandler, IPointerClickHandler, IBeginDragHandler, IDragHandler,
     IEndDragHandler, IScrollHandler, IMoveHandler, ISubmitHandler, ICancelHandler,

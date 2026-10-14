@@ -1,5 +1,3 @@
-//源自 ChezhouLib UGUI；迁移来源与第三方许可见 Docs/ThirdParty.md。
-using UnityEngine;
 namespace RimUnity.UI;
 
 //为文字保留阴影或描边配置。

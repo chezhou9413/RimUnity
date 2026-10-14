@@ -1,12 +1,11 @@
 using System;
 using System.Runtime.InteropServices;
-using UnityEngine;
 using TexturePixelData = Waylith.Rendering.TexturePixelData;
 using LoadedTextureFormat = Waylith.Rendering.LoadedTextureFormat;
 
 namespace RimUnity;
 
-//读取完整三维浮点体素，避免宿主二维 GetPixels 截断深度或压缩有符号速度。
+//读取三维浮点体素，保留深度与有符号速度分量。
 internal static class ParticleVectorField
 {
     internal static Vector3 Sample(Texture3D texture, Vector3 uvw)

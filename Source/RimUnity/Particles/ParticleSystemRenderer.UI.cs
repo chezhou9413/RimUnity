@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using RimUnity.UI.Runtime;
-using UnityEngine;
-using UnityStubs.Gui;
 
 namespace RimUnity;
 

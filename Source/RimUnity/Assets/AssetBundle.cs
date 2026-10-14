@@ -31,7 +31,7 @@ public sealed class AssetBundle
     }
 
     //优先匹配工程路径；短名重名时明确报错，避免随机选择外观不同的资源。
-    public T LoadAsset<T>(string assetName) where T : UnityEngine.Object
+    public T LoadAsset<T>(string assetName) where T : RimUnity.Object
     {
         string path = assetName.Replace('\\', '/');
         string prefix = "Bundles/" + name + "/";
@@ -47,6 +47,6 @@ public sealed class AssetBundle
     }
 
     //只筛选声明类型，查询不会实例化无关预制体。
-    private static bool MatchesType<T>(string type) => typeof(T) == typeof(UnityEngine.Object)
-        || type == (typeof(T) == typeof(UnityEngine.GameObject) ? "Prefab" : typeof(T).Name);
+    private static bool MatchesType<T>(string type) => typeof(T) == typeof(RimUnity.Object)
+        || type == (typeof(T) == typeof(GameObject) ? "Prefab" : typeof(T).Name);
 }

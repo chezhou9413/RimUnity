@@ -17,7 +17,7 @@
 
 不要重复创建已有的 `modDependencies`／`loadAfter` 节点。游戏中仍需启用 RimUnity 所依赖的 Harmony。
 
-使用 .NET 10 SDK 工程，引用目标游戏自己的程序集，禁止从旧 Unity 游戏版本复制 DLL：
+使用 .NET 10 SDK 工程，引用目标游戏自己的程序集，引用设置 `Private="false"`：
 
 ```xml
 <Project Sdk="Microsoft.NET.Sdk">
@@ -29,6 +29,7 @@
   <ItemGroup>
     <Reference Include="Assembly-CSharp" HintPath="$(RimWorldDir)/Assembly-CSharp.dll" Private="false" />
     <Reference Include="UnityStubs" HintPath="$(RimWorldDir)/UnityStubs.dll" Private="false" />
+    <Reference Include="RimUnity.Core" HintPath="$(RimUnityDir)/1.7/Assemblies/RimUnity.Core.dll" Private="false" />
     <Reference Include="RimUnity" HintPath="$(RimUnityDir)/1.7/Assemblies/RimUnity.dll" Private="false" />
   </ItemGroup>
 </Project>
@@ -43,7 +44,7 @@
 ```csharp
 using System;
 using RimUnity.Assets;
-using UnityEngine;
+using RimUnity;
 using Verse;
 using ParticleSystem = RimUnity.ParticleSystem;
 
@@ -56,12 +57,12 @@ public sealed class BurstEffect : IDisposable
     public BurstEffect(ModContentPack contentMod, Vector3 position)
     {
         GameObject template = PrefabLoader.Load(contentMod, "Effects/BasicBurst");
-        Instance = UnityEngine.Object.Instantiate(template);
+        Instance = RimUnity.Object.Instantiate(template);
         Instance.transform.position = position;
         particles = Instance.GetComponent<ParticleSystem>();
         if (particles == null)
         {
-            UnityEngine.Object.Destroy(Instance);
+            RimUnity.Object.Destroy(Instance);
             throw new InvalidOperationException("BasicBurst 根节点需要 ParticleSystem。");
         }
         Instance.SetActive(true);
@@ -71,8 +72,8 @@ public sealed class BurstEffect : IDisposable
     //停止发射，已有粒子继续自然消散。
     public void Stop() => particles.Stop();
 
-    //调用方在特效结束、拥有者销毁或地图退出时清理实例。
-    public void Dispose() => UnityEngine.Object.Destroy(Instance);
+    //调用方在特效结束、拥有者销毁或地图退出时销毁实例。
+    public void Dispose() => RimUnity.Object.Destroy(Instance);
 }
 ```
 
@@ -84,14 +85,16 @@ public sealed class BurstEffect : IDisposable
 
 | 制作端类型 | 游戏端类型／用法 |
 |---|---|
-| GameObject、Transform、Vector3、Quaternion、Color | `UnityEngine` 中宿主已实现的类型 |
+| GameObject、Transform、MonoBehaviour、Vector3、Quaternion、Color | `RimUnity` 下对应类型 |
+| Mesh、Material、Texture2D、Shader、ComputeBuffer | `RimUnity` 下对应类型 |
+| UnityEvent 与参数事件 | `RimUnity.Events` |
 | ParticleSystem、ParticleSystemRenderer | `RimUnity.ParticleSystem`、`RimUnity.ParticleSystemRenderer` |
 | Animator、Animation、LineRenderer、TrailRenderer | `RimUnity` 下对应类型 |
 | RectTransform、Canvas、CanvasGroup | `RimUnity` 下对应类型 |
 | Image、Button、Slider、Text 等 | `RimUnity.UI` |
 | 指针事件接口 | `RimUnity.EventSystems` |
 
-保留调用习惯可用 `using ParticleSystem = RimUnity.ParticleSystem;`。不要在游戏侧误用宿主同名但未完整实现的粒子组件。
+游戏侧脚本使用 `using RimUnity;`。需要同时访问游戏的 `UnityEngine` 类型时，使用明确别名，不能将两套 GameObject、Component 或 Material 相互传递。Verse 返回的位置可在边界转换：`var p = pawn.DrawPos; instance.transform.position = new RimUnity.Vector3(p.x, p.y, p.z);`。
 
 粒子提供 `Play`、`Pause`、`Stop`、`Clear`、`Simulate`、`IsAlive`、`GetParticles`／`SetParticles`。暂停整个对象可用 `SetActive(false)`，但这与粒子 Pause 的生命周期语义不同。最终销毁调用实例的 `Destroy`。数据采集等高频路径应复用数组，避免每帧分配。
 
@@ -103,7 +106,7 @@ public sealed class BurstEffect : IDisposable
 RimUnity.Assets.TypeResolver.Register("Authoring.EffectDriver", typeof(MyMod.EffectDriver));
 ```
 
-注册是添加映射，不是覆盖接口；重复注册同一个名称会报错。字段、资源引用和 UnityEvent 绑定必须使用当前支持的类型，详见 [类型迁移](Usage.md)。不支持把第三方 DLL 原样自动转为 Waylith 组件。
+注册是添加映射，不是覆盖接口；重复注册同一个名称会报错。字段、资源引用和 UnityEvent 绑定必须使用当前支持的类型，详见 [类型与脚本用法](Usage.md)。不支持把第三方 DLL 原样自动转为 Waylith 组件。
 
 ## 5. 用内容模组设置控制 Bloom
 
@@ -119,4 +122,4 @@ RimUnity.RimUnityMod.Bloom.ReleaseLayer(29);
 
 29 只是示例，不是框架保留层。同一层只应由一个内容模组负责；接管时开关优先于 RimUnity 手动选择，强度、阈值等参数仍共用。关闭 Bloom 不会停止粒子播放。更多限制见 [颜色与 Bloom](ColorAndBloom.md)。
 
-所有实例化、资源加载、组件操作与设置接线均在游戏主线程执行；不要放进后台 Task。当前没有运行实例／局部子树克隆和热重载保证，也没有全面游戏视觉及性能验收。
+所有实例化、资源加载、组件操作与设置接线均在游戏主线程执行；不要放进后台 Task。不支持运行实例／局部子树克隆和资源热重载。

@@ -1,4 +1,3 @@
-//源自 ChezhouLib UGUI；迁移来源与第三方许可见 Docs/ThirdParty.md。
 using System;
 using RimUnity.EventSystems;
 using UnityEngine;
@@ -27,11 +26,11 @@ internal static class UguiPointer
         for (int i = UguiRuntime.Entries.Count - 1; i >= 0; i--)
         {
             UguiRuntime.Entry entry = UguiRuntime.Entries[i];
-            if (entry.Raycast && UguiRuntime.Contains(entry, ev.mousePosition)) { hit = entry.Rect.gameObject; break; }
+            if (entry.Raycast && UguiRuntime.Contains(entry, new Vector2(ev.mousePosition.x, ev.mousePosition.y))) { hit = entry.Rect.gameObject; break; }
         }
         Vector2 screen = new(ev.mousePosition.x * Prefs.UIScale, Screen.height - ev.mousePosition.y * Prefs.UIScale);
         PointerEventData data = new() { position = screen, delta = screen - previous, pressPosition = pressPosition,
-            button = (PointerEventData.InputButton)ev.button, dragging = dragging, scrollDelta = ev.delta,
+            button = (PointerEventData.InputButton)ev.button, dragging = dragging, scrollDelta = new Vector2(ev.delta.x, ev.delta.y),
             pointerDrag = dragTarget, pointerPress = downTarget, rawPointerPress = pressHit, useDragThreshold = useDragThreshold,
             pointerPressRaycast = new RaycastResult { gameObject = pressHit } };
         if (hit != hovered)

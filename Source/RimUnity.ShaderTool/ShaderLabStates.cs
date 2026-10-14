@@ -32,6 +32,9 @@ internal static class ShaderLabStates
                 if (!tokens.Read().Equals("Off", StringComparison.OrdinalIgnoreCase))
                     throw new NotSupportedException("仅支持显式关闭固定管线光照的顶点／片元程序。");
                 break;
+            case "fog":
+                tokens.Expect("{"); tokens.Expect("Mode"); tokens.Expect("Off"); tokens.Expect("}");
+                break;
             case "cull": manifest.states["Cull"] = Value(tokens); break;
             case "ztest": manifest.states["ZTest"] = Value(tokens); break;
             case "zwrite": manifest.states["ZWrite"] = Value(tokens); break;

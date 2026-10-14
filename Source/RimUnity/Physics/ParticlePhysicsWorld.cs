@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using UnityEngine;
 
 namespace RimUnity;
 
@@ -15,7 +14,7 @@ internal static class ParticlePhysicsWorld
     internal static void Refresh(bool advanceBodies)
     {
         if (advanceBodies) PhysicsBodySimulation.AdvanceFrame();
-        colliders = UnityEngine.Object.FindObjectsByType<Collider>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        colliders = RimUnity.Object.FindObjectsByType<Collider>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
     }
 
     internal static bool Queryable(Collider collider) => collider != null && collider.enabled && collider.gameObject.activeInHierarchy

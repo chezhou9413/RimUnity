@@ -1,4 +1,3 @@
-using UnityEngine;
 
 namespace RimUnity.UI;
 
@@ -7,6 +6,6 @@ public sealed class Mask : MonoBehaviour
 {
     public bool showMaskGraphic { get; set; } = true;
     public new RectTransform transform => (RectTransform)base.transform;
-    public UnityEngine.UI.Graphic graphic => GetComponent<UnityEngine.UI.Graphic>();
+    public RimUnity.UI.Graphic graphic => GetComponent<RimUnity.UI.Graphic>();
     public bool MaskEnabled() => isActiveAndEnabled && graphic != null && graphic.isActiveAndEnabled;
 }

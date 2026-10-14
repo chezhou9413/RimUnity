@@ -1,9 +1,8 @@
 using System;
-using UnityEngine;
 
 namespace RimUnity;
 
-//宿主未提供该枚举，数值与 Unity 的形状模式保持一致。
+//形状模式枚举值与制作端一致。
 public enum ParticleSystemShapeMultiModeValue { Random, Loop, PingPong, BurstSpread }
 
 //形状相位由实际出生时刻求值，不随帧切分或发射数量改变旋转速度。

@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.Rendering;
 
 namespace RimUnity;
 
@@ -28,9 +26,7 @@ public sealed partial class TrailRenderer
         foreach (Material material in sharedMaterials)
         {
             if (material == null) continue;
-            Material[] passes = Rendering.MaterialPasses.Get(material);
-            if (passes == null) Graphics.DrawMesh(batch, Matrix4x4.identity, material, gameObject.layer, camera);
-            else foreach (Material pass in passes) Graphics.DrawMesh(batch, Matrix4x4.identity, pass, gameObject.layer, camera);
+            RimUnity.Graphics.DrawMesh(batch, Matrix4x4.identity, material, gameObject.layer);
         }
     }
 

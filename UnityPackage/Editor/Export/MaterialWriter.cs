@@ -16,6 +16,7 @@ namespace RimUnity.Editor
             bool legacyParticle = false;
             if (shader == "Unlit/Texture" || shader == "Unlit/Color") target = "RimUnity_Unlit";
             else if (shader == "Unlit/Transparent") target = "RimUnity_Transparent";
+            else if (shader == "UI/Unlit/Transparent") target = ui ? "RimUnity_UI" : "RimUnity_ParticleAlpha";
             else if (shader == "Particles/Standard Unlit") target = StandardParticleMaterial.Target(material, path);
             else if (shader == "Legacy Shaders/Particles/Alpha Blended" || shader == "Particles/Alpha Blended" || shader == "Legacy Shaders/Particles/Additive" || shader == "Particles/Additive" || shader == "Mobile/Particles/Additive" || shader == "Mobile/Particles/Alpha Blended")
             {
@@ -83,7 +84,6 @@ namespace RimUnity.Editor
                 data.members.Add(new MemberData { name = "shader", value = new ValueData { kind = "asset", text = resources.AddShader(material, ui, path, 0) } });
             else if (material.passCount > 1)
             {
-                if (ui) throw new NotSupportedException(path + "：UI 自定义多 Pass 尚未接通。");
                 var passes = new System.Collections.Generic.List<ValueData>();
                 var subshader = UnityEditor.ShaderUtil.GetShaderData(material.shader).ActiveSubshader;
                 if (subshader == null || subshader.PassCount != material.passCount)
@@ -98,9 +98,10 @@ namespace RimUnity.Editor
                     if (!material.GetShaderPassEnabled(material.GetPassName(i))) continue;
                     //无投影的 Renderer 不提交 ShadowCaster，不能把它当作第二个颜色 Pass。
                     if (IsShadowPass(material, i)) continue;
-                    passes.Add(new ValueData { kind = "asset", text = resources.AddShader(material, false, path + ".pass[" + i + "]", programPass) });
+                    passes.Add(new ValueData { kind = "asset", text = resources.AddShader(material, ui, path + ".pass[" + i + "]", programPass) });
                 }
                 if (passes.Count == 0) throw new NotSupportedException(path + "：材质没有启用的颜色 Pass。");
+                if (ui && passes.Count > 1) throw new NotSupportedException(path + "：UI 自定义多颜色 Pass 尚未接通。");
                 data.members.Add(new MemberData { name = "shader", value = passes[0] });
                 data.members.Add(new MemberData { name = "shaderPasses", value = new ValueData { kind = "array", items = passes } });
             }

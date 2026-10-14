@@ -1,10 +1,9 @@
 using System;
 using System.Collections.Generic;
-using UnityEngine;
 
 namespace RimUnity;
 
-//按子网格与 Shader Pass 顺序提交，避免宿主单 Pass 材质丢失叠加效果。
+//按子网格与 Shader Pass 顺序提交绘制。
 public sealed class MeshRenderer : MonoBehaviour
 {
     internal static readonly HashSet<MeshRenderer> Active = new();
@@ -22,7 +21,6 @@ public sealed class MeshRenderer : MonoBehaviour
             Material source = sharedMaterial;
             if (source == null || ownedMaterials.Contains(source)) return source;
             var clone = new Material(source);
-            Rendering.MaterialPasses.Copy(source, clone);
             sharedMaterials = (Material[])sharedMaterials.Clone(); sharedMaterials[0] = clone;
             ownedMaterials.Add(clone);
             return clone;
@@ -45,15 +43,13 @@ public sealed class MeshRenderer : MonoBehaviour
             Material material = sharedMaterials[i];
             if (material == null) continue;
             int submesh = Math.Min(i, mesh.subMeshCount - 1);
-            Material[] passes = Rendering.MaterialPasses.Get(material);
-            if (passes == null) Graphics.DrawMesh(mesh, matrix, material, gameObject.layer, camera, submesh);
-            else foreach (Material pass in passes) Graphics.DrawMesh(mesh, matrix, pass, gameObject.layer, camera, submesh);
+            RimUnity.Graphics.DrawMesh(mesh, matrix, material, gameObject.layer, submesh);
         }
     }
 
     private void OnDestroy()
     {
         Active.Remove(this);
-        foreach (Material owned in ownedMaterials) { Rendering.MaterialPasses.Release(owned); Destroy(owned); }
+        foreach (Material owned in ownedMaterials) Destroy(owned);
     }
 }

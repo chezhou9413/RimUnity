@@ -1,6 +1,5 @@
 using System;
-using UnityEngine;
-using UnityEngine.UI;
+using RimUnity.UI;
 
 namespace RimUnity.UI;
 
@@ -8,7 +7,7 @@ namespace RimUnity.UI;
 public class AspectRatioFitter : MonoBehaviour, ILayoutSelfController
 {
     public enum AspectMode { None, WidthControlsHeight, HeightControlsWidth, FitInParent, EnvelopeParent }
-    public AspectMode aspectMode { get; set; }
+    public AspectMode aspectMode { get; set => SetProperty(ref field, value); }
     private float ratio = 1f;
     public float aspectRatio
     {
@@ -16,7 +15,7 @@ public class AspectRatioFitter : MonoBehaviour, ILayoutSelfController
         set
         {
             if (!float.IsFinite(value) || value <= 0f) throw new ArgumentOutOfRangeException(nameof(value), "宽高比必须是有限正数。");
-            ratio = value;
+            SetProperty(ref ratio, value);
         }
     }
 

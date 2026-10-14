@@ -1,7 +1,5 @@
 using System;
 using RimUnity.UI.Runtime;
-using UnityEngine;
-using UnityStubs.Gui;
 
 namespace RimUnity.UI;
 
@@ -13,7 +11,7 @@ public static class ImmediateMesh
         Vector2 uvA, Vector2 uvB, Vector2 uvC, Vector2 uvD, Color color)
     {
         if (material == null) throw new ArgumentNullException(nameof(material));
-        if (Event.current.type != EventType.Repaint) return;
+        if (!Runtime.NativeGuiHost.CanDraw) return;
         GuiVertex va = new() { position = a, uv = uvA, color = color };
         GuiVertex vb = new() { position = b, uv = uvB, color = color };
         GuiVertex vc = new() { position = c, uv = uvC, color = color };

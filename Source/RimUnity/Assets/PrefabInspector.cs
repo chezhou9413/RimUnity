@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using RimUnity.Serialization;
-using UnityEngine;
 
 namespace RimUnity.Assets;
 
@@ -69,7 +68,7 @@ public static class PrefabInspector
                 break;
             case "asset":
                 AssetRecord asset = manifest.assets.Single(a => a.id == value.text);
-                Type assetType = asset.type == "Prefab" ? typeof(GameObject) : TypeResolver.Resolve((asset.type == "TMP_FontAsset" ? "RimUnity.UI." : asset.type == "AnimationClip" || asset.type == "RuntimeAnimatorController" ? "RimUnity." : "UnityEngine.") + asset.type);
+                Type assetType = asset.type == "Prefab" ? typeof(GameObject) : TypeResolver.Resolve((asset.type == "TMP_FontAsset" ? "RimUnity.UI." : "RimUnity.") + asset.type);
                 if (!type.IsAssignableFrom(assetType)) throw new InvalidDataException(path + "：资源引用类型不匹配。");
                 break;
             case "data": InspectMembers(type, value.fields, objects, manifest, path); break;
