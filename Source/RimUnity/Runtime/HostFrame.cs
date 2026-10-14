@@ -31,6 +31,8 @@ internal static class HostFrame
     //退出或更换游戏时释放场景实例，模板和共享资源保留在资源缓存中。
     private static void Update()
     {
+        //读档与地图生成会在后台重建世界数据，完成前不推进脚本或提交地图绘制。
+        if (LongEventHandler.AnyEventNowOrWaiting) return;
         //最小化窗口时没有绘制快照，在下一次更新前结束未提交的帧。
         FinishFrame(application);
         if (!ReferenceEquals(lastGame, Current.Game))

@@ -7,6 +7,7 @@
   <supportedVersions><li>1.7</li></supportedVersions>
   <modDependencies><li><packageId>brrainz.harmony</packageId><displayName>Harmony</displayName><steamWorkshopUrl>steam://url/CommunityFilePage/2009463077</steamWorkshopUrl></li></modDependencies>
   <loadAfter><li>brrainz.harmony</li></loadAfter>
+  <loadBefore><li>ludeon.rimworld</li></loadBefore>
   <description>RimUnity 为 RimWorld 1.7 提供 Unity 资源导出与运行支持，让内容模组使用在 Unity 中制作的粒子、材质、UI、模型和动画，并提供熟悉的脚本接口。需配合支持 RimUnity 的内容模组使用。依赖 Harmony。
 
 RimUnity brings Unity-authored particles, materials, UI, models and animations to RimWorld 1.7, with familiar scripting APIs. A framework for content mods that support RimUnity. Requires Harmony.</description>

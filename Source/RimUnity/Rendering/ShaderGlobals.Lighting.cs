@@ -11,10 +11,10 @@ internal static partial class ShaderGlobals
     //读取地图公开的天空光照，向原生 Shader 提供方向和颜色。
     private static void UpdateMapLighting()
     {
-        Map map = Find.CurrentMap;
+        Map map = Current.ProgramState == ProgramState.Playing ? Find.CurrentMap : null;
         Vector4 sun = Vector4.zero, moon = Vector4.zero;
         Color ambient = Color.black, radiance = Color.black;
-        if (map != null)
+        if (map != null && !map.Disposed)
         {
             //直接读取天空管理器已计算的日月参数。
             sun = Shader.GetGlobalVector(ShaderPropertyIDs.WaterCastVectSun);
