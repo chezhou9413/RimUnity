@@ -19,6 +19,8 @@ internal sealed class AnimatedFloat
         scale = propertyPath.StartsWith("m_LocalScale.", StringComparison.Ordinal);
         if (target is GameObject go && propertyPath == "m_IsActive")
         { read = () => go.activeSelf ? 1 : 0; write = value => go.SetActive(value > .5f); initial = read(); return; }
+        if (target is ParticleSystem particles && AnimatedParticleFloat.TryBind(particles, propertyPath, out var particleRead, out var particleWrite))
+        { read = particleRead; write = particleWrite; initial = read(); return; }
         //材质浮点参数不是 CLR 字段，绑定当前渲染器的实例材质，避免改动共享资源。
         if (propertyPath.StartsWith("material.", StringComparison.Ordinal))
         {

@@ -12,7 +12,11 @@ Unity 菜单：`RimUnity / 明文资源构建管理器`。通过本地 UPM 包�
 
 同一目标 Mod 的入口在同一批次导出，按资源 ID 复用贴图、材质、网格和 Shader 变体。发布前自动只保留清单入口及其依赖，去掉未引用的历史文件；内容相同的附属文件存入 `blobs/`，只保留一份。增量模式也会整理目录，但保留未重新导出的公开入口。
 
-JSON 保持明文，省略缩进和空字段，保留显式零值、false、粒子参数与资源精度。文件去重不会合并不同资源 ID 的对象身份，也不会降低贴图分辨率。单个导出窗口与逐项粒子导出保留历史目录；这些结果可用[发布副本 API](ResourceLoading.md#发布内容资源)整理后再分发。
+清单和小型配置保持明文。超过 4 KiB 的 Prefab、Mesh、AnimationClip、RuntimeAnimatorController JSON 在压缩有效时保存为 `.json.gz`，游戏直接流式读取；用常见 Gzip 工具即可还原 JSON。省略缩进和 null 字段，保留显式零值、false、粒子参数与资源精度。文件去重不会合并不同资源 ID 的对象身份，也不会降低贴图分辨率。单个导出窗口与逐项粒子导出保留明文和历史目录；这些结果可用[发布副本 API](ResourceLoading.md#发布内容资源)整理后再分发。
+
+多个模组共同发布时，构建管理器按 `About/About.xml` 的 `modDependencies` 和 `modDependenciesByVersion/v1.7` 复用必需依赖中的相同文件。依赖必须在同一批发布目标中；不会从无依赖关系的模组借用资源。`catalog.json` 的 `sharedFiles` 记录相对文件名与所属 packageId；依赖必须安装并启用，缺失时会明确报错。请将共享资源的主模组与扩展作为配套版本发布；主模组重新构建时，一并构建使用它的扩展。
+
+压缩发布清单使用 `formatVersion: 2`，需要 RimUnity 0.1.7 或更新版本；旧运行时不能加载。PrefabLoader、AssetLoader 和脚本逻辑路径无需改变。
 
 缺失脚本会作为警告写入预制体，游戏载入时会报告；其他可导出组件仍可使用。Shader Graph 和需要另行编译的脚本资源会在列表中提示，移出这些入口后即可导出其余内容。
 

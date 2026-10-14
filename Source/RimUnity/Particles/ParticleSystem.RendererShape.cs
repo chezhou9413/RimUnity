@@ -38,8 +38,8 @@ public sealed partial class ParticleSystem
                 rendererShape.spriteVertices = new Vector3[source.Positions.Length];
                 for (int i = 0; i < source.Positions.Length; i++)
                 {
-                    Vector2 point = source.Positions[i] - sprite.pivot;
-                    rendererShape.spriteVertices[i] = new Vector3(point.x * sprite.rect.width / sprite.pixelsPerUnit, point.y * sprite.rect.height / sprite.pixelsPerUnit, 0);
+                    Vector2 point = UI.SpriteGeometry.LocalPosition(sprite, source.Positions[i]);
+                    rendererShape.spriteVertices[i] = new Vector3(point.x, point.y, 0);
                 }
                 rendererShape.spriteTriangles = source.Triangles; shapeSprite = sprite;
             }

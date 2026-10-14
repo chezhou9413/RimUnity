@@ -81,6 +81,16 @@ RimUnity.Editor.ExportStorage.CopyForPublish(
 
 整理只保留公开入口及其依赖，压紧 JSON，并按 SHA-256 共享内容相同的贴图、字体、GLSL 等附属文件。资源 ID、逻辑路径和显式参数保留。不能仅复制最新 generation——未重导出的入口可能仍引用较早的文件。
 
+大资源 JSON 自动保存为 Gzip，加载接口无需变化。若输入已有跨模组共享引用，为 `CopyForPublish` 传入第三个参数 `owner => ownerDirectories[owner]`；字典值为该 packageId 对应的 `1.7/Data/RimUnity` 目录。该方法将外部文件带回独立副本；共同发布多个模组时，再调用 `ExportSharing.Share(prepared)`，其中 `prepared` 是正式 Mod 根目录到准备好的资源目录的字典。构建管理器已经自动完成这些步骤。
+
+需要离线优化已有导出数据时，在仓库目录执行：
+
+```powershell
+dotnet run --project Tools/ResourcePacker/ResourcePacker.csproj -c Release -p:UnityEditorDir="C:/Unity/2022.3/Editor/Data" -- "C:/Builds/Optimized" "C:/Mods/BaseMod" "C:/Mods/AddonMod"
+```
+
+需要 .NET 10 SDK 和本机 Unity 编辑器的 Newtonsoft.Json 程序集，不启动 Unity 或游戏。输出目录必须不存在；输出按 packageId 分目录，并生成同名 ZIP。只包含资源目录，不是完整模组，分发时用它替换对应模组的 `1.7/Data/RimUnity`。原目录不变，共享资源的所有所属模组都应作为参数传入。
+
 失败导出目录中的 `FAILED.txt`、批次报告、`.export.lock` 和临时文件不是运行必需资源。清单中的稳定 ID、相对路径与依赖应由导出器维护，不建议手工修改。
 
 `Tools/Pack.ps1` 只打包框架，不替内容模组收集资源。图片／字体／模型的分发许可由内容作者确认，RimUnity 的 MIT 不会改变它们的许可。

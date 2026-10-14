@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Verse;
 
 namespace RimUnity.Assets;
@@ -32,7 +33,16 @@ public static class AssetLoader
     internal static AssetCatalog GetCatalog(string dataDirectory)
     {
         string root = Path.GetFullPath(dataDirectory);
-        if (!Catalogs.TryGetValue(root, out AssetCatalog catalog)) Catalogs.Add(root, catalog = new AssetCatalog(root));
+        if (!Catalogs.TryGetValue(root, out AssetCatalog catalog)) Catalogs.Add(root, catalog = new AssetCatalog(root, ResolveOwner));
         return catalog;
+    }
+
+    //仅从已启用模组解析 packageId，缺失依赖直接给出可定位错误。
+    private static string ResolveOwner(string owner)
+    {
+        var mod = LoadedModManager.RunningModsListForReading.SingleOrDefault(m =>
+            string.Equals(m.PackageIdPlayerFacing, owner, StringComparison.OrdinalIgnoreCase));
+        if (mod == null) throw new FileNotFoundException("RimUnity 共享资源依赖未启用：" + owner);
+        return Path.Combine(mod.RootDir, "1.7", "Data", "RimUnity");
     }
 }

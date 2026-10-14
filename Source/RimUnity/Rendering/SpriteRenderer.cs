@@ -43,13 +43,10 @@ public sealed class SpriteRenderer : MonoBehaviour
             var vertices = new Vector3[geometry.Positions.Length];
             var colors = new Color[vertices.Length];
             var normals = new Vector3[vertices.Length];
-            //Sprite.pivot 使用与导出数据一致的归一化坐标。
-            Vector2 pivot = sprite.pivot;
             for (int i = 0; i < vertices.Length; i++)
             {
-                Vector2 p = geometry.Positions[i] - pivot;
-                vertices[i] = new Vector3(p.x * sprite.rect.width / sprite.pixelsPerUnit * (flipX ? -1 : 1),
-                    p.y * sprite.rect.height / sprite.pixelsPerUnit * (flipY ? -1 : 1), 0);
+                Vector2 p = UI.SpriteGeometry.LocalPosition(sprite, geometry.Positions[i]);
+                vertices[i] = new Vector3(p.x * (flipX ? -1 : 1), p.y * (flipY ? -1 : 1), 0);
                 colors[i] = color;
                 normals[i] = Vector3.back;
             }

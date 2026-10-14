@@ -3,7 +3,8 @@ using Newtonsoft.Json.Linq;
 
 public static class RimUnityWorkflow
 {
-    public sealed class Profile { public string repository, shaderTool, gameRoot; public bool disableCastShadows, disableReceiveShadows, disableLightProbes, disableReflectionProbes; }
+    public sealed class Profile { public string repository, shaderTool, gameRoot; public Mapping[] mappings; public bool disableCastShadows, disableReceiveShadows, disableLightProbes, disableReflectionProbes; }
+    public sealed class Mapping { public string mod; }
     public sealed class Entry { public string path, mod, bundle, status, error; public bool ui; }
 }
 namespace UnityEngine { public sealed class Object { public string Path; } }
@@ -38,6 +39,7 @@ namespace RimUnity.Editor
             Directory.CreateDirectory(root);
             string catalog = Path.Combine(root, "catalog.json");
             var json = File.Exists(catalog) ? JObject.Parse(File.ReadAllText(catalog)) : new JObject { ["formatVersion"] = 1, ["assets"] = new JArray() };
+            json["owner"] = ExportSharing.Owner(mod);
             foreach (var request in requests)
             {
                 if (request.asset.Path == "failure") throw new InvalidOperationException("Injected converter failure");

@@ -10,6 +10,7 @@ namespace RimUnity.Serialization
         public int formatVersion = 1;
         public string owner;
         public List<AssetRecord> assets = new List<AssetRecord>();
+        public Dictionary<string, string> sharedFiles = new Dictionary<string, string>();
     }
 
     //记录逻辑地址与实际文件，描述随资源一起发布。

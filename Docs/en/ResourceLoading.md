@@ -81,6 +81,16 @@ Both arguments are asset directories, not mod roots. The destination must be abs
 
 Compaction keeps public entries and their dependencies, writes compact JSON and shares identical texture, font, GLSL and other payload files by SHA-256. Asset IDs, logical paths and explicit parameters are preserved. Keeping only the newest generation can break entries that were not re-exported.
 
+Large asset JSON is stored as Gzip without changing loading APIs. If the input already shares files across mods, pass a third argument to `CopyForPublish`: `owner => ownerDirectories[owner]`. Each dictionary value is that package ID's `1.7/Data/RimUnity` directory. This materializes external files into a self-contained copy. To share files across several prepared mods, call `ExportSharing.Share(prepared)` with a dictionary mapping real mod roots to prepared asset directories. The build manager handles these steps automatically.
+
+To optimize existing exports offline, run from the repository:
+
+```powershell
+dotnet run --project Tools/ResourcePacker/ResourcePacker.csproj -c Release -p:UnityEditorDir="C:/Unity/2022.3/Editor/Data" -- "C:/Builds/Optimized" "C:/Mods/BaseMod" "C:/Mods/AddonMod"
+```
+
+Requires .NET 10 SDK and the Newtonsoft.Json assembly supplied with your Unity Editor; neither Unity nor the game is launched. The output directory must not exist. Output is grouped by package ID and accompanied by a ZIP. It contains assets only, not complete mods: replace each mod's `1.7/Data/RimUnity` with its matching output for distribution. Source directories remain unchanged. Include all owners of shared input files in the arguments.
+
 `FAILED.txt`, batch reports, `.export.lock` and temporary files are not runtime resources. Let the exporter maintain stable IDs, relative paths and dependencies instead of editing them by hand.
 
 `Tools/Pack.ps1` packages the framework only; it does not collect content mod resources. Content authors are responsible for permission to redistribute images, fonts and models. RimUnity's MIT license does not change their licenses.

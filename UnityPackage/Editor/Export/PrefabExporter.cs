@@ -66,7 +66,7 @@ namespace RimUnity.Editor
                 //提交期间持有排他锁；另一个编辑器正在提交时明确报错。
                 using var commit = new FileStream(Path.Combine(root, ".export.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
                 Manifest previous = File.Exists(catalogFile) ? JsonConvert.DeserializeObject<Manifest>(File.ReadAllText(catalogFile)) : new Manifest { owner = owner };
-                if (previous.formatVersion != 1 || previous.owner != owner) throw new InvalidDataException("现有清单版本或所属模组不匹配。");
+                if ((previous.formatVersion != 1 && previous.formatVersion != 2) || previous.owner != owner) throw new InvalidDataException("现有清单版本或所属模组不匹配。");
                 //保留未重新导出的入口，但同 ID 的共享资源统一指向本次版本。
                 foreach (AssetRecord old in previous.assets)
                 {
@@ -79,7 +79,8 @@ namespace RimUnity.Editor
                 var reachable = new HashSet<string>();
                 void Visit(string id) { if (!reachable.Add(id)) return; foreach (string dependency in records[id].dependencies) Visit(dependency); }
                 foreach (AssetRecord record in records.Values.Where(a => !a.path.StartsWith("__assets/", StringComparison.Ordinal))) Visit(record.id);
-                var manifest = new Manifest { owner = owner, assets = records.Values.Where(a => reachable.Contains(a.id)).OrderBy(a => a.path, StringComparer.Ordinal).ToList() };
+                var manifest = new Manifest { owner = owner, formatVersion = previous.formatVersion, sharedFiles = previous.sharedFiles,
+                    assets = records.Values.Where(a => reachable.Contains(a.id)).OrderBy(a => a.path, StringComparer.Ordinal).ToList() };
                 string pending = Path.Combine(root, "catalog." + Guid.NewGuid().ToString("N") + ".tmp");
                 ExportJson.Write(pending, manifest);
                 if (File.Exists(catalogFile)) File.Replace(pending, catalogFile, null);

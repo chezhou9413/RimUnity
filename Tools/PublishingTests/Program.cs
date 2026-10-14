@@ -87,4 +87,34 @@ RimUnityPublisher.Export(profile, new[] { E(Mod("strict-options")) }, true, mess
 Check(!PrefabExporter.LastOptions.disableCastShadows && !PrefabExporter.LastOptions.disableReceiveShadows
     && !PrefabExporter.LastOptions.disableLightProbes && !PrefabExporter.LastOptions.disableReflectionProbes,
     "disabled policies remain strict on the next export");
+//压缩与依赖共享共同执行时，独立模组和增量副本必须仍能独立读取。
+string baseMod = Mod("shared-base"), addon = Mod("shared-addon"), unrelated = Mod("unrelated");
+File.WriteAllText(Path.Combine(addon, "About/About.xml"), "<ModMetaData><packageId>tests.shared-addon</packageId><modDependencies><li><packageId>tests.shared-base</packageId></li></modDependencies></ModMetaData>");
+var stages = new Dictionary<string, string>();
+foreach (string mod in new[] { baseMod, addon, unrelated })
+{
+    string source = Path.Combine(mod, "1.7/Data/RimUnity");
+    var manifest = JObject.Parse(File.ReadAllText(Path.Combine(source, "catalog.json")));
+    manifest["owner"] = ExportSharing.Owner(mod);
+    ((JArray)manifest["assets"]).Add(new JObject { ["id"] = "dense", ["type"] = "Prefab", ["file"] = "dense.json", ["path"] = "dense", ["dependencies"] = new JArray() });
+    File.WriteAllText(Path.Combine(source, "catalog.json"), manifest.ToString());
+    File.WriteAllText(Path.Combine(source, "dense.json"), new JObject { ["enabled"] = false, ["count"] = 0, ["text"] = new string('x', 12000) }.ToString());
+    string target = Path.Combine(run, "prepared-" + Path.GetFileName(mod));
+    ExportStorage.CopyForPublish(source, target);
+    stages.Add(mod, target);
+}
+ExportSharing.Share(stages);
+var ownerRoots = stages.ToDictionary(p => ExportSharing.Owner(p.Key), p => p.Value);
+foreach (string rootPath in stages.Values) RimUnityPublisher.Validate(rootPath, owner => ownerRoots[owner]);
+var addonCatalog = ExportStorage.Read(Path.Combine(stages[addon], "catalog.json"));
+Check(((JObject)addonCatalog["sharedFiles"]).Count == 1 && Directory.GetFiles(Path.Combine(stages[addon], "blobs")).Length == 0, "required dependency shares payload");
+Check(Directory.GetFiles(Path.Combine(stages[unrelated], "blobs")).Length == 1, "unrelated mod retains its payload");
+string denseFile = (string)((JArray)addonCatalog["assets"]).Single(a => (string)a["id"] == "dense")["file"];
+var dense = ExportStorage.Read(Path.Combine(stages[addon], denseFile));
+Check(denseFile.EndsWith(".json.gz") && (bool)dense["enabled"] == false && (int)dense["count"] == 0 && ((string)dense["text"]).Length == 12000, "compressed descriptor preserves explicit values");
+Failure(() => RimUnityPublisher.Validate(stages[addon]), "missing owner resolver reports dependency error");
+string standalone = Path.Combine(run, "standalone-copy");
+ExportStorage.CopyForPublish(stages[addon], standalone, owner => ownerRoots[owner]);
+RimUnityPublisher.Validate(standalone);
+Check(((JObject)ExportStorage.Read(Path.Combine(standalone, "catalog.json"))["sharedFiles"]).Count == 0, "repacking shared compressed input produces self-contained copy");
 Console.WriteLine("All publication tests passed. Scratch data: " + run);

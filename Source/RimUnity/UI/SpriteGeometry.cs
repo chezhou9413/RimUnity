@@ -9,6 +9,11 @@ public static class SpriteGeometry
     internal sealed record Geometry(Vector2[] Positions, Vector2[] UV, int[] Triangles);
     private static readonly ConditionalWeakTable<Sprite, Geometry> Data = new();
 
+    //归一化几何先还原为像素，再减去像素枢轴并换算为局部单位。
+    internal static Vector2 LocalPosition(Sprite sprite, Vector2 position)
+        => new((position.x * sprite.rect.width - sprite.pivot.x) / sprite.pixelsPerUnit,
+            (position.y * sprite.rect.height - sprite.pivot.y) / sprite.pixelsPerUnit);
+
     //加载器传入与 Unity Image.GenerateSprite 相同的归一化顶点。
     public static void Register(Sprite sprite, Vector2[] positions, Vector2[] uv, int[] triangles)
     {

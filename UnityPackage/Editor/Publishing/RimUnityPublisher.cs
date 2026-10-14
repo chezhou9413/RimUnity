@@ -7,6 +7,7 @@ using Newtonsoft.Json.Linq;
 using RimUnity.Editor;
 using UnityEditor;
 using UnityEngine;
+using RimUnity.Serialization;
 
 //所有目标准备完毕后统一发布，失败时恢复原有数据。
 namespace RimUnity.Editor { public static class RimUnityPublisher
@@ -30,6 +31,11 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
             throw new InvalidOperationException("ShaderTool 或 RimWorld 1.7 路径无效。");
         var targets = entries.GroupBy(e => Path.GetFullPath(Path.Combine(profile.repository, e.mod)), StringComparer.OrdinalIgnoreCase)
             .Select(group => new Target { Mod = group.Key, Entries = group.ToArray() }).ToArray();
+        var inputRoots = ExportSharing.Roots(targets.Select(t => t.Mod).Concat(
+            (profile.mappings ?? Array.Empty<RimUnityWorkflow.Mapping>()).Where(m => !string.IsNullOrWhiteSpace(m.mod))
+            .Select(m => Path.GetFullPath(Path.Combine(profile.repository, m.mod)))));
+        string InputOwner(string owner) => inputRoots.TryGetValue(owner, out var root) ? root
+            : throw new InvalidDataException("工程配置缺少共享资源所属模组：" + owner);
         string oldTool = EditorPrefs.GetString("RimUnity.ShaderTool", ""), oldGame = EditorPrefs.GetString("RimUnity.GameRoot", "");
         bool committed = false;
         try
@@ -56,7 +62,7 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
                 target.Prepared = Path.Combine(target.Stage, "1.7/Data/RimUnity");
                 Directory.CreateDirectory(Path.Combine(target.Stage, "About"));
                 File.Copy(about, Path.Combine(target.Stage, "About/About.xml"));
-                if (!rebuild && File.Exists(Path.Combine(target.Live, "catalog.json"))) ExportStorage.CopyForPublish(target.Live, target.Prepared);
+                if (!rebuild && File.Exists(Path.Combine(target.Live, "catalog.json"))) ExportStorage.CopyForPublish(target.Live, target.Prepared, InputOwner);
             }
             EditorPrefs.SetString("RimUnity.ShaderTool", profile.shaderTool);
             EditorPrefs.SetString("RimUnity.GameRoot", profile.gameRoot);
@@ -106,6 +112,9 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
                 log("验证通过：" + target.Mod);
             }
             if (errors.Count > 0) throw new AggregateException("导出存在错误，正式数据未替换。", errors);
+            ExportSharing.Share(targets.ToDictionary(t => t.Mod, t => t.Prepared));
+            var preparedRoots = targets.ToDictionary(t => ExportSharing.Owner(t.Mod), t => t.Prepared, StringComparer.OrdinalIgnoreCase);
+            foreach (var target in targets) Validate(target.Prepared, owner => preparedRoots[owner]);
             //发布期间保留全部旧数据，任意目标失败时整体恢复。
             foreach (var target in targets)
             {
@@ -158,12 +167,24 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
             "\n请修复这些入口后再导出。移出 AssetBundle 标签或手动入口后，它们不会进入本次发布。";
     }
 
-    public static void Validate(string root)
+    public static void Validate(string root, Func<string, string> ownerRoot = null)
     {
         root = Path.GetFullPath(root);
         var catalog = JObject.Parse(File.ReadAllText(Path.Combine(root, "catalog.json")));
         var assets = (JArray)catalog["assets"];
-        if ((int)catalog["formatVersion"] != 1 || assets == null || assets.Count == 0) throw new InvalidDataException("导出清单为空或格式无效。");
+        if (((int)catalog["formatVersion"] != 1 && (int)catalog["formatVersion"] != 2) || assets == null || assets.Count == 0) throw new InvalidDataException("导出清单为空或格式无效。");
+        void CheckPayload(string relative)
+        {
+            string directory = root;
+            if (catalog["sharedFiles"] is JObject shared && shared[relative] != null)
+            {
+                ContentFiles.RequireBlob(relative);
+                string owner = (string)shared[relative];
+                if (ownerRoot == null) throw new InvalidDataException("验证共享资源需要模组目录：" + owner);
+                directory = ownerRoot(owner);
+            }
+            CheckFile(directory, relative);
+        }
         var ids = new HashSet<string>();
         foreach (JObject asset in assets)
             if (!ids.Add((string)asset["id"])) throw new InvalidDataException("重复资源 ID。");
@@ -173,13 +194,13 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
             if (!File.Exists(file)) throw new FileNotFoundException("清单资源不存在", file);
             foreach (string dependency in (asset["dependencies"] as JArray ?? new JArray()).Values<string>())
                 if (!ids.Contains(dependency)) throw new InvalidDataException("缺失依赖：" + dependency);
-            var json = JObject.Parse(File.ReadAllText(file));
+            var json = ExportStorage.Read(file);
             //附属文件路径以资源根目录为基准。
             foreach (string name in new[] { "vertexFile", "fragmentFile", "descriptorFile" })
-                if (json[name]?.Type == JTokenType.String) CheckFile(root, (string)json[name]);
+                if (json[name]?.Type == JTokenType.String) CheckPayload((string)json[name]);
             if (json["members"] is JArray members)
                 foreach (JObject member in members)
-                    if ((string)member["name"] == "file") CheckFile(root, (string)member["value"]?["text"]);
+                    if ((string)member["name"] == "file") CheckPayload((string)member["value"]?["text"]);
         }
     }
     private static void CheckFile(string root, string relative)
@@ -189,13 +210,7 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
     }
 
     private static string Inside(string root, string relative)
-    {
-        if (string.IsNullOrWhiteSpace(relative) || Path.IsPathRooted(relative)) throw new InvalidDataException("无效资源路径。");
-        string full = Path.GetFullPath(Path.Combine(root, relative));
-        if (!full.StartsWith(Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException("资源路径越界。");
-        return full;
-    }
+        => ContentFiles.Inside(root, relative);
     private static void EnsureNoLinks(string root)
     {
         if ((File.GetAttributes(root) & FileAttributes.ReparsePoint) != 0) throw new IOException("数据目录不可为链接：" + root);

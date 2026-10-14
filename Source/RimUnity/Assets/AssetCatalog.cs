@@ -17,13 +17,16 @@ internal sealed class AssetCatalog
     private readonly Dictionary<string, AssetRecord> paths = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, RimUnity.Object> resources = new();
     private readonly HashSet<string> loading = new();
+    private readonly Func<string, string> ownerRoot;
+    private readonly Dictionary<string, string> sharedPaths = new(StringComparer.Ordinal);
 
     //清单在首次加载时校验，失败直接报告内容模组及资源路径。
-    internal AssetCatalog(string root)
+    internal AssetCatalog(string root, Func<string, string> ownerRoot = null)
     {
+        this.ownerRoot = ownerRoot;
         Root = Path.GetFullPath(root);
         Manifest = Read<Manifest>("catalog.json");
-        if (Manifest.formatVersion != 1) throw new NotSupportedException($"RimUnity 格式 {Manifest.formatVersion} 不受支持：{root}");
+        if (Manifest.formatVersion is not (1 or 2)) throw new NotSupportedException($"RimUnity 格式 {Manifest.formatVersion} 不受支持：{root}");
         records = Manifest.assets.ToDictionary(a => a.id, StringComparer.Ordinal);
         foreach (AssetRecord record in Manifest.assets)
         {
@@ -37,17 +40,23 @@ internal sealed class AssetCatalog
     //禁止资源清单跳出内容目录，也不允许绝对路径。
     internal string Resolve(string relative)
     {
-        if (string.IsNullOrWhiteSpace(relative) || Path.IsPathRooted(relative)) throw new InvalidDataException($"资源必须使用相对路径：{relative}");
-        string full = Path.GetFullPath(Path.Combine(Root, relative));
-        if (!full.StartsWith(Root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException($"资源路径超出目录：{relative}");
-        return full;
+        if (Manifest != null && Manifest.sharedFiles.TryGetValue(relative, out string owner))
+        {
+            if (sharedPaths.TryGetValue(relative, out string cached)) return cached;
+            ContentFiles.RequireBlob(relative);
+            if (ownerRoot == null) throw new InvalidDataException($"{Manifest.owner} 需要共享资源所属模组目录：{owner}");
+            string full = ContentFiles.Inside(ownerRoot(owner), relative);
+            if (!File.Exists(full)) throw new FileNotFoundException($"{Manifest.owner} 缺少 {owner} 的共享资源；请安装配套版本：{relative}", full);
+            sharedPaths.Add(relative, full);
+            return full;
+        }
+        return ContentFiles.Inside(Root, relative);
     }
 
     //所有载荷均由共享格式定义解码。
     internal T Read<T>(string file)
     {
-        using var stream = File.OpenRead(Resolve(file));
+        using var stream = ContentFiles.OpenJson(Resolve(file));
         return JsonSerializer.Deserialize<T>(stream, Json) ?? throw new InvalidDataException($"空资源：{file}");
     }
 

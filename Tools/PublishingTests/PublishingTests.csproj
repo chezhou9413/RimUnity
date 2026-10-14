@@ -8,6 +8,8 @@
     <Compile Include="../../UnityPackage/Editor/Publishing/RimUnityPublisher.cs" Link="RimUnityPublisher.cs" />
     <Compile Include="../../UnityPackage/Editor/Export/ExportStorage.cs" Link="ExportStorage.cs" />
     <Compile Include="../../UnityPackage/Editor/Export/ExportJson.cs" Link="ExportJson.cs" />
+    <Compile Include="../../UnityPackage/Editor/Export/ExportSharing.cs" Link="ExportSharing.cs" />
+    <Compile Include="../../UnityPackage/Runtime/Serialization/ContentFiles.cs" Link="ContentFiles.cs" />
     <Reference Include="Newtonsoft.Json" HintPath="$(UnityEditorDir)/Managed/Newtonsoft.Json.dll" />
   </ItemGroup>
 </Project>

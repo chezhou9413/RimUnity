@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using RimUnity.Serialization;
 
 namespace RimUnity.Editor
 {
@@ -13,7 +15,7 @@ namespace RimUnity.Editor
     public static class ExportStorage
     {
         //目标必须为空目录；源目录保持不变，失败由发布事务处理。
-        public static void CopyForPublish(string source, string destination)
+        public static void CopyForPublish(string source, string destination, Func<string, string> ownerRoot = null)
         {
             source = Path.GetFullPath(source).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             destination = Path.GetFullPath(destination).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
@@ -26,7 +28,7 @@ namespace RimUnity.Editor
             Directory.CreateDirectory(destination);
             var catalog = Read(Inside(source, "catalog.json"));
             var assets = (JArray)catalog["assets"];
-            if ((int)catalog["formatVersion"] != 1 || assets == null)
+            if (((int)catalog["formatVersion"] != 1 && (int)catalog["formatVersion"] != 2) || assets == null)
                 throw new InvalidDataException("资源清单格式无效。");
             var records = assets.Cast<JObject>().ToDictionary(a => (string)a["id"], StringComparer.Ordinal);
             var reachable = new HashSet<string>(StringComparer.Ordinal);
@@ -39,9 +41,20 @@ namespace RimUnity.Editor
             foreach (var record in records.Values)
                 if (!((string)record["path"]).StartsWith("__assets/", StringComparison.Ordinal)) Visit((string)record["id"]);
             var payloads = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            string Resolve(string relative)
+            {
+                if (catalog["sharedFiles"] is JObject shared && shared[relative] != null)
+                {
+                    ContentFiles.RequireBlob(relative);
+                    string owner = (string)shared[relative];
+                    if (ownerRoot == null) throw new InvalidDataException("整理共享资源需要提供所属模组目录：" + owner);
+                    return Inside(ownerRoot(owner), relative);
+                }
+                return Inside(source, relative);
+            }
             string CopyPayload(string relative)
             {
-                string file = Inside(source, relative);
+                string file = Resolve(relative);
                 if (payloads.TryGetValue(file, out var cached)) return cached;
                 string hash;
                 using (var stream = File.OpenRead(file))
@@ -63,7 +76,7 @@ namespace RimUnity.Editor
                     if (data[field]?.Type == JTokenType.String) data[field] = CopyPayload((string)data[field]);
                 if (data["descriptorFile"]?.Type == JTokenType.String)
                 {
-                    var descriptor = Read(Inside(source, (string)data["descriptorFile"]));
+                    var descriptor = Read(Resolve((string)data["descriptorFile"]));
                     //离线描述中的阶段路径相对于描述文件，随共享程序一起更新。
                     descriptor["vertexFile"] = Path.GetFileName((string)data["vertexFile"]);
                     descriptor["fragmentFile"] = Path.GetFileName((string)data["fragmentFile"]);
@@ -84,34 +97,36 @@ namespace RimUnity.Editor
                 //只移除 null，不移除 0、false 或空集合。
                 foreach (var property in data.Descendants().OfType<JProperty>().Where(p => p.Value.Type == JTokenType.Null).ToArray())
                     property.Remove();
+                if (relative.EndsWith(".json.gz", StringComparison.OrdinalIgnoreCase)) relative = relative.Substring(0, relative.Length - 3);
+                bool dense = new[] { "Prefab", "Mesh", "AnimationClip", "RuntimeAnimatorController" }.Contains((string)record["type"]);
+                byte[] encoded = Encoding.UTF8.GetBytes(data.ToString(Formatting.None));
+                if (dense && encoded.Length >= 4096)
+                {
+                    using var buffer = new MemoryStream();
+                    using (var gzip = new GZipStream(buffer, CompressionLevel.Optimal, true)) gzip.Write(encoded, 0, encoded.Length);
+                    if (buffer.Length < encoded.Length) { encoded = buffer.ToArray(); relative += ".gz"; }
+                }
+                record["file"] = relative;
                 string output = Inside(destination, relative);
                 Directory.CreateDirectory(Path.GetDirectoryName(output));
-                ExportJson.Write(output, data);
+                File.WriteAllBytes(output, encoded);
                 kept.Add(record);
             }
             catalog["assets"] = kept;
+            catalog["formatVersion"] = 2;
+            catalog["sharedFiles"] = new JObject();
             ExportJson.Write(Path.Combine(destination, "catalog.json"), catalog);
         }
 
         //逐文件读取，避免将整个资源目录同时留在内存中。
-        private static JObject Read(string path)
+        internal static JObject Read(string path)
         {
-            using var stream = File.OpenText(path);
+            using var stream = new StreamReader(ContentFiles.OpenJson(path), Encoding.UTF8);
             using var reader = new JsonTextReader(stream) { DateParseHandling = DateParseHandling.None };
             return JObject.Load(reader);
         }
 
         //引用只能落在本资源根目录，拒绝通过链接跳出目录。
-        private static string Inside(string root, string relative)
-        {
-            if (string.IsNullOrWhiteSpace(relative) || Path.IsPathRooted(relative)) throw new InvalidDataException("无效资源路径：" + relative);
-            string full = Path.GetFullPath(Path.Combine(root, relative));
-            string prefix = root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-            if (!full.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("资源路径越界：" + relative);
-            for (string path = full; path != null && path.Length >= root.Length; path = Path.GetDirectoryName(path))
-                if ((File.Exists(path) || Directory.Exists(path)) && (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
-                    throw new IOException("资源路径不可包含链接：" + path);
-            return full;
-        }
+        private static string Inside(string root, string relative) => ContentFiles.Inside(root, relative);
     }
 }
