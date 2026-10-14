@@ -26,6 +26,10 @@ public sealed partial class TrailRenderer
         foreach (Material material in sharedMaterials)
         {
             if (material == null) continue;
+            if (Diagnostics.ParticleDebugWindow.Capturing)
+            {
+                Diagnostics.RendererDebugCapture.Capture(this, batch, material, "TrailRenderer", widthMultiplier, colors);
+            }
             RimUnity.Graphics.DrawMesh(batch, Matrix4x4.identity, material, gameObject.layer);
         }
     }

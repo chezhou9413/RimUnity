@@ -28,7 +28,21 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
     private Vector3[] sourcePositions;
     private Vector2[] sourceUV;
     private int[] sourceTriangles;
-    public Material material { get => sharedMaterial; set => sharedMaterial = value; }
+    // Owned by this renderer; released on destruction, never shared across instances.
+    private readonly List<Material> ownedMaterials = new();
+    public Material material
+    {
+        get
+        {
+            Material source = sharedMaterial;
+            if (source == null || ownedMaterials.Contains(source)) return source;
+            var clone = new Material(source);
+            sharedMaterial = clone;
+            ownedMaterials.Add(clone);
+            return clone;
+        }
+        set => sharedMaterial = value;
+    }
     public void GetActiveVertexStreams(List<ParticleSystemVertexStream> target) { target.Clear(); target.AddRange(streams); }
     public void SetActiveVertexStreams(List<ParticleSystemVertexStream> value) => vertexStreams = value.ToArray();
 
@@ -47,7 +61,12 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
 
     //网格缓存随组件销毁，不持有已卸载实例。
     internal void ReleaseGeometry() { if (batch != null) Destroy(batch); if (trailBatch != null) Destroy(trailBatch); batch = trailBatch = null; ReleaseSpriteBatches(); meshGeometry.Clear(); foreach (var material in uiMaterials.Values) Destroy(material); uiMaterials.Clear(); }
-    private void OnDestroy() => ReleaseGeometry();
+    private void OnDestroy()
+    {
+        ReleaseGeometry();
+        foreach (Material owned in ownedMaterials) Destroy(owned);
+        ownedMaterials.Clear();
+    }
     internal void Draw(ParticleSystem system, Camera camera)
     {
         if (!enabled || !gameObject.activeInHierarchy) return;
@@ -152,10 +171,11 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
     private void Submit(ref Mesh target, Material mat, Camera camera)
     {
         if (indices.Count == 0) return;
-        if (uiEntry != null) { SubmitUI(mat); return; }
+        if (uiEntry != null) { CaptureDiagnostics(mat, null); SubmitUI(mat); return; }
         target ??= new Mesh { name = "RimUnity Particle Batch", indexFormat = IndexFormat.UInt32 };
         target.Clear(); target.SetVertices(vertices); target.SetColors(colors); target.SetUVs(0, packedUV); target.SetUVs(1, custom1); target.SetUVs(2, custom2); target.SetTriangles(indices, 0); target.RecalculateBounds();
         target.SetNormals(normals); target.SetTangents(tangents);
+        CaptureDiagnostics(mat, target);
         RimUnity.Graphics.DrawMesh(target, Matrix4x4.identity, mat, gameObject.layer, 0, propertyBlock);
     }
 }

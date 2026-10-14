@@ -6,14 +6,14 @@ using Newtonsoft.Json;
 using UnityEditor;
 using UnityEngine;
 
-namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWindow
+namespace RimUnity.Editor { public sealed partial class RimUnityBuildWindow : EditorWindow
 {
     private RimUnityWorkflow.Profile profile;
     private List<RimUnityWorkflow.Entry> entries = new List<RimUnityWorkflow.Entry>();
     private readonly List<RimUnityWorkflow.Entry> manual = new List<RimUnityWorkflow.Entry>();
     private readonly List<string> messages = new List<string>();
-    private Vector2 resourcesScroll, settingsScroll, logScroll;
-    private string search = "", error = "";
+    private Vector2 resourcesScroll, settingsScroll;
+    private string search = "";
     private int tab, destination;
     private bool rebuild = true, onlyIssues, initialized;
     private GUIStyle titleStyle, subtitleStyle, pathStyle;
@@ -45,7 +45,7 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
             var ui = new HashSet<string>(preset.uiPaths ?? Array.Empty<string>());
             foreach (var entry in entries) entry.ui = ui.Contains(entry.path);
         }
-        catch (Exception exception) { error = "窗口预设读取失败：" + exception.Message; }
+        catch (Exception exception) { Log("窗口预设读取失败：" + exception); Debug.LogException(exception); }
     }
     private void OnDisable()
     {
@@ -62,11 +62,11 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
         }
         catch (Exception exception) { Debug.LogWarning("窗口预设保存失败：" + exception.Message); }
     }
-    private void RefreshEntries()
+    private void RefreshEntries(bool reloadProfile = false)
     {
         try
         {
-            profile = profile ?? RimUnityWorkflow.Load();
+            profile = reloadProfile || profile == null ? RimUnityWorkflow.Load() : profile;
             var previousUi = entries.ToDictionary(e => e.path, e => e.ui, StringComparer.OrdinalIgnoreCase);
             entries = RimUnityWorkflow.Discover(profile);
             foreach (var item in entries) if (previousUi.TryGetValue(item.path, out bool ui)) item.ui = ui;
@@ -76,10 +76,11 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
                 if (current == null) entries.Add(item);
                 else { current.bundle = item.bundle; current.mod = item.mod; current.ui = item.ui; }
             }
+            RefreshDuplicates();
             initialized = true;
-            error = "";
+
         }
-        catch (Exception exception) { error = exception.Message; }
+        catch (Exception exception) { Log(exception.ToString()); Debug.LogException(exception); }
         Repaint();
     }
     private void Styles()
@@ -98,7 +99,7 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
         var accent = EditorGUIUtility.isProSkin ? new Color(0.20f, 0.68f, 0.78f) : new Color(0.12f, 0.48f, 0.60f);
         EditorGUI.DrawRect(GUILayoutUtility.GetRect(1, 3, GUILayout.ExpandWidth(true)), accent);
         GUILayout.Space(10);
-        if (!string.IsNullOrEmpty(error)) EditorGUILayout.HelpBox(error, MessageType.Error);
+
         if (profile == null) { if (GUILayout.Button("重新载入配置")) RefreshEntries(); return; }
         GUILayout.BeginHorizontal();
         Card("源入口", entries.Count.ToString());
@@ -127,12 +128,14 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
         GUILayout.BeginHorizontal(EditorStyles.toolbar);
         search = GUILayout.TextField(search, GUI.skin.FindStyle("ToolbarSearchTextField") ?? EditorStyles.toolbarTextField);
         onlyIssues = GUILayout.Toggle(onlyIssues, "仅看检查问题", EditorStyles.toolbarButton, GUILayout.Width(105));
-        if (GUILayout.Button("刷新检查", EditorStyles.toolbarButton, GUILayout.Width(85))) RefreshEntries();
+        if (GUILayout.Button("刷新检查", EditorStyles.toolbarButton, GUILayout.Width(85))) RefreshEntries(true);
         if (GUILayout.Button("定位首个问题", EditorStyles.toolbarButton, GUILayout.Width(100))) Ping(entries.FirstOrDefault(e => e.status != "pending"));
         GUILayout.EndHorizontal();
-        var visible = entries.Where(e => (!onlyIssues || e.status != "pending" || e.missingScripts > 0) &&
+        DrawBundleFilter();
+        var visible = entries.Where(e => MatchesBundle(e.bundle) && (!onlyIssues || e.status != "pending" || e.missingScripts > 0) &&
             (string.IsNullOrWhiteSpace(search) || (e.path + " " + e.bundle + " " + e.status).IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0)).ToArray();
         resourcesScroll = EditorGUILayout.BeginScrollView(resourcesScroll);
+        DrawDuplicates();
         foreach (var group in visible.GroupBy(e => e.bundle ?? "未分配"))
         {
             GUILayout.Space(6);
@@ -148,8 +151,8 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
                 GUILayout.Label(Status(entry), EditorStyles.miniLabel, GUILayout.Width(105));
                 GUILayout.EndHorizontal();
                 GUILayout.Label(entry.path, pathStyle);
-                if (!string.IsNullOrEmpty(entry.error)) EditorGUILayout.HelpBox(entry.error, MessageType.Warning);
-                if (entry.missingScripts > 0) EditorGUILayout.HelpBox("含 " + entry.missingScripts + " 个缺失脚本，将随资源记录警告。", MessageType.Warning);
+
+
                 GUILayout.EndVertical();
             }
         }
@@ -197,6 +200,7 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
             if (!manual.Any(e => e.path == path)) manual.Add(entry);
         }
         SavePreset();
+        RefreshDuplicates();
     }
     private void Settings()
     {
@@ -277,9 +281,9 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
         if (GUILayout.Button("保存执行记录")) SaveLog();
         if (GUILayout.Button("清空记录")) messages.Clear();
         GUILayout.EndHorizontal();
-        logScroll = EditorGUILayout.BeginScrollView(logScroll);
-        foreach (string message in messages) GUILayout.Label(message, EditorStyles.wordWrappedLabel);
-        EditorGUILayout.EndScrollView();
+
+        GUILayout.FlexibleSpace();
+
     }
     private void Log(string text)
     {
@@ -300,8 +304,6 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
         var blocked = entries.Where(e => e.status != "pending").ToArray();
         if (blocked.Length > 0)
         {
-            EditorGUILayout.HelpBox("清单中有 " + blocked.Length + " 个检查问题。首个：" + blocked[0].path + "\n" +
-                (blocked[0].error ?? blocked[0].status), MessageType.Warning);
             if (GUILayout.Button("查看检查问题并定位首个阻碍"))
             { tab = 0; onlyIssues = true; search = ""; Ping(blocked[0]); }
         }
@@ -315,7 +317,7 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
                 string blockers = RimUnityPublisher.DescribeBlockers(choice);
                 if (blockers != null)
                 {
-                    error = blockers; Log(blockers); SaveLog(); tab = 0; onlyIssues = true; search = "";
+                    Log(blockers); Debug.LogError(blockers); SaveLog(); tab = 0; onlyIssues = true; search = "";
                     Ping(choice.First(e => e.status != "pending"));
                     return;
                 }
@@ -335,9 +337,9 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
                             throw new InvalidOperationException("包必须对应一个明确的目标目录：" + entry.bundle);
                         entry.mod = mappings[0].mod;
                     }
-                    RimUnityPublisher.Export(profile, choice, rebuild, Log); error = ""; RefreshEntries();
+                    RimUnityPublisher.Export(profile, choice, rebuild, Log); RefreshEntries();
                 }
-                catch (Exception exception) { error = exception.Message; Log(exception.ToString()); Debug.LogException(exception); }
+                catch (Exception exception) { Log(exception.ToString()); Debug.LogException(exception); }
                 finally { SaveLog(); }
             }
     }

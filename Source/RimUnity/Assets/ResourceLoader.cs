@@ -44,6 +44,18 @@ internal static class ResourceLoader
                 volume.wrapMode = Get<TextureWrapMode>("wrapMode"); volume.filterMode = Get<FilterMode>("filterMode");
                 result = volume; break;
             case "Texture2D":
+                if (fields.ContainsKey("numericFormat"))
+                {
+                    if (Get<string>("numericFormat") != "RGBAFloatLE") throw new InvalidDataException("Unknown numeric texture encoding: " + record.path);
+                    int w = Get<int>("width"), h = Get<int>("height");
+                    if (w <= 0 || h <= 0) throw new InvalidDataException("Invalid numeric texture dimensions: " + record.path);
+                    byte[] payload = File.ReadAllBytes(catalog.Resolve(Get<string>("file")));
+                    if (!BitConverter.IsLittleEndian || payload.Length != checked(w * h * 16)) throw new InvalidDataException("Invalid numeric texture payload: " + record.path);
+                    var numeric = new Texture2D(w, h, TextureFormat.RGBAFloat, false, Get<bool>("linear"));
+                    numeric.CoreTexture.ReplaceCpuData(w, h, Waylith.Rendering.LoadedTextureFormat.RgbaFloat, new[] { payload }, 1, Get<bool>("linear"));
+                    numeric.wrapMode = Get<TextureWrapMode>("wrapMode"); numeric.filterMode = Get<FilterMode>("filterMode");
+                    result = numeric; break;
+                }
                 Texture2D texture = new(2, 2, TextureFormat.RGBA32, false, Get<bool>("linear"));
                 if (!texture.LoadImage(File.ReadAllBytes(catalog.Resolve(Get<string>("file"))))) throw new InvalidDataException($"无法读取图片：{record.path}");
                 //宿主图片解码会重置为 sRGB，解码后恢复导出时的数值纹理标记。
@@ -71,7 +83,18 @@ internal static class ResourceLoader
                 break;
             case "Mesh":
                 Mesh mesh = new() { indexFormat = IndexFormat.UInt32 };
-                reader.Apply(mesh, data.members.Where(m => m.name != "submeshes" && !m.name.StartsWith("skin", StringComparison.Ordinal)));
+                reader.Apply(mesh, data.members.Where(m => m.name != "submeshes" && m.name != "uvChannels" && !m.name.StartsWith("skin", StringComparison.Ordinal)));
+                if (fields.ContainsKey("uvChannels"))
+                {
+                    Vector4[][] channels = Get<Vector4[][]>("uvChannels");
+                    if (channels.Length > 8) throw new InvalidDataException("Mesh has more than eight UV channels: " + record.path);
+                    for (int channel = 0; channel < channels.Length; channel++)
+                    {
+                        if (channels[channel] == null || channels[channel].Length != 0 && channels[channel].Length != mesh.vertexCount)
+                            throw new InvalidDataException("Invalid UV channel length: " + record.path);
+                        mesh.SetUVs(channel, channels[channel]);
+                    }
+                }
                 if (fields.ContainsKey("skinCounts")) Rendering.SkinWeights.Register(mesh, Get<int[]>("skinCounts"), Get<int[]>("skinIndices"), Get<float[]>("skinWeights"));
                 int[][] triangles = Get<int[][]>("submeshes");
                 mesh.subMeshCount = triangles.Length;

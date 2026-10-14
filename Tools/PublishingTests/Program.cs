@@ -117,4 +117,35 @@ string standalone = Path.Combine(run, "standalone-copy");
 ExportStorage.CopyForPublish(stages[addon], standalone, owner => ownerRoots[owner]);
 RimUnityPublisher.Validate(standalone);
 Check(((JObject)ExportStorage.Read(Path.Combine(standalone, "catalog.json"))["sharedFiles"]).Count == 0, "repacking shared compressed input produces self-contained copy");
+//显式迁移不依赖 About 声明，压缩描述和载荷只留在任意第三个目标包。
+foreach (var stage in stages.Values)
+{
+    var manifest = ExportStorage.Read(Path.Combine(stage, "catalog.json"));
+    foreach (var record in ((JArray)manifest["assets"]).OfType<JObject>())
+        record["sourcePath"] = (string)record["id"] == "dense" ? "Assets/dense.asset" : "Assets/shared.png";
+    File.WriteAllText(Path.Combine(stage, "catalog.json"), manifest.ToString());
+}
+var ownershipProfile = new RimUnityWorkflow.Profile {
+    repository = run,
+    mappings = new[] { new RimUnityWorkflow.Mapping { bundle = "C", mod = unrelated } },
+    resourceOwners = new[] {
+        new RimUnityWorkflow.ResourceOwner { path = "Assets/dense.asset", bundle = "C" },
+        new RimUnityWorkflow.ResourceOwner { path = "Assets/shared.png", bundle = "C" }
+    }
+};
+ResourceOwnership.Apply(ownershipProfile, stages, messages.Add);
+foreach (var stage in stages.Values) RimUnityPublisher.Validate(stage, owner => ownerRoots[owner]);
+foreach (string stage in new[] { stages[baseMod], stages[addon] })
+{
+    var manifest = ExportStorage.Read(Path.Combine(stage, "catalog.json"));
+    Check(((JObject)manifest["sharedFiles"]).Properties().All(p => (string)p.Value == "tests.unrelated"), "explicit owner overrides dependency-based sharing");
+    Check(!Directory.GetFiles(stage, "*.json.gz", SearchOption.AllDirectories).Any(), "compressed descriptor exists only in selected target");
+    Check(!Directory.GetFiles(Path.Combine(stage, "blobs")).Any(), "source retains no owned payload files");
+}
+string migrationCopy = Path.Combine(run, "migration-copy");
+ExportStorage.CopyForPublish(stages[addon], migrationCopy, owner => ownerRoots[owner]);
+RimUnityPublisher.Validate(migrationCopy);
+Check(((JObject)ExportStorage.Read(Path.Combine(migrationCopy, "catalog.json"))["sharedFiles"]).Count == 0, "incremental repack resolves migrated descriptions and payloads");
+var duplicates = ResourceOwnership.Scan(new[] { new Entry { path = "Assets/a.prefab", bundle = "A" }, new Entry { path = "Assets/b.prefab", bundle = "B" } });
+Check(duplicates.Length == 1 && duplicates[0].path == "Assets/shared.png" && duplicates[0].bundles.SequenceEqual(new[] { "A", "B" }), "duplicate scan includes automatic dependency and excludes scripts");
 Console.WriteLine("All publication tests passed. Scratch data: " + run);

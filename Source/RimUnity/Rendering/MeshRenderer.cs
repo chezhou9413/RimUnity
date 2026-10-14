@@ -43,6 +43,8 @@ public sealed class MeshRenderer : MonoBehaviour
             Material material = sharedMaterials[i];
             if (material == null) continue;
             int submesh = Math.Min(i, mesh.subMeshCount - 1);
+            if (Diagnostics.ParticleDebugWindow.Capturing)
+                Diagnostics.RendererDebugCapture.Capture(this, mesh, material, "MeshRenderer", 1, Array.Empty<Color>());
             RimUnity.Graphics.DrawMesh(mesh, matrix, material, gameObject.layer, submesh);
         }
     }
