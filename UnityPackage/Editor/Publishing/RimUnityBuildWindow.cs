@@ -10,7 +10,6 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
 {
     private RimUnityWorkflow.Profile profile;
     private List<RimUnityWorkflow.Entry> entries = new List<RimUnityWorkflow.Entry>();
-    private readonly HashSet<string> selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private readonly List<RimUnityWorkflow.Entry> manual = new List<RimUnityWorkflow.Entry>();
     private readonly List<string> messages = new List<string>();
     private Vector2 resourcesScroll, settingsScroll, logScroll;
@@ -22,7 +21,7 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
     [Serializable] private sealed class Preset
     {
         public bool rebuild;
-        public string[] selected, uiPaths;
+        public string[] uiPaths;
         public RimUnityWorkflow.Entry[] manual;
     }
 
@@ -41,8 +40,6 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
             if (!File.Exists(PresetPath)) return;
             var preset = JsonConvert.DeserializeObject<Preset>(File.ReadAllText(PresetPath));
             rebuild = preset.rebuild;
-            selected.Clear();
-            foreach (string path in preset.selected ?? Array.Empty<string>()) selected.Add(path);
             foreach (var entry in preset.manual ?? Array.Empty<RimUnityWorkflow.Entry>()) manual.Add(entry);
             RefreshEntries();
             var ui = new HashSet<string>(preset.uiPaths ?? Array.Empty<string>());
@@ -60,7 +57,7 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
         try
         {
             File.WriteAllText(PresetPath, JsonConvert.SerializeObject(new Preset {
-                rebuild = rebuild, selected = selected.ToArray(), uiPaths = entries.Where(e => e.ui).Select(e => e.path).ToArray(),
+                rebuild = rebuild, uiPaths = entries.Where(e => e.ui).Select(e => e.path).ToArray(),
                 manual = manual.ToArray() }, Formatting.Indented));
         }
         catch (Exception exception) { Debug.LogWarning("窗口预设保存失败：" + exception.Message); }
@@ -79,7 +76,7 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
                 if (current == null) entries.Add(item);
                 else { current.bundle = item.bundle; current.mod = item.mod; current.ui = item.ui; }
             }
-            if (!initialized) { foreach (var item in entries) selected.Add(item.path); initialized = true; }
+            initialized = true;
             error = "";
         }
         catch (Exception exception) { error = exception.Message; }
@@ -97,7 +94,7 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
         Styles();
         GUILayout.Space(8);
         GUILayout.Label("RIMUNITY  /  明文资源构建", titleStyle);
-        GUILayout.Label("沿用 Unity 制作资源，按包管理输出。检查、选择、导出与版本替换在这里完成。", subtitleStyle);
+        GUILayout.Label("沿用 Unity 制作资源，按 AssetBundle 归属输出。检查、导出与版本替换在这里完成。", subtitleStyle);
         var accent = EditorGUIUtility.isProSkin ? new Color(0.20f, 0.68f, 0.78f) : new Color(0.12f, 0.48f, 0.60f);
         EditorGUI.DrawRect(GUILayoutUtility.GetRect(1, 3, GUILayout.ExpandWidth(true)), accent);
         GUILayout.Space(10);
@@ -105,12 +102,12 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
         if (profile == null) { if (GUILayout.Button("重新载入配置")) RefreshEntries(); return; }
         GUILayout.BeginHorizontal();
         Card("源入口", entries.Count.ToString());
-        Card("已选择", entries.Count(e => selected.Contains(e.path)).ToString());
-        Card("检查阻碍", entries.Count(e => selected.Contains(e.path) && e.status != "pending").ToString());
+        Card("可发布", entries.Count(e => e.status == "pending").ToString());
+        Card("检查阻碍", entries.Count(e => e.status != "pending").ToString());
         Card("输出目录", profile.mappings.Select(m => m.mod).Where(m => !string.IsNullOrWhiteSpace(m)).Distinct().Count().ToString());
         GUILayout.EndHorizontal();
         GUILayout.Space(8);
-        tab = GUILayout.Toolbar(tab, new[] { "资源选择", "输出与工具配置", "执行记录" }, GUILayout.Height(28));
+        tab = GUILayout.Toolbar(tab, new[] { "资源清单", "输出与工具配置", "执行记录" }, GUILayout.Height(28));
         GUILayout.Space(8);
         if (tab == 0) Resources(); else if (tab == 1) Settings(); else Logs();
         GUILayout.Space(8);
@@ -131,14 +128,10 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
         search = GUILayout.TextField(search, GUI.skin.FindStyle("ToolbarSearchTextField") ?? EditorStyles.toolbarTextField);
         onlyIssues = GUILayout.Toggle(onlyIssues, "仅看检查问题", EditorStyles.toolbarButton, GUILayout.Width(105));
         if (GUILayout.Button("刷新检查", EditorStyles.toolbarButton, GUILayout.Width(85))) RefreshEntries();
+        if (GUILayout.Button("定位首个问题", EditorStyles.toolbarButton, GUILayout.Width(100))) Ping(entries.FirstOrDefault(e => e.status != "pending"));
         GUILayout.EndHorizontal();
         var visible = entries.Where(e => (!onlyIssues || e.status != "pending" || e.missingScripts > 0) &&
             (string.IsNullOrWhiteSpace(search) || (e.path + " " + e.bundle + " " + e.status).IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0)).ToArray();
-        GUILayout.BeginHorizontal();
-        if (GUILayout.Button("选择当前结果")) foreach (var e in visible) selected.Add(e.path);
-        if (GUILayout.Button("取消当前结果")) foreach (var e in visible) selected.Remove(e.path);
-        if (GUILayout.Button("定位首个问题")) Ping(entries.FirstOrDefault(e => e.status != "pending"));
-        GUILayout.EndHorizontal();
         resourcesScroll = EditorGUILayout.BeginScrollView(resourcesScroll);
         foreach (var group in visible.GroupBy(e => e.bundle ?? "未分配"))
         {
@@ -148,8 +141,6 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
             {
                 GUILayout.BeginVertical(EditorStyles.helpBox);
                 GUILayout.BeginHorizontal();
-                bool check = GUILayout.Toggle(selected.Contains(entry.path), "", GUILayout.Width(20));
-                if (check) selected.Add(entry.path); else selected.Remove(entry.path);
                 if (GUILayout.Button(new GUIContent(Path.GetFileName(entry.path), entry.path), EditorStyles.label, GUILayout.MinWidth(170))) Ping(entry);
                 GUILayout.FlexibleSpace();
                 bool ui = GUILayout.Toggle(entry.ui, new GUIContent("UI", "为屏幕界面材质/Shader 导出 GUI 顶点布局"), GUILayout.Width(45));
@@ -168,7 +159,7 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
         using (new EditorGUI.DisabledScope(profile.mappings.Length == 0))
             if (GUILayout.Button("加入 Project 中选中的资源", GUILayout.Width(215))) AddSelection();
         GUILayout.EndHorizontal();
-        GUILayout.Label("单击资源名定位到 Project；依赖自动随入口导出。界面材质/Shader 请勾选 UI。", pathStyle);
+        GUILayout.Label("清单由 AssetBundle 标签和手动加入的入口组成，发布时整份清单都会导出。单击资源名定位到 Project；依赖自动随入口导出。界面材质/Shader 请勾选 UI。", pathStyle);
     }
     private static string Status(RimUnityWorkflow.Entry entry)
     {
@@ -204,7 +195,6 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
             }
             entry.bundle = mapping.bundle; entry.mod = mapping.mod;
             if (!manual.Any(e => e.path == path)) manual.Add(entry);
-            selected.Add(path);
         }
         SavePreset();
     }
@@ -259,7 +249,7 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
         GUILayout.EndHorizontal();
         profile.auditOnReload = EditorGUILayout.Toggle("会话首次载入时检查", profile.auditOnReload);
         GUILayout.Space(12);
-        EditorGUILayout.HelpBox("AB 标签确定独立入口所属包；没有标签的独立入口，请在资源页手动加入并选择目标包。材质、贴图、Shader 和动画依赖由 RimUnity 自动收集。", MessageType.Info);
+        EditorGUILayout.HelpBox("AB 标签就是发布范围。打上已配置包名的资源会进入清单；没有标签的独立入口，请在资源页手动加入并指定目标包。材质、贴图、Shader 和动画依赖由 RimUnity 自动收集。", MessageType.Info);
         GUILayout.Space(10);
         if (GUILayout.Button("保存配置并刷新检查", GUILayout.Height(30)))
         {
@@ -307,21 +297,21 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
     }
     private void Footer()
     {
-        var blocked = entries.Where(e => selected.Contains(e.path) && e.status != "pending").ToArray();
+        var blocked = entries.Where(e => e.status != "pending").ToArray();
         if (blocked.Length > 0)
         {
-            EditorGUILayout.HelpBox("所选入口有 " + blocked.Length + " 个检查问题。首个：" + blocked[0].path + "\n" +
+            EditorGUILayout.HelpBox("清单中有 " + blocked.Length + " 个检查问题。首个：" + blocked[0].path + "\n" +
                 (blocked[0].error ?? blocked[0].status), MessageType.Warning);
-            if (GUILayout.Button("查看检查问题并定位首个所选阻碍"))
+            if (GUILayout.Button("查看检查问题并定位首个阻碍"))
             { tab = 0; onlyIssues = true; search = ""; Ping(blocked[0]); }
         }
         rebuild = EditorGUILayout.Popup("发布方式", rebuild ? 0 : 1, new[] { "完整重建 · 成功后删除旧版本", "增量更新 · 保留其他入口" }) == 0;
-        EditorGUILayout.HelpBox(rebuild ? "新清单只保留所选资源及依赖。未选择的旧入口会移除；全部成功后才替换和清理旧文件。" :
-            "更新所选入口，保留其他旧入口及其依赖。失败或取消不替换正式目录。", MessageType.Info);
-        using (new EditorGUI.DisabledScope(selected.Count == 0))
-            if (GUILayout.Button(rebuild ? "完整重建并发布所选资源" : "增量导出并发布所选资源", GUILayout.Height(36)))
+        EditorGUILayout.HelpBox(rebuild ? "新清单只保留当前入口及依赖。没有 AssetBundle 归属、也不在手动入口中的旧资源会移除；全部成功后才替换和清理旧文件。" :
+            "更新当前清单中的入口，保留其他旧入口及其依赖。失败或取消不替换正式目录。", MessageType.Info);
+        using (new EditorGUI.DisabledScope(entries.Count == 0))
+            if (GUILayout.Button(rebuild ? "完整重建并发布" : "增量导出并发布", GUILayout.Height(36)))
             {
-                var choice = entries.Where(e => selected.Contains(e.path)).ToArray();
+                var choice = entries.ToArray();
                 string blockers = RimUnityPublisher.DescribeBlockers(choice);
                 if (blockers != null)
                 {
@@ -329,7 +319,7 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
                     Ping(choice.First(e => e.status != "pending"));
                     return;
                 }
-                if (rebuild && !EditorUtility.DisplayDialog("确认完整重建", "将以 " + choice.Length + " 个所选入口重建目标 Mod 的清单。未选择的旧入口会删除。导出失败不替换正式目录。", "重建并发布", "取消")) return;
+                if (rebuild && !EditorUtility.DisplayDialog("确认完整重建", "将以 " + choice.Length + " 个入口重建目标 Mod 的清单。没有 AssetBundle 归属的旧入口会删除。导出失败不替换正式目录。", "重建并发布", "取消")) return;
                 tab = 2;
                 try
                 {
