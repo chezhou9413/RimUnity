@@ -15,6 +15,8 @@ RimUnity 是面向 RimWorld 1.7 的资源与表现框架。模组作者可以在
 
 [h2]为什么使用 RimUnity？[/h2]
 
+[img]https://raw.githubusercontent.com/chezhou9413/RimUnity/main/Tools/Steam/Images/zh-CN/advantages.png[/img]
+
 [list]
 [*][b]保留熟悉的制作方式。[/b]使用 Unity 原生组件制作资源，在编辑器中调整效果，减少在游戏代码里手写层级和参数的工作。
 [*][b]依赖自动收集。[/b]导出器处理嵌套 Prefab、Variant 及材质、贴图、网格、字体、动画等依赖，支持单个预制体、批量粒子和资源构建管理器。
@@ -46,6 +48,8 @@ RimUnity 是面向 RimWorld 1.7 的资源与表现框架。模组作者可以在
 
 [h2]作者如何接入[/h2]
 
+[img]https://raw.githubusercontent.com/chezhou9413/RimUnity/main/Tools/Steam/Images/zh-CN/workflow.png[/img]
+
 [olist]
 [*]从上方链接下载 UPM TGZ，在 Unity 2022.3 LTS 的 Package Manager 中选择 Add package from tarball 安装；制作端支持 Built-in 与 URP 14 的指定功能。
 [*]制作资源，通过 RimUnity 导出窗口或构建管理器导出到自己的内容模组。
@@ -54,6 +58,16 @@ RimUnity 是面向 RimWorld 1.7 的资源与表现框架。模组作者可以在
 [/olist]
 
 运行时加载的是 RimUnity 导出的资源，不读取原版 Unity 二进制 AssetBundle。已有 AB 标签可以用于组织导出入口，资源仍需经过导出工具处理。
+
+[h2]资源复用与性能机制[/h2]
+
+[img]https://raw.githubusercontent.com/chezhou9413/RimUnity/main/Tools/Steam/Images/zh-CN/performance.png[/img]
+
+导出时裁剪未引用依赖、压紧 JSON、压缩大文件并复用相同内容文件；加载时按逻辑路径和资源 ID 查询，复用模组内的依赖对象。图中展示优化机制，不是 FPS 跑分。压缩有解压成本，实际帧时、内存和加载收益取决于资源与场景，尚无统一性能对比数据。
+
+[h2]框架架构[/h2]
+
+[img]https://raw.githubusercontent.com/chezhou9413/RimUnity/main/Tools/Steam/Images/zh-CN/architecture.png[/img]
 
 [h2]支持范围[/h2]
 

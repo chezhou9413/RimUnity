@@ -15,6 +15,8 @@ RimUnity is an asset and visual-effects framework for RimWorld 1.7. Mod authors 
 
 [h2]Why use RimUnity?[/h2]
 
+[img]https://raw.githubusercontent.com/chezhou9413/RimUnity/main/Tools/Steam/Images/en/advantages.png[/img]
+
 [list]
 [*][b]A familiar authoring workflow.[/b] Use native Unity components and tune assets in the editor, reducing the need to recreate hierarchies and effect parameters in game code.
 [*][b]Automatic dependency collection.[/b] Export nested prefabs and variants together with their materials, textures, meshes, fonts and animations. Use single-prefab export, batch particle export or the asset build manager.
@@ -46,6 +48,8 @@ RimUnity is an asset and visual-effects framework for RimWorld 1.7. Mod authors 
 
 [h2]For authors: getting started[/h2]
 
+[img]https://raw.githubusercontent.com/chezhou9413/RimUnity/main/Tools/Steam/Images/en/workflow.png[/img]
+
 [olist]
 [*]Download the UPM TGZ above and install it through Add package from tarball in Unity 2022.3 LTS Package Manager. Selected features of Built-in and URP 14 projects are supported.
 [*]Create assets and export them into your content mod using the RimUnity export window or build manager.
@@ -54,6 +58,16 @@ RimUnity is an asset and visual-effects framework for RimWorld 1.7. Mod authors 
 [/olist]
 
 The runtime reads RimUnity exports, not original binary Unity AssetBundles. Existing AssetBundle labels can organize export entries, but the assets still need to pass through the exporter.
+
+[h2]Resource reuse and performance mechanisms[/h2]
+
+[img]https://raw.githubusercontent.com/chezhou9413/RimUnity/main/Tools/Steam/Images/en/performance.png[/img]
+
+Exports keep reachable dependencies, compact JSON, compress large files and reuse identical content files. Loading uses logical-path and asset-ID indexes with per-mod dependency caches. This diagram explains mechanisms, not FPS benchmarks. Decompression has a cost; frame time, memory and loading benefits depend on the assets and scene. No standardized performance comparison is available yet.
+
+[h2]Framework architecture[/h2]
+
+[img]https://raw.githubusercontent.com/chezhou9413/RimUnity/main/Tools/Steam/Images/en/architecture.png[/img]
 
 [h2]Scope and compatibility[/h2]
 
