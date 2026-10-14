@@ -21,6 +21,9 @@ internal static class ResourceLoader
         RimUnity.Object result;
         switch (data.type)
         {
+            case "AudioClip":
+                result = AudioClip.LoadFromFile(catalog.Resolve(Get<string>("file")));
+                break;
             case "TextAsset":
                 result = new TextAsset(File.ReadAllBytes(catalog.Resolve(Get<string>("file"))));
                 break;

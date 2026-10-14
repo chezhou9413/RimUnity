@@ -8,6 +8,7 @@ namespace RimUnity.Assets;
 public static class TypeResolver
 {
     private static readonly Dictionary<string, Type> Aliases = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, Type> Resolved = new(StringComparer.Ordinal);
 
     //为重命名的业务脚本登记导出类型名；加载前调用。
     public static void Register(string exportedName, Type runtimeType) => Aliases.Add(exportedName, runtimeType);
@@ -16,10 +17,12 @@ public static class TypeResolver
     internal static Type Resolve(string name)
     {
         if (Aliases.TryGetValue(name, out Type alias)) return alias;
+        if (Resolved.TryGetValue(name, out Type cached)) return cached;
         if (name.StartsWith("UnityEngine.", StringComparison.Ordinal))
             throw new TypeLoadException($"资源仍包含制作端类型 {name}；请用当前导出器重新导出，脚本字段使用 RimUnity 类型。");
         Type[] found = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType(name, false)).Where(t => t != null).ToArray();
         if (found.Length != 1) throw new TypeLoadException($"类型 {name} 匹配 {found.Length} 项；请重新编译对应脚本或通过 TypeResolver.Register 指定类型。");
+        Resolved.Add(name, found[0]);
         return found[0];
     }
 

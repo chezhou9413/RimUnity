@@ -9,7 +9,7 @@ internal static class NativeFontAtlas
     private static Texture2D texture;
     private static int signature;
 
-    //只在字形图集扩容或更新时上传；UI 顶点使用向上的 UV，因此像素行在这里翻转。
+    //只在字形图集扩容或更新时上传；直接复制同为从上到下的设备像素。
     internal static unsafe Texture2D Capture()
     {
         var atlas = ImGui.GetIO().Fonts.TexData;
@@ -29,14 +29,10 @@ internal static class NativeFontAtlas
             texture = new Texture2D(atlas.Width, atlas.Height, TextureFormat.RGBA32, false, true)
             { name = "RimUnity 字体图集", wrapMode = TextureWrapMode.Clamp };
         }
-        var colors = new Color32[checked(atlas.Width * atlas.Height)];
-        for (int y = 0; y < atlas.Height; y++)
-            for (int x = 0; x < atlas.Width; x++)
-            {
-                int source = (y * atlas.Width + x) * 4;
-                colors[(atlas.Height - 1 - y) * atlas.Width + x] = new(pixels[source], pixels[source + 1], pixels[source + 2], pixels[source + 3]);
-            }
-        texture.SetPixels32(colors); texture.Apply(false, false); signature = version;
+        byte[] bytes = new ReadOnlySpan<byte>(pixels, checked(atlas.Width * atlas.Height * 4)).ToArray();
+        texture.CoreTexture.ReplaceCpuData(atlas.Width, atlas.Height, Waylith.Rendering.LoadedTextureFormat.Rgba32,
+            new[] { bytes }, 1, true);
+        signature = version;
         return texture;
     }
 }

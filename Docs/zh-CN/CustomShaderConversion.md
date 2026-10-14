@@ -44,6 +44,16 @@ UI 顶点使用屏幕坐标，不提供对象模型矩阵。世界 Shader 在片
 
 时间动画可使用 `_Time`、`_SinTime`、`_CosTime` 和 `unity_DeltaTime`。颜色设置见 [颜色与 Bloom](ColorAndBloom.md)。
 
+## 数学函数兼容
+
+ShaderLab 与命令行 HLSL 转换共用数学兼容处理，作用于 Slang 生成的 GLSL：
+
+- `pow(x, n)` 的常量正整数指数 2～64 使用乘法展开，支持标量与各分量指数一致的向量。底数只求值一次，负底数按整数幂计算。HLSL 本身不保证负底数 `pow` 得到有效值；这是针对旧 Shader 数学意图的兼容处理，记录在输出清单的 `approximations` 与命令行诊断中。
+- `smoothstep(low, high, x)` 使用 `t = clamp((x-low)/(high-low), 0, 1)` 和 `t*t*(3-2*t)`，保留 HLSL 的反向渐变公式，支持浮点标量与向量。
+- 不对其他 `pow` 自动加绝对值或截断。分数幂、动态指数、不同分量指数仍需作者保证输入有效；相等的 `smoothstep` 边界仍需避免除零。此处理不承诺覆盖所有 Unity/Cg 数学差异。
+
+已有导出 GLSL 必须用更新后的转换器重新导出，更新游戏中的 RimUnity DLL 不会自动改写这些资源。
+
 ## 命令行
 
 需要单独转换 Shader 文件时：

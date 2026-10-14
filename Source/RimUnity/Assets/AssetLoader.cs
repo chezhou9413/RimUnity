@@ -7,9 +7,15 @@ using Verse;
 namespace RimUnity.Assets;
 
 //预制体和独立资源共用同一清单缓存，避免材质与依赖重复创建。
-public static class AssetLoader
+public static partial class AssetLoader
 {
     private static readonly Dictionary<string, AssetCatalog> Catalogs = new(StringComparer.OrdinalIgnoreCase);
+
+    //列出本模组指定资源类型的公开路径，供内容侧建立明确且无歧义的索引。
+    public static string[] GetPaths(ModContentPack mod, string resourceType)
+        => GetCatalog(Path.Combine(mod.RootDir, "1.7", "Data", "RimUnity")).Manifest.assets
+            .Where(a => a.type == resourceType && !a.path.StartsWith("__assets/", StringComparison.Ordinal))
+            .Select(a => a.path).ToArray();
 
     //按导出逻辑路径加载材质、贴图、动画或预制体模板。
     public static T Load<T>(ModContentPack mod, string path) where T : RimUnity.Object

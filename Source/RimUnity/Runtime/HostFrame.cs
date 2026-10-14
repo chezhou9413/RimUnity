@@ -46,6 +46,7 @@ internal static class HostFrame
         try
         {
             NativeRuntime.Update();
+            Tweening.DOTween.Update();
             NativeRuntime.LateUpdate();
             ParticleFrame.Draw();
         }
@@ -74,6 +75,7 @@ internal static class HostFrame
     {
         FinishFrame(app);
         NativeRuntime.ClearScene();
+        Tweening.DOTween.Clear();
         app.OnUpdate -= Update;
         app.FrameEnqueued -= FinishFrame;
         app.BeforeGraphicsShutdown -= Shutdown;

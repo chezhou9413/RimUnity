@@ -59,6 +59,16 @@ namespace RimUnity.Editor
                     File.WriteAllBytes(Path.Combine(directory, file), text.bytes);
                     Put("file", relative + "/" + file);
                 }
+                else if (asset is AudioClip audio)
+                {
+                    data.type = "AudioClip";
+                    string source = AssetDatabase.GetAssetPath(audio);
+                    string file = id + Path.GetExtension(source).ToLowerInvariant();
+                    if (!new[] { ".ogg", ".wav", ".mp3" }.Contains(Path.GetExtension(file)))
+                        throw new NotSupportedException(path + "：音频源文件需要 OGG、WAV 或 MP3。");
+                    File.Copy(Path.GetFullPath(source), Path.Combine(directory, file));
+                    Put("file", relative + "/" + file);
+                }
                 else if (asset is Light light)
                 {
                     if (light.type != LightType.Point || light.shadows != LightShadows.None || light.cookie != null)

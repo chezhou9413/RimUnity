@@ -3,6 +3,26 @@ namespace RimUnity.UI.Runtime;
 //文字测量、字号选择、行距和绘制共用排版结果。
 internal static partial class UguiTextRenderer
 {
+    //按实际绘制的字号、缩放和最佳适配规则提前生成字形。
+    internal static void Warm(UguiRuntime.Entry entry, Text text)
+    {
+        Matrix4x4 matrix = entry.Rect.localToWorldMatrix;
+        bool local = Mathf.Abs(matrix.m01) > 0.0001f || Mathf.Abs(matrix.m10) > 0.0001f || matrix.m00 <= 0 || matrix.m11 <= 0;
+        float scale = local ? 1f : entry.Canvas.scaleFactor / Verse.Prefs.UIScale * Mathf.Abs(entry.Rect.lossyScale.y);
+        UiTextStyle style = UguiRuntime.TextStyle(text);
+        style.fontSize = Mathf.Max(1, Mathf.RoundToInt(text.fontSize * scale));
+        Rect bounds = local ? new Rect(0, 0, text.ContentRect.width, text.ContentRect.height)
+            : UguiRuntime.Bounds(entry, text.ContentRect);
+        UguiTextLayout.Warm(Layout(text, style, bounds, scale));
+    }
+
+    //预热与绘制共用同一排版入口，避免最佳适配字号不同而再次扩充图集。
+    private static UguiTextLayout.Layout Layout(Text text, UiTextStyle style, Rect bounds, float scale)
+    {
+        if (text.resizeTextForBestFit) Fit(text, text, style, bounds, scale);
+        return UguiTextLayout.Build(text, style, bounds.width);
+    }
+
     //布局组件取得的尺寸包括自定义行距，但不受自动字号缩放影响。
     internal static Vector2 Measure(RimUnity.UI.Text text, float width, bool wrap)
     {
@@ -14,8 +34,7 @@ internal static partial class UguiTextRenderer
     //按排版结果提交正文、阴影和轮廓。
     internal static void Draw(UguiRuntime.Entry entry, RimUnity.UI.Text text, UiTextStyle style, Rect bounds, Color tint, float scale)
     {
-        if (text is Text { resizeTextForBestFit: true } fit) Fit(text, fit, style, bounds, scale);
-        UguiTextLayout.Layout layout = UguiTextLayout.Build(text, style, bounds.width);
+        UguiTextLayout.Layout layout = Layout(text, style, bounds, scale);
         bool clip = text is not Text { clipText: false } && WorldUiSubmission.Current == null && localEntry == null;
         if (clip) NativeGuiHost.PushClip(bounds);
         try

@@ -7,8 +7,8 @@ namespace RimUnity.UI.Runtime;
 internal static class UiMaskData
 {
     internal static UguiRuntime.Entry Current;
-    private static readonly Vector4[] rows = new Vector4[32];
-    private static readonly ComputeBuffer buffer = new(32, 16);
+    private static readonly Vector4[] rows = new Vector4[56];
+    private static readonly ComputeBuffer buffer = new(56, 16);
     private static Material defaultMaterial;
     internal static Material DefaultMaterial()
     {
@@ -21,9 +21,11 @@ internal static class UiMaskData
     }
     internal static Material Apply(Material material)
     {
-        material = UiRectMaskData.Apply(material);
         var masks = Current?.Masks;
         int count = masks?.Length ?? 0;
+        //先确定本次材质，再清空两类裁切计数，避免共用材质残留上一个控件的 RectMask2D。
+        if (material == null && (count > 0 || (Current?.RectMasks.Length ?? 0) > 0)) material = DefaultMaterial();
+        material = UiRectMaskData.Apply(material);
         if (count == 0) { if (material != null && material.HasProperty("_UiMaskCount")) material.SetFloat("_UiMaskCount", 0); return material; }
         if (count > 8) throw new NotSupportedException("Mask 嵌套不能超过八层。");
         if (material == null)
@@ -35,11 +37,19 @@ internal static class UiMaskData
         for (int i = 0; i < count; i++)
         {
             Mask mask = masks[i]; var rect = mask.transform; Rect r = rect.rect;
+            var maskImage = mask.graphic as RimUnity.UI.Image;
+            Sprite selected = maskImage?.overrideSprite ?? maskImage?.sprite;
+            if (maskImage?.preserveAspect == true && selected != null && maskImage.type == RimUnity.UI.Image.Type.Simple)
+            {
+                float ratio = selected.rect.width / selected.rect.height;
+                Vector2 size = r.width / r.height > ratio ? new(r.height * ratio, r.height) : new(r.width, r.width / ratio);
+                r = new Rect(r.position + Vector2.Scale(r.size - size, rect.pivot), size);
+            }
             Vector2 P(float x, float y) => RectTransformUtility.ToGui(Current.Canvas, rect.TransformPoint(new Vector3(x, y))) * Prefs.UIScale;
             Matrix4x4 inverse = Homography(P(r.xMin, r.yMin), P(r.xMax, r.yMin), P(r.xMax, r.yMax), P(r.xMin, r.yMax)).inverse;
-            rows[i * 4] = new Vector4(inverse.m00, inverse.m01, inverse.m03, 0);
-            rows[i * 4 + 1] = new Vector4(inverse.m10, inverse.m11, inverse.m13, 0);
-            rows[i * 4 + 2] = new Vector4(inverse.m30, inverse.m31, inverse.m33, 0);
+            rows[i * 7] = new Vector4(inverse.m00, inverse.m01, inverse.m03, 0);
+            rows[i * 7 + 1] = new Vector4(inverse.m10, inverse.m11, inverse.m13, 0);
+            rows[i * 7 + 2] = new Vector4(inverse.m30, inverse.m31, inverse.m33, 0);
             Texture texture = Texture2D.whiteTexture; Rect uv = new(0, 0, 1, 1);
             if (mask.graphic is RimUnity.UI.Image image)
             {
@@ -48,7 +58,20 @@ internal static class UiMaskData
             }
             else if (mask.graphic is RawImage raw) { texture = raw.texture ?? Texture2D.whiteTexture; uv = raw.uvRect; }
             else throw new NotSupportedException("Mask 目前需要 Image 或 RawImage。");
-            rows[i * 4 + 3] = new Vector4(uv.x, uv.y, uv.width, uv.height);
+            rows[i * 7 + 3] = new Vector4(uv.x, uv.y, uv.width, uv.height);
+            rows[i * 7 + 4] = rows[i * 7 + 5] = rows[i * 7 + 6] = Vector4.zero;
+            if (maskImage?.type == RimUnity.UI.Image.Type.Sliced && selected != null && selected.border != Vector4.zero)
+            {
+                Vector4 border = selected.border;
+                float units = selected.pixelsPerUnit / Current.Canvas.referencePixelsPerUnit * maskImage.pixelsPerUnitMultiplier;
+                if (units <= 0) throw new InvalidOperationException("Mask Image 的 PPU 倍率必须为正数。");
+                Vector4 d = border / units;
+                float sx = Math.Min(1, r.width / Math.Max(.000001f, d.x + d.z));
+                float sy = Math.Min(1, r.height / Math.Max(.000001f, d.y + d.w));
+                rows[i * 7 + 4] = new(d.x * sx / r.width, d.y * sy / r.height, d.z * sx / r.width, d.w * sy / r.height);
+                rows[i * 7 + 5] = new(border.x / selected.rect.width, border.y / selected.rect.height, border.z / selected.rect.width, border.w / selected.rect.height);
+                rows[i * 7 + 6] = new(1, maskImage.fillCenter ? 1 : 0, 0, 0);
+            }
             material.SetTexture("_UiMask" + i, texture);
         }
         buffer.SetData(rows); material.SetBuffer("_UiMasks", buffer);

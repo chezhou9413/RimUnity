@@ -14,6 +14,17 @@ public static class HostAssets
     private static readonly Dictionary<Texture2D, UnityEngine.Texture2D> Textures = new();
     private static readonly Dictionary<Material, UnityEngine.Shader> MaterialShaders = new();
 
+    //复制宿主贴图的像素，调用方拥有新贴图；不接管原版资源的释放责任。
+    public static Texture2D CopyTexture(UnityEngine.Texture2D source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var result = new Texture2D(source.width, source.height, TextureFormat.RGBA32, false, source.CoreTexture.CpuData?.Linear ?? false)
+        { name = source.name, filterMode = (FilterMode)source.filterMode, wrapMode = (TextureWrapMode)source.wrapMode };
+        result.SetPixels32(Array.ConvertAll(source.GetPixels32(), c => new Color32(c.r, c.g, c.b, c.a)));
+        result.Apply(false, false);
+        return result;
+    }
+
     //宿主包装不承担共享 Shader 的销毁权，默认参数来自同一份导出描述。
     public static UnityEngine.Shader ToHost(Shader source)
     {

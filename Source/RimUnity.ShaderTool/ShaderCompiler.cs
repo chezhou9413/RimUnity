@@ -55,6 +55,7 @@ internal static class ShaderCompiler
         string previous;
         do { previous = glsl; glsl = Regex.Replace(glsl, @"layout\(([^)]*)\)\s*layout\(([^)]*)\)", "layout($1, $2)"); } while (glsl != previous);
         glsl = ShaderLabGlsl.Rewrite(glsl, File.ReadAllText(file));
+        glsl = ShaderMathCompat.Rewrite(glsl, manifest);
         //布局注解来自适配阶段显式指定的位置，不按编译器生成的变量名猜测。
         foreach (Match annotation in Regex.Matches(File.ReadAllText(file), @"//\s*@rimunity-vertex\s+(\d+)\s+(\w+)\s+(required|optional)([^\r\n]*)"))
         {

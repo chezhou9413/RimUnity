@@ -11,7 +11,8 @@ public class Image : MaskableGraphic
     public enum Origin180 { Bottom, Left, Top, Right }
     public enum Origin360 { Bottom, Right, Top, Left }
     public Sprite sprite { get; set => SetProperty(ref field, value); }
-    public Sprite overrideSprite { get; set => SetProperty(ref field, value); }
+    //与 UGUI 一致：无临时覆盖时读取基础精灵，写入 null 则恢复基础精灵。
+    public Sprite overrideSprite { get => field != null ? field : sprite; set => SetProperty(ref field, value); }
     public Type type { get; set => SetProperty(ref field, value); }
     public FillMethod fillMethod { get; set; }
     public float fillAmount { get; set; } = 1f;

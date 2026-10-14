@@ -13,13 +13,17 @@ namespace RimUnity.Editor
         internal static void Component(TextMeshProUGUI text, ComponentData data, ValueWriter writer, string path)
         {
             if (text.font == null) throw new InvalidOperationException(path + "：TMP 字体未指定。");
-            if (text.fontStyle != FontStyles.Normal || text.enableVertexGradient || text.isRightToLeftText) throw new NotSupportedException(path + "：TMP 字体样式／顶点渐变／RTL 尚未接通。");
+            if ((text.fontStyle & ~FontStyles.Bold) != 0 || text.enableVertexGradient || text.isRightToLeftText) throw new NotSupportedException(path + "：TMP 支持普通与粗体，其他字体样式／顶点渐变／RTL 尚未接通。");
             if (text.overflowMode != TextOverflowModes.Overflow && text.overflowMode != TextOverflowModes.Masking) throw new NotSupportedException(path + "：TMP 省略号／分页等溢出模式尚未接通。");
             foreach (string name in new[] { "text", "font", "fontSize", "fontSizeMin", "fontSizeMax", "enableAutoSizing", "enableWordWrapping", "richText", "enableKerning", "overflowMode", "alignment", "characterSpacing", "lineSpacing", "margin", "color", "raycastTarget", "faceColor", "outlineColor", "outlineWidth" }) data.members.Add(writer.Property(text, name, path));
             Material material = text.fontSharedMaterial;
             if (material == null || !material.HasProperty("_GradientScale")) throw new NotSupportedException(path + "：仅支持 TMP SDF 字体材质。");
             foreach (string keyword in new[] { "UNDERLAY_ON", "UNDERLAY_INNER", "GLOW_ON", "BEVEL_ON" }) if (material.IsKeywordEnabled(keyword)) throw new NotSupportedException(path + "：TMP 材质特性尚未接通：" + keyword);
-            data.members.Add(new MemberData { name = "faceDilate", property = true, value = writer.Write(material.GetFloat("_FaceDilate"), path) });
+            bool bold = (text.fontStyle & FontStyles.Bold) != 0;
+            float weight = material.GetFloat(bold ? "_WeightBold" : "_WeightNormal") / 4f;
+            float dilation = (weight + material.GetFloat("_FaceDilate")) * material.GetFloat("_ScaleRatioA");
+            data.members.Add(new MemberData { name = "faceDilate", property = true, value = writer.Write(dilation, path) });
+            data.members.Add(new MemberData { name = "fontSpacing", property = true, value = writer.Write(text.font.normalSpacingOffset + (bold ? text.font.boldSpacing : 0), path) });
         }
         internal static void Font(TMP_FontAsset font, ResourceData data, ValueWriter writer, string path)
         {

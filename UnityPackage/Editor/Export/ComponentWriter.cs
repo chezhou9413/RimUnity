@@ -12,15 +12,19 @@ namespace RimUnity.Editor
     {
         private static readonly Dictionary<string, string[]> Members = new Dictionary<string, string[]>
         {
+            ["UnityEngine.AudioSource"] = new[] { "clip", "playOnAwake", "loop", "mute", "volume", "pitch", "panStereo", "spatialBlend" },
             ["UnityEngine.Camera"] = new[] { "orthographic", "orthographicSize", "nearClipPlane", "farClipPlane", "fieldOfView", "cullingMask", "rect", "targetTexture", "backgroundColor", "clearFlags", "depth" },
             ["UnityEngine.Light"] = new[] { "type", "color", "intensity", "range", "spotAngle", "shadows", "shadowStrength", "shadowBias", "shadowNormalBias", "cullingMask" },
             ["UnityEngine.Canvas"] = new[] { "renderMode", "sortingOrder", "worldCamera", "scaleFactor", "referencePixelsPerUnit", "overrideSorting", "planeDistance" },
             ["UnityEngine.CanvasGroup"] = new[] { "alpha", "interactable", "blocksRaycasts", "ignoreParentGroups" },
             ["UnityEngine.UI.CanvasScaler"] = new[] { "uiScaleMode", "referencePixelsPerUnit", "scaleFactor", "referenceResolution", "screenMatchMode", "matchWidthOrHeight", "physicalUnit", "fallbackScreenDPI", "defaultSpriteDPI", "dynamicPixelsPerUnit" },
             ["UnityEngine.UI.GraphicRaycaster"] = Array.Empty<string>(),
-            ["UnityEngine.UI.Image"] = new[] { "color", "raycastTarget", "sprite", "overrideSprite", "type", "preserveAspect", "fillCenter", "fillMethod", "fillAmount", "fillClockwise", "fillOrigin", "pixelsPerUnitMultiplier", "useSpriteMesh" },
+            ["UnityEngine.UI.Shadow"] = new[] { "effectColor", "effectDistance", "useGraphicAlpha" },
+            ["UnityEngine.UI.Outline"] = new[] { "effectColor", "effectDistance", "useGraphicAlpha" },
+            //overrideSprite 是非序列化的临时状态，getter 在无覆盖时返回 sprite，不能写入预制体。
+            ["UnityEngine.UI.Image"] = new[] { "color", "raycastTarget", "sprite", "type", "preserveAspect", "fillCenter", "fillMethod", "fillAmount", "fillClockwise", "fillOrigin", "pixelsPerUnitMultiplier", "useSpriteMesh" },
             ["UnityEngine.UI.RawImage"] = new[] { "color", "raycastTarget", "texture", "uvRect" },
-            ["UnityEngine.UI.Text"] = new[] { "color", "raycastTarget", "text", "font", "fontSize", "fontStyle", "alignment", "supportRichText", "lineSpacing", "resizeTextForBestFit", "resizeTextMinSize", "resizeTextMaxSize" },
+            ["UnityEngine.UI.Text"] = new[] { "color", "raycastTarget", "text", "font", "fontSize", "fontStyle", "alignment", "supportRichText", "lineSpacing", "horizontalOverflow", "verticalOverflow", "resizeTextForBestFit", "resizeTextMinSize", "resizeTextMaxSize" },
             ["UnityEngine.UI.Button"] = new[] { "interactable", "targetGraphic", "transition", "onClick" },
             ["UnityEngine.UI.Toggle"] = new[] { "interactable", "targetGraphic", "transition", "graphic", "group", "toggleTransition", "isOn", "onValueChanged" },
             ["UnityEngine.UI.ToggleGroup"] = new[] { "allowSwitchOff" },
@@ -63,6 +67,9 @@ namespace RimUnity.Editor
         internal static ComponentData Write(Component component, string id, ValueWriter writer, string path, bool root)
         {
             string original = component.GetType().FullName;
+            if (component is AudioSource audio && (audio.spatialBlend != 0 || audio.outputAudioMixerGroup != null ||
+                audio.bypassEffects || audio.bypassListenerEffects || audio.bypassReverbZones || audio.ignoreListenerPause || audio.ignoreListenerVolume))
+                throw new NotSupportedException(path + "：AudioSource 当前支持无 Mixer 路由的二维界面音频，不支持空间音效或监听器绕过。");
             var data = new ComponentData { id = id, type = MapTypeName(original), enabled = !(component is Behaviour b) || b.enabled };
             if (component is TMPro.TextMeshProUGUI tmp) { TmpWriter.Component(tmp, data, writer, path); return data; }
             if (component is ParticleSystem particles) { ParticleWriter.Write(particles, data, writer, path); return data; }
@@ -103,10 +110,6 @@ namespace RimUnity.Editor
                 Canvas canvas = customGraphic.GetComponentInParent<Canvas>();
                 if (canvas != null && canvas.rootCanvas.renderMode != RenderMode.ScreenSpaceOverlay)
                     throw new NotSupportedException(path + "：世界／相机画布的自定义 UI Shader 尚未接通。");
-                if (customGraphic.GetComponentInParent<Mask>() != null)
-                    throw new NotSupportedException(path + "：自定义 UI Shader 的 Mask 覆盖率入口尚未接通。");
-                if (customGraphic.GetComponentInParent<RectMask2D>() != null)
-                    throw new NotSupportedException(path + "：自定义 UI Shader 的 RectMask2D 裁切入口尚未接通。");
                 data.members.Add(new MemberData { name = "material", property = true, value = writer.Material(customGraphic.material, path + ".material", true) });
             }
             if (Members.TryGetValue(original, out string[] names))
@@ -155,6 +158,8 @@ namespace RimUnity.Editor
         //当前还未接通的非默认设置必须阻止导出，不能降级后假报成功。
         private static void Validate(Component component, string path, bool root)
         {
+            if (component is Shadow shadow && shadow.GetComponent<Text>() == null)
+                throw new NotSupportedException(path + "：Shadow 和 Outline 当前只支持普通 UI Text。");
             if (component is Camera camera && (camera.targetTexture == null || camera.clearFlags != CameraClearFlags.SolidColor))
                 throw new NotSupportedException(path + "：离屏相机需要目标纹理与纯色清屏。");
             if (component is MeshRenderer twoSided && twoSided.shadowCastingMode == UnityEngine.Rendering.ShadowCastingMode.TwoSided)
@@ -181,8 +186,9 @@ namespace RimUnity.Editor
                 throw new NotSupportedException(path + "：当前 SpriteRenderer 支持 Simple 几何，不支持九宫格／平铺／SpriteMask。");
             if (component is SpriteRenderer sorted && sorted.sortingLayerID != 0)
                 throw new NotSupportedException(path + "：SpriteRenderer 当前只接通默认 Sorting Layer。");
-            if (component is Mask stencil && !(stencil.graphic is RawImage) && !(stencil.graphic is Image maskImage && maskImage.type == Image.Type.Simple && !maskImage.preserveAspect && !maskImage.useSpriteMesh))
-                throw new NotSupportedException(path + "：基础 Mask 需要普通 Simple Image 或 RawImage，复杂遮罩几何尚未接通。");
+            if (component is Mask stencil && !(stencil.graphic is RawImage) && !(stencil.graphic is Image maskImage &&
+                (maskImage.type == Image.Type.Simple || maskImage.type == Image.Type.Sliced) && !maskImage.useSpriteMesh))
+                throw new NotSupportedException(path + "：Mask 支持 Simple、Sliced Image 和 RawImage，其他遮罩几何尚未接通。");
             if (component is Animator animator && (animator.applyRootMotion || animator.avatar != null && animator.avatar.isHuman)) throw new NotSupportedException(path + "：Root Motion／Humanoid 不在首阶段范围。");
             if (component is Text spaced && (spaced.lineSpacing < 0 || float.IsNaN(spaced.lineSpacing) || float.IsInfinity(spaced.lineSpacing))) throw new NotSupportedException(path + "：Text 行距必须为非负有限值。");
             if (!Members.ContainsKey(component.GetType().FullName) && component is ISerializationCallbackReceiver) throw new NotSupportedException(path + "：自定义序列化回调尚未适配。");

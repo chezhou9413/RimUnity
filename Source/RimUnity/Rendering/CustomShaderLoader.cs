@@ -22,7 +22,9 @@ internal static class CustomShaderLoader
         ShaderData data = catalog.Read<ShaderData>(record.file);
         if (data.formatVersion != 1 || data.key != record.id || data.profile is not ("world" or "ui")) throw new InvalidDataException("Shader 描述不合法：" + record.path);
         ShaderMaterialDefaults.Register(data.key, data.defaults);
-        if (ShaderRegistry.TryResolve(data.key, out var cached)) return Wrap(data, cached);
+        //资源键包含 packageId 的点号；宿主的路径回退会把它当扩展名截断，只接受完整键命中。
+        if (ShaderRegistry.TryResolve(data.key, out var cached) && string.Equals(cached.Key, data.key, StringComparison.Ordinal))
+            return Wrap(data, cached);
         string vertexPath = catalog.Resolve(data.vertexFile), fragmentPath = catalog.Resolve(data.fragmentFile);
         string vertex = File.ReadAllText(vertexPath), fragment = File.ReadAllText(fragmentPath);
         var layout = ShaderMetadataParser.ExtractMaterialLayout(fragment, data.key, 2);
@@ -49,7 +51,8 @@ internal static class CustomShaderLoader
         var stages = new PrecompiledShaderStages(
             RuntimeShaderCompiler.Compile(vertex, vertexPath, "main", RuntimeShaderLanguage.Glsl, RuntimeShaderStage.Vertex),
             RuntimeShaderCompiler.Compile(fragment, fragmentPath, "main", RuntimeShaderLanguage.Glsl, RuntimeShaderStage.Fragment), false);
-        var shader = new Waylith.Rendering.Shader(data.key, data.key, program, data.keywords, layout, pipeline, vertexInputLayout: inputs, precompiledStages: stages);
+        //清单资源按完整键注册，不再额外登记会被 NormalizePath 截断的文件路径别名。
+        var shader = new Waylith.Rendering.Shader(data.key, string.Empty, program, data.keywords, layout, pipeline, vertexInputLayout: inputs, precompiledStages: stages);
         if (shader.HasErrors) throw new InvalidDataException("Shader 注册前校验失败：" + data.sourceName);
         ShaderRegistry.Register(shader);
         if (data.profile == "world") LinearShaderVariants.Register(shader, fragment);

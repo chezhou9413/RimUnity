@@ -16,16 +16,20 @@ internal static class ShaderLabStages
     {
         string vertexPath = Path.Combine(directory, manifest.vertexFile), fragmentPath = Path.Combine(directory, manifest.fragmentFile);
         string vertex = File.ReadAllText(vertexPath), fragment = File.ReadAllText(fragmentPath);
+        if (manifest.profile == "ui") fragment = UiMaskAdapter.Apply(fragment);
         if (Regex.IsMatch(vertex + fragment, @"uniform\s+sampler2D\s+_CameraDepthTexture\b"))
             throw new NotSupportedException("此变体实际采样相机深度，Waylith 深度纹理绑定尚未接通；不会导出成白色默认纹理。");
         if (!Regex.IsMatch(vertex, @"\bgl_Position(?:\.[xyzw]+)?\s*=")) throw new InvalidDataException("顶点程序没有写出 SV_POSITION。");
         if (manifest.profile == "world" && Regex.IsMatch(fragment, @"uniform\s+block_RU_(CameraData|ObjectData)_"))
             throw new NotSupportedException("世界配置的对象模型和相机顶点块不能在片元阶段访问；请由顶点函数通过 varying 传递计算结果。");
         Match vertexBlock = Block(vertex), fragmentBlock = Block(fragment);
+        if (manifest.profile == "ui" && vertexBlock != null)
+            vertex = vertex.Replace(vertexBlock.Value, vertexBlock.Value.Insert(vertexBlock.Value.IndexOf('}'),
+                "\nfloat _UiMaskCount; // @default = 0.0\nfloat _UiRectMaskCount; // @default = 0.0\n"));
         if (vertexBlock != null && fragmentBlock == null) fragment = Insert(fragment, vertexBlock.Value);
         if (fragmentBlock != null && vertexBlock == null) vertex = Insert(vertex, fragmentBlock.Value);
         (vertex, fragment) = RemoveUnusedMaterialMembers(vertex, fragment);
-        // The fragment source also describes vertex-only storage bindings to the host.
+        //片元描述也保留仅由顶点阶段使用的存储绑定。
         var vertexStorage = Storage(vertex); var fragmentStorage = Storage(fragment);
         foreach (var item in vertexStorage)
             if (!fragmentStorage.ContainsKey(item.Key)) fragment = Insert(fragment, item.Value.Value);
@@ -50,8 +54,8 @@ internal static class ShaderLabStages
         ShaderCompiler.Verify(vertexPath); ShaderCompiler.Verify(fragmentPath);
     }
 
-    // Slang retains unused members in ConstantBuffer structs. Keeping them can exceed
-    // the host's material capacity. Remove only members unused by BOTH final programs.
+    //Slang 会保留常量缓冲区中未使用的成员，可能超出宿主材质容量。
+    //仅移除两个最终阶段均未使用的成员。
     private static (string Vertex, string Fragment) RemoveUnusedMaterialMembers(string vertex, string fragment)
     {
         var blocks = new[] { Block(vertex), Block(fragment) }.Where(b => b != null).ToArray();
@@ -61,7 +65,7 @@ internal static class ShaderLabStages
             if (pair.Item2 == null) continue;
             string instance = Regex.Match(pair.Item2.Value, @"\}\s*(\w+)\s*;").Groups[1].Value;
             string program = pair.Item1.Replace(pair.Item2.Value, "");
-            // Whole-block copies require the original struct layout; do not prune them.
+            //整体缓冲区复制依赖原始结构布局，此时不能裁剪字段。
             if (Regex.IsMatch(program, @"\b" + Regex.Escape(instance) + @"\b(?!\s*\.)")) return (vertex, fragment);
             foreach (Match access in Regex.Matches(program, @"\b" + Regex.Escape(instance) + @"\s*\.\s*(\w+)")) used.Add(access.Groups[1].Value);
         }

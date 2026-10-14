@@ -121,6 +121,11 @@ internal static partial class UguiRuntime
     {
         if (Event.current.type != EventType.Repaint) return;
         Rendering.ShaderGlobals.Update();
+        //整帧字形先入图集，避免逐个 Text 绘制时反复扩容、复制和上传同一张图集。
+        foreach (Entry entry in Entries)
+            if (entry.Canvas.EffectiveMode == RenderMode.ScreenSpaceOverlay && entry.Graphic is Text text
+                && text.isActiveAndEnabled && entry.Clip.width > 0 && entry.Clip.height > 0)
+                UguiTextRenderer.Warm(entry, text);
         try
         {
             foreach (Entry entry in Entries)
@@ -193,7 +198,7 @@ internal static partial class UguiRuntime
     internal static Rect Bounds(Entry entry) => Bounds(entry, entry.Rect.rect);
 
     //文字排版矩形与 Graphic 命中矩形分别换算，边距不扩大鼠标点击区域。
-    private static Rect Bounds(Entry entry, Rect rect)
+    internal static Rect Bounds(Entry entry, Rect rect)
     {
         Vector2 a = RectTransformUtility.ToGui(entry.Canvas, entry.Rect.TransformPoint(new Vector3(rect.xMin, rect.yMin)));
         Vector2 b = RectTransformUtility.ToGui(entry.Canvas, entry.Rect.TransformPoint(new Vector3(rect.xMax, rect.yMax)));

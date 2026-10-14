@@ -18,7 +18,7 @@ public sealed partial class TextMeshProUGUI
     internal void Build(float width, float height)
     {
         if (font == null) throw new InvalidOperationException("TMP 字体未指定：" + name);
-        int options = HashCode.Combine(HashCode.Combine(alignment, enableWordWrapping, richText, enableAutoSizing, characterSpacing, lineSpacing, fontSizeMin, fontSizeMax), enableKerning);
+        int options = HashCode.Combine(HashCode.Combine(alignment, enableWordWrapping, richText, enableAutoSizing, characterSpacing, lineSpacing, fontSizeMin, fontSizeMax), enableKerning, fontSpacing);
         Vector4 bounds = new(width, height, fontSize, 0);
         if (cached == text && cachedFont == font && cachedBounds == bounds && cachedOptions == options) return;
         cached = text; cachedFont = font; cachedBounds = bounds; cachedOptions = options;
@@ -46,7 +46,7 @@ public sealed partial class TextMeshProUGUI
             var glyph = letter.glyph; var owner = letter.owner;
             float scale = letter.size / owner.pointSize * owner.scale * glyph.scale;
             Vector4 adjustment = Adjustment(letters, i);
-            float advance = (glyph.advance + adjustment.z) * scale + characterSpacing;
+            float advance = (glyph.advance + adjustment.z) * scale + characterSpacing + fontSpacing * letter.size * .01f;
             //拉丁单词先整体换行；超出整行宽度的长词仍允许按字符断开。
             if (enableWordWrapping && wordStart && !letter.Breakable && x > 0)
             {
@@ -54,7 +54,7 @@ public sealed partial class TextMeshProUGUI
                 for (int j = i; j < letters.Count && !letters[j].Breakable; j++)
                 {
                     var item = letters[j];
-                    wordWidth += (item.glyph.advance + Adjustment(letters, j).z) * item.size / item.owner.pointSize * item.owner.scale * item.glyph.scale + characterSpacing;
+                    wordWidth += (item.glyph.advance + Adjustment(letters, j).z) * item.size / item.owner.pointSize * item.owner.scale * item.glyph.scale + characterSpacing + fontSpacing * item.size * .01f;
                 }
                 if (x + wordWidth > width) Newline();
             }

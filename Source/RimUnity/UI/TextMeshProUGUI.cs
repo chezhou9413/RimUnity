@@ -21,10 +21,13 @@ public sealed partial class TextMeshProUGUI : MaskableGraphic, ILayoutElement
     public float characterSpacing { get; set => SetProperty(ref field, value); }
     public float lineSpacing { get; set => SetProperty(ref field, value); }
     public Vector4 margin { get; set => SetProperty(ref field, value); }
-    public Color faceColor { get; set; } = Color.white;
-    public Color outlineColor { get; set; } = Color.black;
+    //与 TMP 的 Color32 属性一致，导出字节颜色在写入材质时才归一化。
+    public Color32 faceColor { get; set; } = Color.white;
+    public Color32 outlineColor { get; set; } = Color.black;
     public float outlineWidth { get; set; }
     public float faceDilate { get; set; }
+    //字体自带字距与粗体增量使用 TMP 的百分之一 em 单位。
+    public float fontSpacing { get; set => SetProperty(ref field, value); }
     public new RectTransform rectTransform => (RectTransform)transform;
     public override Texture mainTexture => font != null && font.atlasTextures.Length > 0 ? font.atlasTextures[0] : null;
     public float minWidth => 0;
