@@ -18,7 +18,9 @@ namespace RimUnity.Editor { public static class RimUnityWorkflow
         public string repository, shaderTool, gameRoot;
         public bool auditOnReload, disableCastShadows, disableReceiveShadows, disableLightProbes, disableReflectionProbes;
         public Mapping[] mappings;
+        public ResourceOwner[] resourceOwners = Array.Empty<ResourceOwner>();
     }
+    [Serializable] public sealed class ResourceOwner { public string path, bundle; }
     [Serializable] public sealed class Mapping { public string bundle, mod; }
     [Serializable] public sealed class Entry
     {

@@ -88,11 +88,13 @@ namespace RimUnity.Editor
                 else if (asset is Texture2D texture)
                 {
                     data.type = "Texture2D";
-                    string file = id + ".png";
+                    bool numeric = IsFloatTexture(texture.format);
+                    string file = id + (numeric ? ".bytes" : ".png");
                     var importer = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(texture)) as TextureImporter;
-                    bool linear = importer != null && !importer.sRGBTexture;
-                    File.WriteAllBytes(Path.Combine(directory, file), TextureBytes(texture, linear));
+                    bool linear = importer != null ? !importer.sRGBTexture : !texture.isDataSRGB;
+                    File.WriteAllBytes(Path.Combine(directory, file), numeric ? FloatTextureBytes(texture) : TextureBytes(texture, linear));
                     Put("file", relative + "/" + file); Put("linear", linear);
+                    if (numeric) { Put("numericFormat", "RGBAFloatLE"); Put("width", texture.width); Put("height", texture.height); }
                     Put("wrapMode", texture.wrapMode); Put("filterMode", texture.filterMode);
                 }
                 else if (asset is Sprite sprite)
@@ -109,7 +111,13 @@ namespace RimUnity.Editor
                     if (mesh.blendShapeCount > 0) throw new NotSupportedException(path + "：BlendShape 不在首阶段范围内。");
                     data.type = "Mesh";
                     Put("vertices", mesh.vertices); Put("normals", mesh.normals); Put("tangents", mesh.tangents);
-                    Put("uv", mesh.uv); Put("uv2", mesh.uv2); Put("uv3", mesh.uv3); Put("uv4", mesh.uv4); Put("colors", mesh.colors);
+                    var uvChannels = new Vector4[8][];
+                    for (int channel = 0; channel < uvChannels.Length; channel++)
+                    {
+                        var values = new List<Vector4>(); mesh.GetUVs(channel, values);
+                        uvChannels[channel] = values.ToArray();
+                    }
+                    Put("uvChannels", uvChannels); Put("colors", mesh.colors);
                     var submeshes = new int[mesh.subMeshCount][];
                     for (int i = 0; i < submeshes.Length; i++)
                     {
@@ -150,7 +158,7 @@ namespace RimUnity.Editor
                 else throw new NotSupportedException(path + "：未实现的资源类型：" + asset.GetType().FullName);
                 string json = id + ".json";
                 ExportJson.Write(Path.Combine(directory, json), data);
-                records.Add(id, new AssetRecord { id = id, name = asset.name, description = "", path = "__assets/" + id,
+                records.Add(id, new AssetRecord { id = id, sourcePath = AssetDatabase.GetAssetPath(asset), name = asset.name, description = "", path = "__assets/" + id,
                     file = relative + "/" + json, type = data.type, dependencies = End() });
                 return id;
             }

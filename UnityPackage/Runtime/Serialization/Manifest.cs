@@ -17,7 +17,7 @@ namespace RimUnity.Serialization
     [Serializable]
     public sealed class AssetRecord
     {
-        public string id, name, description, path, file, type;
+        public string id, name, description, path, file, type, sourcePath;
         public List<string> dependencies = new List<string>();
     }
 }

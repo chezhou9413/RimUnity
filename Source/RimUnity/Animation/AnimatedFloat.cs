@@ -32,6 +32,7 @@ internal sealed class AnimatedFloat
                 LineRenderer line => line.material,
                 TrailRenderer trail => trail.material,
                 MeshRenderer mesh => mesh.material,
+                ParticleSystemRenderer particlesRenderer => particlesRenderer.material,
                 _ => throw new NotSupportedException("此动画目标尚未接通实例材质属性：" + target.GetType().FullName)
             };
             if (material == null) throw new InvalidOperationException("动画目标缺少材质：" + path);

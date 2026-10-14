@@ -3,14 +3,15 @@ using Newtonsoft.Json.Linq;
 
 public static class RimUnityWorkflow
 {
-    public sealed class Profile { public string repository, shaderTool, gameRoot; public Mapping[] mappings; public bool disableCastShadows, disableReceiveShadows, disableLightProbes, disableReflectionProbes; }
-    public sealed class Mapping { public string mod; }
+    public sealed class Profile { public string repository, shaderTool, gameRoot; public Mapping[] mappings; public ResourceOwner[] resourceOwners; public bool disableCastShadows, disableReceiveShadows, disableLightProbes, disableReflectionProbes; }
+    public sealed class Mapping { public string mod, bundle; }
+    public sealed class ResourceOwner { public string path, bundle; }
     public sealed class Entry { public string path, mod, bundle, status, error; public bool ui; }
 }
 namespace UnityEngine { public sealed class Object { public string Path; } }
 namespace UnityEditor
 {
-    public static class AssetDatabase { public static UnityEngine.Object LoadMainAssetAtPath(string path) => new() { Path = path }; }
+    public static class AssetDatabase { public static UnityEngine.Object LoadMainAssetAtPath(string path) => new() { Path = path }; public static string AssetPathToGUID(string path) => ""; public static bool IsValidFolder(string path) => false; public static string[] GetDependencies(string[] paths, bool recursive) => paths.Concat(new[] { "Assets/shared.png", "Assets/code.cs" }).ToArray(); }
     public static class EditorUtility
     {
         public static bool Cancel;

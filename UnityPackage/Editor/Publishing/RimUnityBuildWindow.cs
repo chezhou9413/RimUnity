@@ -6,7 +6,7 @@ using Newtonsoft.Json;
 using UnityEditor;
 using UnityEngine;
 
-namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWindow
+namespace RimUnity.Editor { public sealed partial class RimUnityBuildWindow : EditorWindow
 {
     private RimUnityWorkflow.Profile profile;
     private List<RimUnityWorkflow.Entry> entries = new List<RimUnityWorkflow.Entry>();
@@ -45,7 +45,7 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
             var ui = new HashSet<string>(preset.uiPaths ?? Array.Empty<string>());
             foreach (var entry in entries) entry.ui = ui.Contains(entry.path);
         }
-        catch (Exception exception) { error = "窗口预设读取失败：" + exception.Message; }
+        catch (Exception exception) { error = "窗口预设读取失败：" + exception.Message; Log(error); Debug.LogException(exception); }
     }
     private void OnDisable()
     {
@@ -62,11 +62,11 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
         }
         catch (Exception exception) { Debug.LogWarning("窗口预设保存失败：" + exception.Message); }
     }
-    private void RefreshEntries()
+    private void RefreshEntries(bool reloadProfile = false)
     {
         try
         {
-            profile = profile ?? RimUnityWorkflow.Load();
+            profile = reloadProfile || profile == null ? RimUnityWorkflow.Load() : profile;
             var previousUi = entries.ToDictionary(e => e.path, e => e.ui, StringComparer.OrdinalIgnoreCase);
             entries = RimUnityWorkflow.Discover(profile);
             foreach (var item in entries) if (previousUi.TryGetValue(item.path, out bool ui)) item.ui = ui;
@@ -76,10 +76,11 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
                 if (current == null) entries.Add(item);
                 else { current.bundle = item.bundle; current.mod = item.mod; current.ui = item.ui; }
             }
+            RefreshDuplicates();
             initialized = true;
             error = "";
         }
-        catch (Exception exception) { error = exception.Message; }
+        catch (Exception exception) { error = exception.Message; Log(exception.ToString()); Debug.LogException(exception); }
         Repaint();
     }
     private void Styles()
@@ -127,12 +128,14 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
         GUILayout.BeginHorizontal(EditorStyles.toolbar);
         search = GUILayout.TextField(search, GUI.skin.FindStyle("ToolbarSearchTextField") ?? EditorStyles.toolbarTextField);
         onlyIssues = GUILayout.Toggle(onlyIssues, "仅看检查问题", EditorStyles.toolbarButton, GUILayout.Width(105));
-        if (GUILayout.Button("刷新检查", EditorStyles.toolbarButton, GUILayout.Width(85))) RefreshEntries();
+        if (GUILayout.Button("刷新检查", EditorStyles.toolbarButton, GUILayout.Width(85))) RefreshEntries(true);
         if (GUILayout.Button("定位首个问题", EditorStyles.toolbarButton, GUILayout.Width(100))) Ping(entries.FirstOrDefault(e => e.status != "pending"));
         GUILayout.EndHorizontal();
-        var visible = entries.Where(e => (!onlyIssues || e.status != "pending" || e.missingScripts > 0) &&
+        DrawBundleFilter();
+        var visible = entries.Where(e => MatchesBundle(e.bundle) && (!onlyIssues || e.status != "pending" || e.missingScripts > 0) &&
             (string.IsNullOrWhiteSpace(search) || (e.path + " " + e.bundle + " " + e.status).IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0)).ToArray();
         resourcesScroll = EditorGUILayout.BeginScrollView(resourcesScroll);
+        DrawDuplicates();
         foreach (var group in visible.GroupBy(e => e.bundle ?? "未分配"))
         {
             GUILayout.Space(6);
@@ -197,6 +200,7 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
             if (!manual.Any(e => e.path == path)) manual.Add(entry);
         }
         SavePreset();
+        RefreshDuplicates();
     }
     private void Settings()
     {
@@ -315,7 +319,7 @@ namespace RimUnity.Editor { public sealed class RimUnityBuildWindow : EditorWind
                 string blockers = RimUnityPublisher.DescribeBlockers(choice);
                 if (blockers != null)
                 {
-                    error = blockers; Log(blockers); SaveLog(); tab = 0; onlyIssues = true; search = "";
+                    error = blockers; Log(blockers); Debug.LogError(blockers); SaveLog(); tab = 0; onlyIssues = true; search = "";
                     Ping(choice.First(e => e.status != "pending"));
                     return;
                 }

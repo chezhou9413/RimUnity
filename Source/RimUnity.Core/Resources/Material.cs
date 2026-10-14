@@ -120,7 +120,13 @@ public sealed class Material : Object
     {
         engineMaterial.SetTexture(id, value?.NativeTexture);
         //即使首次使用恒等变换也显式初始化 _ST，避免全零 UV。
-        if (ShaderPropertyId.TryGetName(id, out string name)) UpdateTextureTransform(name);
+        if (ShaderPropertyId.TryGetName(id, out string name))
+        {
+            UpdateTextureTransform(name);
+            //宿主将像素尺寸作为普通向量读取，随纹理绑定同步写入。
+            engineMaterial.SetVector(Shader.PropertyToID(name + "_TexelSize"), value == null ? System.Numerics.Vector4.Zero
+                : new System.Numerics.Vector4(1f / value.width, 1f / value.height, value.width, value.height));
+        }
         TextureChanged?.Invoke(this, id, value);
     }
     public Texture GetTexture(string name) => GetTexture(Shader.PropertyToID(name));

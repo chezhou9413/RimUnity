@@ -29,12 +29,13 @@ namespace RimUnity.Serialization
             return full;
         }
 
-        //只有内容寻址载荷允许跨模组共享，资源描述仍属于原模组。
+        //只有内容寻址载荷允许跨模组共享，资源描述迁移时也需先转换为内容寻址文件。
         public static void RequireBlob(string relative)
         {
+            string name = Path.GetFileNameWithoutExtension(relative.EndsWith(".json.gz", StringComparison.OrdinalIgnoreCase) ? relative.Substring(0, relative.Length - 3) : relative);
             if (!relative.StartsWith("blobs/", StringComparison.Ordinal) || relative.IndexOf('/', 6) >= 0
-                || Path.GetFileNameWithoutExtension(relative).Length != 64
-                || !IsHex(Path.GetFileNameWithoutExtension(relative)))
+                || name.Length != 64
+                || !IsHex(name))
                 throw new InvalidDataException("共享资源必须使用 SHA256 文件名：" + relative);
         }
 

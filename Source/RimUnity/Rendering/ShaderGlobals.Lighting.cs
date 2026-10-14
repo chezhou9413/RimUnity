@@ -1,4 +1,6 @@
 using Verse;
+using RimWorld;
+using HarmonyLib;
 
 namespace RimUnity.Rendering;
 
@@ -8,20 +10,53 @@ internal static partial class ShaderGlobals
     private static readonly int SunDirectionId = Shader.PropertyToID("_RU_MapSunDirection"), MoonDirectionId = Shader.PropertyToID("_RU_MapMoonDirection"),
         SunColorId = Shader.PropertyToID("_RU_MapSunColor"), MoonColorId = Shader.PropertyToID("_RU_MapMoonColor"), AmbientId = Shader.PropertyToID("_RU_MapAmbient");
 
-    //读取地图公开的天空光照，向原生 Shader 提供方向和颜色。
+    //读档期间地图可能先于世界层和地块就绪，查询群系前先核对实际集合范围。
+    private static readonly AccessTools.StructFieldRef<RimWorld.Planet.PlanetTile, int> TileLayerId
+        = AccessTools.StructFieldRefAccess<RimWorld.Planet.PlanetTile, int>("layerId");
+
+    //仅在地图及其地块信息完整时提供天空参数。
+    private static bool TryGetMapLighting(out Map map, out BiomeDef biome)
+    {
+        map = null; biome = null;
+        if (Current.ProgramState != ProgramState.Playing || LongEventHandler.AnyEventNowOrWaiting
+            || Current.Game == null) return false;
+        var game = Current.Game;
+        int index = game.currentMapIndex;
+        if (game.Maps == null || (uint)index >= (uint)game.Maps.Count) return false;
+        Map candidate = game.Maps[index];
+        if (candidate == null || candidate.Disposed || candidate.info == null || candidate.skyManager == null) return false;
+        RimWorld.Planet.Tile tileInfo;
+        if (candidate.IsPocketMap) tileInfo = candidate.pocketTileInfo;
+        else
+        {
+            var grid = Current.Game.World?.grid;
+            var tile = candidate.Tile;
+            if (grid == null || !tile.Valid) return false;
+            RimWorld.Planet.PlanetLayer layer;
+            int layerId = TileLayerId(ref tile);
+            if (layerId < 0) layer = grid.Surface;
+            else if (!grid.PlanetLayers.TryGetValue(layerId, out layer)) return false;
+            if (layer?.Tiles == null || (uint)tile.tileId >= (uint)layer.Tiles.Count) return false;
+            tileInfo = layer.Tiles[tile.tileId];
+        }
+        if (tileInfo == null) return false;
+        map = candidate; biome = tileInfo.PrimaryBiome;
+        return true;
+    }
+    //读取地图公开的天空光照，同时供主相机和离屏相机调用。
     internal static void UpdateMapLighting()
     {
-        Map map = Current.ProgramState == ProgramState.Playing ? Find.CurrentMap : null;
+        bool ready = TryGetMapLighting(out Map map, out BiomeDef biome);
         Vector4 sun = Vector4.zero, moon = Vector4.zero;
         Color ambient = Color.black, radiance = Color.black;
-        if (map != null && !map.Disposed)
+        if (ready)
         {
             //直接读取天空管理器已计算的日月参数。
             sun = Shader.GetGlobalVector(ShaderPropertyIDs.WaterCastVectSun);
             moon = Shader.GetGlobalVector(ShaderPropertyIDs.WaterCastVectMoon);
-            var sky = map.skyManager.CurSky.colors.sky;
+            UnityEngine.Color sky = map.skyManager.CurSky.colors.sky;
             ambient = radiance = new Color(sky.r, sky.g, sky.b, sky.a);
-            if (map.Biome != null && map.Biome.disableSkyLighting)
+            if (biome != null && biome.disableSkyLighting)
             { ambient = Color.white; sun.w = moon.w = 0; }
         }
         Vector3 sunDir = new Vector3(-sun.x, 1, -sun.z).normalized;

@@ -50,7 +50,14 @@ public sealed class MaterialPropertyBlock : IDrawPropertyProvider
     public void SetMatrix(string name, Matrix4x4 value) => SetMatrix(Shader.PropertyToID(name), value);
     public void SetMatrix(int id, Matrix4x4 value) => values[id] = DrawProperty.Matrix(id, Matrix4x4.ToNumerics(value));
     public void SetTexture(string name, Texture value) => SetTexture(Shader.PropertyToID(name), value);
-    public void SetTexture(int id, Texture value) => values[id] = DrawProperty.Texture(id, value?.NativeTexture);
+    //实例纹理覆盖时同步尺寸，避免继承共享材质中另一张纹理的尺寸。
+    public void SetTexture(int id, Texture value)
+    {
+        values[id] = DrawProperty.Texture(id, value?.NativeTexture);
+        if (ShaderPropertyId.TryGetName(id, out string name))
+            SetVector(Shader.PropertyToID(name + "_TexelSize"), value == null ? Vector4.zero
+                : new Vector4(1f / value.width, 1f / value.height, value.width, value.height));
+    }
     public void SetBuffer(string name, ComputeBuffer value) => SetBuffer(Shader.PropertyToID(name), value);
     public void SetBuffer(int id, ComputeBuffer value) { if (value is null) buffers.Remove(id); else buffers[id] = value; }
     public float GetFloat(int id) => values.TryGetValue(id, out var property) ? property.FloatValue : 0;

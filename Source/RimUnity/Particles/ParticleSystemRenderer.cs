@@ -34,10 +34,12 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
     {
         get
         {
-            if (sharedMaterial == null || ownedMaterials.Contains(sharedMaterial)) return sharedMaterial;
-            sharedMaterial = new Material(sharedMaterial);
-            ownedMaterials.Add(sharedMaterial);
-            return sharedMaterial;
+            Material source = sharedMaterial;
+            if (source == null || ownedMaterials.Contains(source)) return source;
+            var clone = new Material(source);
+            sharedMaterial = clone;
+            ownedMaterials.Add(clone);
+            return clone;
         }
         set => sharedMaterial = value;
     }
@@ -62,7 +64,7 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
     private void OnDestroy()
     {
         ReleaseGeometry();
-        foreach (var material in ownedMaterials) Destroy(material);
+        foreach (Material owned in ownedMaterials) Destroy(owned);
         ownedMaterials.Clear();
     }
     internal void Draw(ParticleSystem system, Camera camera)
@@ -169,10 +171,11 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
     private void Submit(ref Mesh target, Material mat, Camera camera)
     {
         if (indices.Count == 0) return;
-        if (uiEntry != null) { SubmitUI(mat); return; }
+        if (uiEntry != null) { CaptureDiagnostics(mat, null); SubmitUI(mat); return; }
         target ??= new Mesh { name = "RimUnity Particle Batch", indexFormat = IndexFormat.UInt32 };
         target.Clear(); target.SetVertices(vertices); target.SetColors(colors); target.SetUVs(0, packedUV); target.SetUVs(1, custom1); target.SetUVs(2, custom2); target.SetTriangles(indices, 0); target.RecalculateBounds();
         target.SetNormals(normals); target.SetTangents(tangents);
+        CaptureDiagnostics(mat, target);
         RimUnity.Graphics.DrawMesh(target, Matrix4x4.identity, mat, gameObject.layer, 0, propertyBlock);
     }
 }

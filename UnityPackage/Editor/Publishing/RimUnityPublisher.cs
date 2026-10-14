@@ -112,7 +112,9 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
                 log("验证通过：" + target.Mod);
             }
             if (errors.Count > 0) throw new AggregateException("导出存在错误，正式数据未替换。", errors);
-            ExportSharing.Share(targets.ToDictionary(t => t.Mod, t => t.Prepared));
+            var prepared = targets.ToDictionary(t => t.Mod, t => t.Prepared);
+            ExportSharing.Share(prepared);
+            ResourceOwnership.Apply(profile, prepared, log);
             var preparedRoots = targets.ToDictionary(t => ExportSharing.Owner(t.Mod), t => t.Prepared, StringComparer.OrdinalIgnoreCase);
             foreach (var target in targets) Validate(target.Prepared, owner => preparedRoots[owner]);
             //发布期间保留全部旧数据，任意目标失败时整体恢复。
@@ -173,7 +175,7 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
         var catalog = JObject.Parse(File.ReadAllText(Path.Combine(root, "catalog.json")));
         var assets = (JArray)catalog["assets"];
         if (((int)catalog["formatVersion"] != 1 && (int)catalog["formatVersion"] != 2) || assets == null || assets.Count == 0) throw new InvalidDataException("导出清单为空或格式无效。");
-        void CheckPayload(string relative)
+        string ResolvePayload(string relative)
         {
             string directory = root;
             if (catalog["sharedFiles"] is JObject shared && shared[relative] != null)
@@ -184,23 +186,24 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
                 directory = ownerRoot(owner);
             }
             CheckFile(directory, relative);
+            return Inside(directory, relative);
         }
         var ids = new HashSet<string>();
         foreach (JObject asset in assets)
             if (!ids.Add((string)asset["id"])) throw new InvalidDataException("重复资源 ID。");
         foreach (JObject asset in assets)
         {
-            string file = Inside(root, (string)asset["file"]);
+            string file = ResolvePayload((string)asset["file"]);
             if (!File.Exists(file)) throw new FileNotFoundException("清单资源不存在", file);
             foreach (string dependency in (asset["dependencies"] as JArray ?? new JArray()).Values<string>())
                 if (!ids.Contains(dependency)) throw new InvalidDataException("缺失依赖：" + dependency);
             var json = ExportStorage.Read(file);
             //附属文件路径以资源根目录为基准。
             foreach (string name in new[] { "vertexFile", "fragmentFile", "descriptorFile" })
-                if (json[name]?.Type == JTokenType.String) CheckPayload((string)json[name]);
+                if (json[name]?.Type == JTokenType.String) ResolvePayload((string)json[name]);
             if (json["members"] is JArray members)
                 foreach (JObject member in members)
-                    if ((string)member["name"] == "file") CheckPayload((string)member["value"]?["text"]);
+                    if ((string)member["name"] == "file") ResolvePayload((string)member["value"]?["text"]);
         }
     }
     private static void CheckFile(string root, string relative)

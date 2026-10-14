@@ -114,6 +114,11 @@ internal sealed class BloomPipeline : IDisposable
         NativeRenderTexture source = scene.Source?.Invoke(ctx.SubmissionFrameIndex);
         if (source == null) return;
         var hdr = HdrMapHooks.LinearScene(source, settings.FrameNumber);
+        if (Diagnostics.ParticleDebugWindow.Capturing)
+            Diagnostics.RendererDebugCapture.CompositeState = "场景合成：source=" + source.ColorFormat + " / output=" + ctx.ColorFormat
+                + " / hdr=" + (hdr == null ? "无" : hdr.ColorFormat.ToString()) + " / sourceGamma=" + Gamma(source)
+                + " / saturation=" + scene.Saturation + " / bloomPrepared=" + prepared + " / intensity=" + settings.Intensity
+                + " / mask=" + settings.LayerMask;
         if (hdr != null)
         {
             hdrCombine.SetInput(0, hdr);

@@ -82,6 +82,8 @@ public sealed class MeshRenderer : MonoBehaviour
             if (material == null) continue;
             int submesh = Math.Min(i, mesh.subMeshCount - 1);
             properties.SetFloat("_RU_DisableShadows", receiveShadows ? 0 : 1);
+            if (!shadow && Diagnostics.ParticleDebugWindow.Capturing)
+                Diagnostics.RendererDebugCapture.Capture(this, mesh, material, "MeshRenderer", 1, Array.Empty<Color>());
             RimUnity.Graphics.DrawMesh(mesh, matrix, material, gameObject.layer, submesh, properties);
         }
     }

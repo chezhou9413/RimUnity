@@ -34,7 +34,7 @@ namespace RimUnity.Editor
             using (var sha = SHA256.Create()) fileHash = BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(id))).Replace("-", "").ToLowerInvariant();
             string file = "s_" + CustomShaderWriter.CompactHash(fileHash) + ".json";
             ExportJson.Write(Path.Combine(directory, file), shader);
-            records.Add(id, new AssetRecord { id = id, name = material.shader.name, description = ui ? "UI GLSL" : "世界 GLSL", path = "__assets/" + id, file = relative + "/" + file, type = "Shader" });
+            records.Add(id, new AssetRecord { id = id, sourcePath = UnityEditor.AssetDatabase.GetAssetPath(material.shader), name = material.shader.name, description = ui ? "UI GLSL" : "世界 GLSL", path = "__assets/" + id, file = relative + "/" + file, type = "Shader" });
             return id;
         }
     }

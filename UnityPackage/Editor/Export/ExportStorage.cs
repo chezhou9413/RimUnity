@@ -71,7 +71,7 @@ namespace RimUnity.Editor
             foreach (var record in records.Values.Where(a => reachable.Contains((string)a["id"])))
             {
                 string relative = (string)record["file"];
-                var data = Read(Inside(source, relative));
+                var data = Read(Resolve(relative));
                 foreach (string field in new[] { "vertexFile", "fragmentFile" })
                     if (data[field]?.Type == JTokenType.String) data[field] = CopyPayload((string)data[field]);
                 if (data["descriptorFile"]?.Type == JTokenType.String)

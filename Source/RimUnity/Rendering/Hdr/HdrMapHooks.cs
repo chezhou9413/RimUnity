@@ -39,7 +39,10 @@ internal static class HdrMapHooks
         private static MethodBase TargetMethod() => AccessTools.Method(AccessTools.TypeByName("RimWorldWaylith.Rendering.MapRenderFeature"), "CaptureFrame");
         private static void Postfix(object __result)
         {
-            if (__result is MeshDrawFrame frame && HdrDrawFrame.Needed(frame)) Frames.Add(frame, new HdrDrawFrame(frame));
+            if (__result is not MeshDrawFrame frame) return;
+            HdrDrawFrame snapshot = null;
+            if (HdrDrawFrame.Needed(frame)) { snapshot = new HdrDrawFrame(frame); Frames.Add(frame, snapshot); }
+            Diagnostics.ParticleDebugWindow.CaptureFinalFrame(frame, snapshot?.Frame);
         }
     }
 

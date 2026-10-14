@@ -21,7 +21,13 @@ public sealed partial class Shader
     public static void SetGlobalMatrix(string name, Matrix4x4 value) => SetGlobalMatrix(PropertyToID(name), value);
     public static void SetGlobalMatrix(int id, Matrix4x4 value) => GlobalShaderState.SetMatrix(id, Matrix4x4.ToNumerics(value));
     public static void SetGlobalTexture(string name, Texture value) => SetGlobalTexture(PropertyToID(name), value);
-    public static void SetGlobalTexture(int id, Texture value) => GlobalShaderState.SetTexture(id, value?.NativeTexture);
+    public static void SetGlobalTexture(int id, Texture value)
+    {
+        GlobalShaderState.SetTexture(id, value?.NativeTexture);
+        if (ShaderPropertyId.TryGetName(id, out string name))
+            GlobalShaderState.SetVector(PropertyToID(name + "_TexelSize"), value == null ? System.Numerics.Vector4.Zero
+                : new System.Numerics.Vector4(1f / value.width, 1f / value.height, value.width, value.height));
+    }
     public static float GetGlobalFloat(int id) => GlobalShaderState.TryGetFloat(id, out float value) ? value : 0;
     public static float GetGlobalFloat(string name) => GetGlobalFloat(PropertyToID(name));
     public static Vector4 GetGlobalVector(int id)
