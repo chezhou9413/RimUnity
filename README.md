@@ -12,6 +12,8 @@ RimUnity 是面向 RimWorld 1.7 的 Unity 资源导出与运行框架。在 Unit
 
 只玩模组的玩家安装 Harmony、RimUnity 和对应内容模组即可，不需要 Unity 编辑器。制作资源的作者请先阅读[导出工具安装与第一次导出](Docs/ExporterSetup.md)。
 
+仓库的 `1.7/Assemblies` 已包含可用的 `RimUnity.Core.dll` 和 `RimUnity.dll`。下载或克隆仓库后，将包含 `About` 和 `LoadFolders.xml` 的整个根目录放入游戏 `Mods`，即可启用，无需自行编译运行时。
+
 1. 在 RimWorld 中安装并启用 Harmony 和 RimUnity。
 2. 在 Unity 2022.3 的 Package Manager 中选择 **Add package from disk**，安装 `UnityPackage/package.json`，也可以安装发布的 UPM TGZ。支持 Built-in 与 URP 14 的指定功能。
 3. 制作 Prefab，通过 `Tools → RimUnity` 导出到内容模组目录。

@@ -2,6 +2,8 @@ Source/**/obj/
 Source/**/bin/
 Source/.build/
 1.7/Assemblies/*.dll
+!1.7/Assemblies/RimUnity.dll
+!1.7/Assemblies/RimUnity.Core.dll
 1.7/Assemblies/*.pdb
 1.7/Assemblies/*.deps.json
 Tools/bin/

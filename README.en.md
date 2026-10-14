@@ -12,6 +12,8 @@ RimUnity is a Unity asset exporter and runtime framework for RimWorld 1.7. Creat
 
 Players only need Harmony, RimUnity and the relevant content mod; the Unity Editor is not required. Asset authors should start with [installing the exporter and exporting a first prefab](Docs/en/ExporterSetup.md).
 
+The repository includes ready-to-use `RimUnity.Core.dll` and `RimUnity.dll` files under `1.7/Assemblies`. After downloading or cloning it, place the entire repository root containing `About` and `LoadFolders.xml` in the game's `Mods` directory. No runtime compilation is required.
+
 1. Install and enable Harmony and RimUnity in RimWorld.
 2. In Unity 2022.3, use **Add package from disk** in Package Manager to install `UnityPackage/package.json`, or install a released UPM TGZ. Selected features of Built-in and URP 14 projects are supported.
 3. Create a prefab and export it to your content mod through `Tools → RimUnity`.
