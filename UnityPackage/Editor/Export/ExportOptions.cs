@@ -5,7 +5,7 @@ using UnityEngine.Rendering;
 
 namespace RimUnity.Editor
 {
-    // Per-export policy, never a mutable global editor preference.
+    //每次导出独立设置，不改变编辑器全局偏好。
     public sealed class ExportOptions
     {
         public bool disableCastShadows, disableReceiveShadows, disableLightProbes, disableReflectionProbes;

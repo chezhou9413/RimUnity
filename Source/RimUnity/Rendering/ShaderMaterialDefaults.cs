@@ -14,7 +14,7 @@ internal static class ShaderMaterialDefaults
     private static void Apply(Material material)
     {
         Shader shader = material.shader;
-        if (shader == null || !Defaults.TryGetValue(shader.name, out var defaults)) return;
+        if (shader == null || !Defaults.TryGetValue(shader.EngineShader.Key, out var defaults)) return;
         foreach (var property in defaults)
         {
             var v = property.value;

@@ -40,13 +40,16 @@ internal static class Program
     private static int Run(string[] args)
     {
         if (args[1] == "preprocess" && args.Length == 3) ShaderPreprocessor.Write(args[2]);
-        else if (args[1] == "inspect" && args.Length == 4)
+        else if (args[1] == "inspect" && args.Length >= 4)
         {
             string libraryPath = Path.GetFullPath(args[2]);
             //静态资源检查使用目标模组随附的 Core，游戏目录不提供该程序集。
             AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(Path.GetDirectoryName(libraryPath), "RimUnity.Core.dll"));
             Assembly library = AssemblyLoadContext.Default.LoadFromAssemblyPath(libraryPath);
-            library.GetType("RimUnity.Assets.PrefabInspector", true).GetMethod("ValidateDirectory").Invoke(null, new object[] { args[3] });
+            //额外程序集只供静态类型和字段核对，不创建游戏或组件实例。
+            for (int i = 5; i < args.Length; i++) AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.GetFullPath(args[i]));
+            var paths = args.Length >= 5 ? System.Text.Json.JsonSerializer.Deserialize<string[]>(File.ReadAllText(args[4])) : null;
+            library.GetType("RimUnity.Assets.PrefabInspector", true).GetMethod("ValidateDirectory").Invoke(null, new object[] { args[3], paths });
         }
         else if (args[1] == "verify")
         {

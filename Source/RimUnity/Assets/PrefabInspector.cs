@@ -11,11 +11,12 @@ namespace RimUnity.Assets;
 public static class PrefabInspector
 {
     //编译及静态核对不能替代游戏生命周期和画面验收。
-    public static int ValidateDirectory(string directory)
+    public static int ValidateDirectory(string directory, string[] paths = null)
     {
         var catalog = new AssetCatalog(directory);
         int count = 0;
-        foreach (AssetRecord record in catalog.Manifest.assets.Where(a => a.type == "Prefab"))
+        var selected = paths == null ? null : new HashSet<string>(paths, StringComparer.Ordinal);
+        foreach (AssetRecord record in catalog.Manifest.assets.Where(a => a.type == "Prefab" && (selected == null || selected.Contains(a.path))))
         {
             PrefabData prefab = catalog.Read<PrefabData>(record.file);
             PrefabStructure.Validate(prefab);
@@ -36,6 +37,7 @@ public static class PrefabInspector
             Console.WriteLine(record.path + "：" + prefab.nodes.Count + " 个节点，类型／字段／引用静态核对通过");
             count++;
         }
+        if (selected != null && count != selected.Count) throw new InvalidDataException("指定的预制体入口未全部出现在资源清单中。");
         return count;
     }
 

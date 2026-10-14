@@ -32,7 +32,7 @@ namespace RimUnity.Editor
         //显式路径入口便于批量导出；源文件和工具不具备时准确说明缺失项。
         internal static CustomShaderExport Write(Material material, string directory, bool ui, string path, string tool, string gameRoot, int pass = -1)
         {
-            string source = AssetDatabase.GetAssetPath(material.shader);
+            string source = BuiltInSurfaceSource.Path(material);
             bool importedSource = source.EndsWith(".cfxrshader", StringComparison.OrdinalIgnoreCase);
             if ((!source.EndsWith(".shader", StringComparison.OrdinalIgnoreCase) && !importedSource) || !File.Exists(source))
                 throw new NotSupportedException(path + "：自定义转换需要可读取的 .shader 源文件：" + source);
@@ -43,7 +43,7 @@ namespace RimUnity.Editor
             string profile = ui ? "ui" : "world";
             //换过 Shader 的材质会保留无效旧关键字，只提交当前程序声明的变体。
             string keywords = string.Join(",", material.shaderKeywords.Where(value => material.shader.keywordSpace.FindKeyword(value).isValid).OrderBy(value => value, StringComparer.Ordinal));
-            string identity = AssetDatabase.AssetPathToGUID(source) + "\n" + AssetDatabase.GetAssetDependencyHash(source) + "\n" + profile + "\n" + keywords + "\n" + pass + "\ncolor-v1:" + QualitySettings.activeColorSpace;
+            string identity = source + "\n" + material.shader.name + "\n" + AssetDatabase.GetAssetDependencyHash(source) + "\n" + profile + "\n" + keywords + "\n" + pass + "\ncolor-v1:" + QualitySettings.activeColorSpace;
             string hash;
             using (SHA256 sha = SHA256.Create()) hash = BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(identity))).Replace("-", "").ToLowerInvariant();
             string id = "RimUnity_Custom_" + hash;

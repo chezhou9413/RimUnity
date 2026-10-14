@@ -24,6 +24,10 @@ internal static class ResourceLoader
             case "TextAsset":
                 result = new TextAsset(File.ReadAllBytes(catalog.Resolve(Get<string>("file"))));
                 break;
+            case "RenderTexture":
+                result = new RenderTexture(Get<int>("width"), Get<int>("height"), Get<int>("depth"), Get<int>("graphicsFormat"), Get<int>("antiAliasing"))
+                { wrapMode = Get<TextureWrapMode>("wrapMode"), filterMode = Get<FilterMode>("filterMode") };
+                break;
             case "Light":
                 var lightObject = GameObject.CreateAssetToken(data.name + " 灯光模板");
                 var light = lightObject.AddComponent<Light>();
@@ -90,8 +94,9 @@ internal static class ResourceLoader
                     unityShader = Rendering.StandardParticleShader.Resolve(shader, data.colorSpace == "Linear");
                 }
                 Material material = new(unityShader);
+                if (fields.ContainsKey("shadowCaster")) material.shadowCaster = Get<Shader>("shadowCaster");
                 if (fields.ContainsKey("shaderPasses")) material.SetPasses(Get<Shader[]>("shaderPasses"));
-                foreach (var entry in fields.Where(p => p.Key != "shader" && p.Key != "shaderPasses"))
+                foreach (var entry in fields.Where(p => p.Key != "shader" && p.Key != "shaderPasses" && p.Key != "shadowCaster"))
                 {
                     if (entry.Value.kind == "asset" || entry.Value.kind == "null") material.SetTexture(entry.Key,
                         entry.Key == "_MainTex" && entry.Value.kind == "null" ? Texture2D.whiteTexture : (Texture)reader.Read(entry.Value, typeof(Texture)));

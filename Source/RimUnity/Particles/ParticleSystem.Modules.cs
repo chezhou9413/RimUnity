@@ -52,6 +52,20 @@ public sealed partial class ParticleSystem
     {
         public bool enabled = true;
         public MinMaxCurve rateOverTime = 10, rateOverDistance = 0;
+        //常量模式的倍率对应常量值，曲线模式对应导出的曲线幅度。
+        public float rateOverTimeMultiplier { get => EmissionMultiplier(rateOverTime); set => SetEmissionMultiplier(ref rateOverTime, value); }
+        public float rateOverDistanceMultiplier { get => EmissionMultiplier(rateOverDistance); set => SetEmissionMultiplier(ref rateOverDistance, value); }
+        private static float EmissionMultiplier(MinMaxCurve curve) => curve.mode is ParticleSystemCurveMode.Constant or ParticleSystemCurveMode.TwoConstants ? curve.constantMax : curve.curveMultiplier;
+        private static void SetEmissionMultiplier(ref MinMaxCurve curve, float value)
+        {
+            if (curve.mode == ParticleSystemCurveMode.Constant) curve.constant = value;
+            else if (curve.mode == ParticleSystemCurveMode.TwoConstants)
+            {
+                curve.constantMin = curve.constantMax == 0 ? 0 : curve.constantMin * value / curve.constantMax;
+                curve.constantMax = value;
+            }
+            else curve.curveMultiplier = value;
+        }
         public Burst[] bursts = Array.Empty<Burst>();
         public int burstCount { get => bursts.Length; set => Array.Resize(ref bursts, value); }
         public void SetBursts(Burst[] value) => SetBursts(value, value.Length);

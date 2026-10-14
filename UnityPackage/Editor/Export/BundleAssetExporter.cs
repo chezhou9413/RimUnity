@@ -39,7 +39,9 @@ namespace RimUnity.Editor
                         else
                         {
                             PrefabExporter.Export(modDirectory, new ExportRequest { asset = asset,
-                                path = "Bundles/" + bundle + "/" + path, description = "AB：" + bundle + "\n源资源：" + path });
+                                path = "Bundles/" + bundle + "/" + path, description = "AB：" + bundle + "\n源资源：" + path,
+                                ui = asset is Material material && (material.shader.name.StartsWith("UI/", StringComparison.Ordinal)
+                                    || string.Equals(material.GetTag("CanUseSpriteAtlas", false, ""), "True", StringComparison.OrdinalIgnoreCase)) });
                             result.status = "exported";
                             if (asset is GameObject prefab && prefab.GetComponentsInChildren<Component>(true).Any(c => c == null))
                                 result.status = "exported-with-missing-script";

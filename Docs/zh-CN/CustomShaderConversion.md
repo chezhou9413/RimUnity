@@ -24,13 +24,23 @@
 
 可使用相对路径 include，以及 UnityCG、UnityShaderVariables、UnityUI 和部分 URP Core／SpaceTransforms 接口；不支持完整 Unity 渲染管线库。
 
-世界材质可导出受支持的多个颜色 Pass。Unlit Surface 仅支持转换器接受的受限写法。UI 自定义多 Pass、Shader Graph、GrabPass、场景深度软粒子、完整光照与阴影管线不受支持。其他不支持的语法、宏或布局会在导出时报告具体位置。
+世界材质可导出受支持的多个颜色 Pass。Surface 支持转换器接受的 Unlit、Standard 与三参数自定义 Lighting 写法；内置 `Standard`、`Particles/Standard Surface` 使用随导出器提供的表面程序。支持范围不等同完整 Unity 渲染管线，其他不支持的语法、宏或布局会在导出时报告具体位置。
 
 UI 顶点使用屏幕坐标，不提供对象模型矩阵。世界 Shader 在片元阶段需要的对象或相机计算结果应通过顶点 varying 传递。
+
+## 离屏预制体与阴影
+
+- Prefab 中带 `targetTexture` 的 Camera 可导出到 RimUnity，由宿主离屏绘制服务生成 RenderTexture，再供预制体材质采样。目前要求二维颜色附件、SolidColor 清屏，不支持 Mip 与随机写入。
+- 单采样纹理按原尺寸绘制；4× MSAA 资源以宽高各两倍的超采样附件绘制，再线性缩小到原尺寸。这不是硬件 MSAA，显存占用和边缘结果可能不同。
+- 离屏预制体可使用同一根对象中的一个 Directional Light；地图表面材质使用地图日月光照。
+- MeshRenderer 可保留投影与接收阴影设置。ShadowCaster 导出保留受支持的顶点与裁切程序，Surface 材质使用 RimUnity 的方向光深度图接收阴影。不支持双面投影；阴影不会自动投射到未接入该采样程序的原版地图材质上。
+- 这些能力已用于渡鸦的水流、离屏魔方及四种剑特效导出。导出与静态引用校验不代表已经验证游戏内画面，也不保证与 Unity 原场景逐像素一致。
 
 ## 参数使用
 
 脚本使用原材质的属性名，例如 `_MainTex`、`_Color`。纹理变换通过 `SetTextureScale`、`SetTextureOffset` 设置，或以 `(scale.x, scale.y, offset.x, offset.y)` 写入 `_MainTex_ST`。
+
+全局 `float4` 数组可以与普通向量合并声明，例如 `float4 _Color, _Hits[4];`。每次绘制的数组参数使用 `MaterialPropertyBlock.SetVectorArray`；设置、复制及绘制提交都保留独立数据，复用属性块不会覆盖已排队实例的受击参数。
 
 时间动画可使用 `_Time`、`_SinTime`、`_CosTime` 和 `unity_DeltaTime`。颜色设置见 [颜色与 Bloom](ColorAndBloom.md)。
 

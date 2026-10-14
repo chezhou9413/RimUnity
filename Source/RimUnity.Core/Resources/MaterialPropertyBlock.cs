@@ -9,6 +9,8 @@ public sealed class MaterialPropertyBlock : IDrawPropertyProvider
 {
     private readonly Dictionary<int, DrawProperty> values = new();
     private readonly Dictionary<int, ComputeBuffer> buffers = new();
+    private readonly Waylith.Rendering.MaterialPropertyBlock arrays = new();
+    private System.Numerics.Vector4[] vectorScratch = Array.Empty<System.Numerics.Vector4>();
     //创建空的实例绘制参数。
     public MaterialPropertyBlock() { }
 
@@ -18,11 +20,21 @@ public sealed class MaterialPropertyBlock : IDrawPropertyProvider
         ArgumentNullException.ThrowIfNull(source);
         values = new(source.values);
         buffers = new(source.buffers);
+        arrays = source.arrays.Clone();
     }
 
     public int PropertyCount => values.Count;
-    public bool HasStorageBindings => buffers.Count > 0;
-    public void Clear() { values.Clear(); buffers.Clear(); }
+    public bool HasStorageBindings => buffers.Count > 0 || arrays.HasStorageBindings;
+    public void Clear() { values.Clear(); buffers.Clear(); arrays.Clear(); }
+    //数组按值交给宿主保存，绘制提交时由宿主生成独立快照。
+    public void SetVectorArray(string name, Vector4[] value) => SetVectorArray(Shader.PropertyToID(name), value);
+    public void SetVectorArray(int id, Vector4[] value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        if (vectorScratch.Length != value.Length) vectorScratch = new System.Numerics.Vector4[value.Length];
+        for (int i = 0; i < value.Length; i++) vectorScratch[i] = Vector4.ToNumerics(value[i]);
+        arrays.SetVectorArray(id, vectorScratch);
+    }
     public void SetFloat(string name, float value) => SetFloat(Shader.PropertyToID(name), value);
     public void SetFloat(int id, float value) => values[id] = DrawProperty.Float(id, value);
     public void SetInt(string name, int value) => SetInt(Shader.PropertyToID(name), value);
@@ -53,5 +65,10 @@ public sealed class MaterialPropertyBlock : IDrawPropertyProvider
         if (destination.Length < values.Count) throw new ArgumentException("绘制参数目标空间不足。", nameof(destination));
         int index = 0; foreach (DrawProperty value in values.Values) destination[index++] = value; return index;
     }
-    public void CollectStorageBindings(List<InstanceStorageBinding> output) { foreach (var pair in buffers) output.Add(pair.Value.Binding(pair.Key)); }
+    //数组使用宿主的帧存储池，复用属性块不会改变已经排队的其他实例。
+    public void CollectStorageBindings(List<InstanceStorageBinding> output)
+    {
+        foreach (var pair in buffers) output.Add(pair.Value.Binding(pair.Key));
+        arrays.CollectStorageBindings(output);
+    }
 }

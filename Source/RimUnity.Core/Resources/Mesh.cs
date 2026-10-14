@@ -109,7 +109,7 @@ public sealed partial class Mesh : Object
         if (indices.Length % 3 != 0) throw new ArgumentException("三角形索引数量必须是三的倍数。");
         foreach (int index in indices) if ((uint)index >= vertexCount) throw new ArgumentOutOfRangeException(nameof(indices), "网格索引越界。");
     }
-    protected override void Release() => native.Dispose();
+    protected override void Release() { mirrored?.Dispose(); native.Dispose(); }
 }
 
 //四权重字段用于旧作者数据，任意数量权重仍由 SkinWeights 管理。

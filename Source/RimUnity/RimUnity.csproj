@@ -4,6 +4,7 @@
     <ProjectReference Include="../RimUnity.Core/RimUnity.Core.csproj" />
     <Reference Include="Assembly-CSharp" HintPath="$(RimWorldDir)/Assembly-CSharp.dll" />
     <Reference Include="UnityStubs" HintPath="$(RimWorldDir)/UnityStubs.dll" />
+    <Reference Include="RimWorld" HintPath="$(RimWorldDir)/RimWorld.dll" />
     <Reference Include="Waylith" HintPath="$(RimWorldDir)/Waylith.dll" />
     <Reference Include="0Harmony" HintPath="$(HarmonyPath)" />
     <Reference Include="Brutal.ImGui" HintPath="$(RimWorldDir)/Brutal.ImGui.dll" />

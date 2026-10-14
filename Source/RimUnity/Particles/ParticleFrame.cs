@@ -12,16 +12,25 @@ internal static class ParticleFrame
         Rendering.ShaderGlobals.Update();
         Camera camera = Camera.main;
         if (camera == null) return;
-        foreach (var renderer in MeshRenderer.Active)
-            renderer.Draw(camera);
-        foreach (var system in ParticleSystem.Active)
-            if (system.GetComponentInParent<Canvas>() == null) system.GetComponent<ParticleSystemRenderer>()?.Draw(system, camera);
-        foreach (var renderer in SkinnedMeshRenderer.Active)
-            renderer.Draw(camera);
+        foreach (var offscreen in System.Linq.Enumerable.OrderBy(Camera.Active, c => c.depth))
+            if (offscreen.isActiveAndEnabled && offscreen.targetTexture != null) offscreen.Render();
+        Rendering.DirectionalShadow.Prepare(camera);
+        DrawScene(camera);
         UI.Runtime.UguiRuntime.DrawWorld();
+    }
+    //各相机独立筛选图层，离屏与地图共享模型、粒子和拖尾绘制逻辑。
+    internal static void DrawScene(Camera camera)
+    {
+        bool Visible(Component component) => (camera.cullingMask & (1 << component.gameObject.layer)) != 0;
+        foreach (var renderer in MeshRenderer.Active)
+            if (Visible(renderer)) renderer.Draw(camera);
+        foreach (var system in ParticleSystem.Active)
+            if (Visible(system) && system.GetComponentInParent<Canvas>() == null) system.GetComponent<ParticleSystemRenderer>()?.Draw(system, camera);
+        foreach (var renderer in SkinnedMeshRenderer.Active)
+            if (Visible(renderer)) renderer.Draw(camera);
         foreach (var renderer in TrailRenderer.Active)
-            renderer.Draw(camera);
+            if (Visible(renderer)) renderer.Draw(camera);
         foreach (var renderer in LineRenderer.Active)
-            renderer.Draw(camera);
+            if (Visible(renderer)) renderer.Draw(camera);
     }
 }

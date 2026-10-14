@@ -19,7 +19,8 @@ internal static class ShaderLabConverter
         if (generatedGraph != null && profile != "world") throw new NotSupportedException("BuiltIn Lit Graph 需要世界绘制配置。");
         string source = generatedGraph ?? ExpandIncludes(path, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
         source = UnlitSurfaceLowering.Lower(source);
-        ShaderLabSource shader = ShaderLabParser.Parse(source, profile, keywords, pass);
+        ShaderLabSource shader = ShaderLabParser.Parse(source, profile, keywords, pass == -2 ? 0 : pass);
+        if (pass == -2 || shader.Manifest.tags.GetValueOrDefault("LightMode") == "ShadowCaster") shader = ShadowCasterLowering.Lower(shader);
         if (colorSpace is not ("Gamma" or "Linear")) throw new ArgumentException("颜色空间必须为 Gamma 或 Linear。");
         shader.Manifest.colorSpace = colorSpace;
         if (generatedGraph != null) shader.Manifest.approximations.Add("BuiltIn Lit 使用地图太阳、月光与天空环境色；不使用 Unity 烘焙光照、局部灯光和反射探针。");

@@ -9,15 +9,23 @@ namespace RimUnity.Rendering;
 //明文 GLSL 由宿主编译器生成设备代码，游戏自带缓存负责避免重复编译。
 internal static class CustomShaderLoader
 {
+    //缓存键标识导出变体，对外名称仍对应 Unity Shader，供辉光选择等业务使用。
+    private static RimUnity.Shader Wrap(ShaderData data, Waylith.Rendering.Shader engine)
+    {
+        var shader = RimUnity.Shader.FromEngineShader(data.key, engine);
+        shader.name = data.sourceName;
+        return shader;
+    }
+
     internal static RimUnity.Shader Load(AssetCatalog catalog, AssetRecord record)
     {
         ShaderData data = catalog.Read<ShaderData>(record.file);
         if (data.formatVersion != 1 || data.key != record.id || data.profile is not ("world" or "ui")) throw new InvalidDataException("Shader 描述不合法：" + record.path);
         ShaderMaterialDefaults.Register(data.key, data.defaults);
-        if (ShaderRegistry.TryResolve(data.key, out var cached)) return RimUnity.Shader.FromEngineShader(data.key, cached);
+        if (ShaderRegistry.TryResolve(data.key, out var cached)) return Wrap(data, cached);
         string vertexPath = catalog.Resolve(data.vertexFile), fragmentPath = catalog.Resolve(data.fragmentFile);
         string vertex = File.ReadAllText(vertexPath), fragment = File.ReadAllText(fragmentPath);
-        var layout = ShaderMetadataParser.ExtractMaterialLayout(fragment, data.key, 2);
+        var layout = CustomShaderTextureLayout.BindTexelSizes(ShaderMetadataParser.ExtractMaterialLayout(fragment, data.key, 2));
         var inputs = ShaderMetadataParser.ExtractVertexInputLayout(vertex, data.key);
         if (layout.HasErrors || inputs.HasErrors || ShaderMetadataParser.ValidateStageInterface(vertex, fragment, vertexPath, fragmentPath))
             throw new InvalidDataException("Shader 布局或阶段接口不合法：" + data.sourceName);
@@ -48,6 +56,6 @@ internal static class CustomShaderLoader
         foreach (string approximation in data.approximations)
             if (!LinearShaderVariants.TryGet(shader, out _) || !approximation.StartsWith("程序按 Linear 计算后编码到宿主 UNorm 场景", StringComparison.Ordinal))
                 Verse.Log.Warning("[RimUnity] " + data.sourceName + "：" + approximation);
-        return RimUnity.Shader.FromEngineShader(data.key, shader);
+        return Wrap(data, shader);
     }
 }

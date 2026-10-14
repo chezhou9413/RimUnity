@@ -12,6 +12,7 @@ internal static class UnityHlslCompat
     internal const string Macros = """
         #define UNITY_VERSION 202230
         #define SHADER_TARGET 30
+        #define UNITY_PI 3.14159265359
         #define UNITY_NEAR_CLIP_VALUE 0.0
         #define UNITY_REVERSED_Z 1
         #ifdef UNITY_COLORSPACE_GAMMA
@@ -32,6 +33,9 @@ internal static class UnityHlslCompat
         #define UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output)
         #define UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input)
         #define UNITY_INITIALIZE_OUTPUT(type,name) name = (type)0
+        #define V2F_SHADOW_CASTER float4 pos : SV_POSITION
+        #define TRANSFER_SHADOW_CASTER_NORMALOFFSET(o) o.pos = UnityObjectToClipPos(v.vertex)
+        #define SHADOW_CASTER_FRAGMENT(i) return float4(i.pos.z,0,0,1)
         #define UNITY_DECLARE_DEPTH_TEXTURE(name) sampler2D name
         #define UNITY_DECLARE_SCREENSPACE_TEXTURE(name) sampler2D name;
         #define UNITY_SAMPLE_SCREENSPACE_TEXTURE(tex,uv) tex2D(tex,uv)
@@ -43,7 +47,7 @@ internal static class UnityHlslCompat
         #define WorldSpaceViewDir(position) (_WorldSpaceCameraPos - mul(unity_ObjectToWorld, (position)).xyz)
         """;
     //Unity 包包含由小型兼容头替代，本地自定义包含由转换入口先展开。
-    internal static string Prepare(string source, string vertexEntry = null)
+    internal static string Prepare(string source, string vertexEntry = null, string profile = "world")
     {
         //全屏图像程序使用与普通网格一致的顶点输入和投影入口。
         if (Regex.IsMatch(source, @"\b(?:vert_img|v2f_img)\b") && !Regex.IsMatch(source, @"\bstruct\s+v2f_img\b"))
@@ -63,8 +67,18 @@ internal static class UnityHlslCompat
         });
         source = Regex.Replace(source, @"\b(fixed|half)([1-4](?:x[1-4])?)?\b", "float$2");
         source = Regex.Replace(source, @"\bsampler2D_float\b", "sampler2D");
+        //宿主 IMGUI 使用原生矩形裁剪，不提供 Unity 的裁剪纹理和视图变换。
+        if (profile == "ui" && source.Contains("_GUIClipTexture"))
+        {
+            source = Regex.Replace(source, @"\bsampler2D\s+_GUIClipTexture\s*;", "");
+            source = Regex.Replace(source, @"\bfloat4x4\s+unity_GUIClipTextureMatrix\s*;", "static const float4x4 unity_GUIClipTextureMatrix = float4x4(1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1);");
+            source = Regex.Replace(source, @"\btex2D\s*\(\s*_GUIClipTexture\s*,", "RU_GuiClip(");
+            source = "float4 RU_GuiClip(float2 uv) { return float4(1,1,1,1); }\n" + source;
+        }
         if (Regex.IsMatch(source, @"\bUnityObjectToViewPos\s*\("))
-            source = "float3 UnityObjectToViewPos(float3 p) { return mul(_RimUnity_View, mul(unity_ObjectToWorld, float4(p,1))).xyz; }\n" + source;
+            source = (profile == "ui" ? "float3 UnityObjectToViewPos(float3 p) { return p; }\n"
+                : "float3 UnityObjectToViewPos(float3 p) { return mul(_RimUnity_View, mul(unity_ObjectToWorld, float4(p,1))).xyz; }\n")
+                + "float3 UnityObjectToViewPos(float4 p) { return UnityObjectToViewPos(p.xyz); }\n" + source;
         if (Regex.IsMatch(source, @"\bLinearEyeDepth\s*\("))
             source = "float4 _ZBufferParams;\nfloat LinearEyeDepth(float z) { return unity_OrthoParams.w != 0 ? _ProjectionParams.z - z * (_ProjectionParams.z - _ProjectionParams.y) : 1.0 / (_ZBufferParams.z*z+_ZBufferParams.w); }\n" + source;
         source = Regex.Replace(source, @"\bCBUFFER_START\s*\(\s*UnityPerMaterial\s*\)|\bCBUFFER_END\b", "");

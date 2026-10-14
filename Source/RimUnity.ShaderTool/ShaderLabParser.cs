@@ -100,7 +100,7 @@ internal static class ShaderLabParser
             .Cast<Match>().SelectMany(m => m.Groups[1].Value.Split((char[])null, StringSplitOptions.RemoveEmptyEntries)).Distinct().ToArray();
         string[] allKeywords = Declared(string.Join("\n", includes.Concat(programs))), passKeywords = Declared(program);
         manifest.keywords = manifest.keywords.Where(k => !allKeywords.Contains(k) || passKeywords.Contains(k)).ToList();
-        if (manifest.tags.TryGetValue("LightMode", out string lightMode) && lightMode is "ForwardAdd" or "ShadowCaster" or "Deferred")
+        if (manifest.tags.TryGetValue("LightMode", out string lightMode) && lightMode is "ForwardAdd" or "Deferred")
             throw new NotSupportedException("当前无法执行此渲染阶段：" + lightMode);
         program = Pragmas(program, manifest);
         return new ShaderLabSource(manifest, program);
@@ -118,6 +118,13 @@ internal static class ShaderLabParser
                 case "vertex": manifest.vertexEntry = One(values, kind); break;
                 case "fragment": manifest.fragmentEntry = One(values, kind); break;
                 case "target": case "exclude_renderers": case "only_renderers": break;
+                case "multi_compile_fwdbase":
+                    //前向基础程序由宿主提供光照，未接通的烘焙与阴影变体仍明确拒绝。
+                    if (manifest.keywords.Any(k => k.StartsWith("SHADOWS_", StringComparison.Ordinal) || k.Contains("LIGHTMAP")))
+                        throw new NotSupportedException("前向基础程序尚不支持此烘焙或阴影变体。");
+                    manifest.keywordGroups.Add(new[] { "DIRECTIONAL" }); break;
+                case "multi_compile_shadowcaster":
+                    manifest.keywordGroups.Add(new[] { "SHADOWS_DEPTH" }); break;
                 case "fragmentoption":
                     if (values.Length != 1 || values[0] != "ARB_precision_hint_fastest") throw new NotSupportedException("未知片元编译选项：" + string.Join(" ", values));
                     break;

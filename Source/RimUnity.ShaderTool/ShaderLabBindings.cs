@@ -13,7 +13,7 @@ internal static class ShaderLabBindings
     //显式共享缓冲区布局，纹理绑定与 ShaderLab 属性名称一一对应。
     internal static string Adapt(ShaderLabSource shader)
     {
-        string source = UnityHlslCompat.Prepare(shader.Program, shader.Manifest.vertexEntry);
+        string source = UnityHlslCompat.Prepare(FragmentFacing.Adapt(shader.Program, shader.Manifest.fragmentEntry), shader.Manifest.vertexEntry, shader.Manifest.profile);
         source = UnityColorFunctions.Add(source);
         source = ShaderPreprocessor.Run((shader.Manifest.colorSpace == "Gamma" ? "#define UNITY_COLORSPACE_GAMMA 1\n" : "")
             + string.Join("\n", shader.Manifest.keywords.Select(k => "#define " + k + " 1")) + "\n" + UnityHlslCompat.Macros + "\n" + source);
@@ -24,9 +24,9 @@ internal static class ShaderLabBindings
             Regex.Matches(source, @"\b" + Regex.Escape(m.Groups[1].Value) + @"\b").Count == 1 ? "" : m.Value);
         Dictionary<string, string> uniforms = new(StringComparer.Ordinal), textures = new(StringComparer.Ordinal), samplers = new(StringComparer.Ordinal);
         source = Regex.Replace(source, @"\bcbuffer\s+UnityPerMaterial\s*\{([^{}]*)\}\s*;?", "$1");
-        //逗号分隔的数值和纹理声明先展开，保证每个参数都有对应的材质绑定。
+        //展开逗号声明并保留每项数组长度，使混合向量与数组也进入各自的材质绑定。
         int[] commaDepths = Depths(source);
-        source = Regex.Replace(source, @"\b((?:uniform\s+)?(?:float(?:[1-4](?:x[1-4])?)?|int[1-4]?|uint[1-4]?|sampler2D|samplerCUBE|Texture2D(?:\s*<\s*float4\s*>)?|SamplerState))\s+(\w+(?:\s*,\s*\w+)+)\s*;", match =>
+        source = Regex.Replace(source, @"\b((?:uniform\s+)?(?:float(?:[1-4](?:x[1-4])?)?|int[1-4]?|uint[1-4]?|sampler2D|samplerCUBE|Texture2D(?:\s*<\s*float4\s*>)?|SamplerState))\s+(\w+(?:\s*\[[^\]]*\])?(?:\s*,\s*\w+(?:\s*\[[^\]]*\])?)+)\s*;", match =>
             commaDepths[match.Index] == 0
                 ? string.Join("\n", match.Groups[2].Value.Split(',').Select(name => match.Groups[1].Value + " " + name.Trim() + ";"))
                 : match.Value);

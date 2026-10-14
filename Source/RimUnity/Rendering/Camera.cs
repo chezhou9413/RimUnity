@@ -1,8 +1,20 @@
 namespace RimUnity;
 
 //相机保存桥接自己的变换与投影；地图相机由宿主边界同步一次快照。
-public sealed class Camera : Behaviour
+public sealed class Camera : MonoBehaviour
 {
+    internal static readonly System.Collections.Generic.HashSet<Camera> Active = new();
+    public RenderTexture targetTexture { get; set; }
+    public Color backgroundColor { get; set; } = Color.black;
+    public CameraClearFlags clearFlags { get; set; } = CameraClearFlags.SolidColor;
+    public float depth { get; set; }
+    public Rect rect { get; set; } = new(0, 0, 1, 1);
+    private void OnEnable() => Active.Add(this);
+    private void OnDisable() => Active.Remove(this);
+    internal Rendering.DirectionalShadow Shadow;
+    private void OnDestroy() { Active.Remove(this); Shadow?.Dispose(); }
+    //仅显式目标纹理由 RimUnity 渲染，地图相机仍由宿主负责。
+    public void Render() => Rendering.CameraRenderer.Render(this);
     public static Camera main { get; set; }
     public static Camera current => main;
     private Matrix4x4? projectionOverride, viewOverride;
@@ -13,7 +25,13 @@ public sealed class Camera : Behaviour
     public float farClipPlane { get; set; } = 1000;
     public float fieldOfView { get; set; } = 60;
     public int cullingMask { get; set; } = -1;
-    public Rect pixelRect { get; set; } = new(0, 0, Screen.width, Screen.height);
+    private Rect? pixelOverride;
+    public Rect pixelRect
+    {
+        get => pixelOverride ?? new Rect(rect.x * (targetTexture?.width ?? Screen.width), rect.y * (targetTexture?.height ?? Screen.height),
+            rect.width * (targetTexture?.width ?? Screen.width), rect.height * (targetTexture?.height ?? Screen.height));
+        set => pixelOverride = value;
+    }
     public int pixelWidth => (int)pixelRect.width;
     public int pixelHeight => (int)pixelRect.height;
     public float aspect { get => aspectOverride > 0 ? aspectOverride : pixelRect.width / pixelRect.height; set => aspectOverride = value; }
@@ -62,3 +80,5 @@ public sealed class Camera : Behaviour
         return ray.GetPoint((point.z - originDepth) / along);
     }
 }
+
+public enum CameraClearFlags { Skybox = 1, Color = 2, SolidColor = Color, Depth = 3, Nothing = 4 }

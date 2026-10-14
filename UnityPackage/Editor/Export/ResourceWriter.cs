@@ -67,6 +67,17 @@ namespace RimUnity.Editor
                     Put("type", light.type); Put("color", light.color); Put("intensity", light.intensity); Put("range", light.range);
                 }
                 else if (asset is Cubemap cube) Cube(cube, data, writer, path, id);
+                else if (asset is RenderTexture renderTexture)
+                {
+                    data.type = "RenderTexture";
+                    if (renderTexture.dimension != UnityEngine.Rendering.TextureDimension.Tex2D || (renderTexture.antiAliasing != 1 && renderTexture.antiAliasing != 4) || renderTexture.useMipMap || renderTexture.enableRandomWrite)
+                        throw new NotSupportedException(path + "：RenderTexture 支持一或四采样二维颜色附件，无 Mip 或随机写入。");
+                    if (renderTexture.antiAliasing == 4) Debug.LogWarning("[RimUnity] " + path + "：宿主离屏通道使用 2×2 超采样和线性降采样实现四采样抗锯齿，不使用硬件 MSAA。");
+                    Put("width", renderTexture.width); Put("height", renderTexture.height); Put("depth", renderTexture.depth);
+                    Put("antiAliasing", renderTexture.antiAliasing);
+                    Put("graphicsFormat", (int)renderTexture.graphicsFormat);
+                    Put("wrapMode", renderTexture.wrapMode); Put("filterMode", renderTexture.filterMode);
+                }
                 else if (asset is Texture3D volume)
                 {
                     if (!volume.isReadable) throw new NotSupportedException(path + "：三维向量纹理需要启用 Read/Write 才能导出浮点体素。");

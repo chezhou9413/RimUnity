@@ -9,7 +9,7 @@ internal static partial class ShaderGlobals
         SunColorId = Shader.PropertyToID("_RU_MapSunColor"), MoonColorId = Shader.PropertyToID("_RU_MapMoonColor"), AmbientId = Shader.PropertyToID("_RU_MapAmbient");
 
     //读取地图公开的天空光照，向原生 Shader 提供方向和颜色。
-    private static void UpdateMapLighting()
+    internal static void UpdateMapLighting()
     {
         Map map = Current.ProgramState == ProgramState.Playing ? Find.CurrentMap : null;
         Vector4 sun = Vector4.zero, moon = Vector4.zero;

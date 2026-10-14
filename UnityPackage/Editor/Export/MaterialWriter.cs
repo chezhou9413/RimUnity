@@ -74,13 +74,13 @@ namespace RimUnity.Editor
         //自定义 Shader 保留每个公开属性与原始程序，内建 Lit 没有明文源时明确失败。
         private static void WriteCustom(Material material, ResourceData data, ValueWriter writer, string path, ResourceWriter resources, bool ui)
         {
-            //Unlit Surface 的颜色程序由离线工具生成；Unity 自动产生的附加 Pass 没有对应源码索引。
-            string sourcePath = UnityEditor.AssetDatabase.GetAssetPath(material.shader);
-            bool unlitSurface = sourcePath.EndsWith(".shader", StringComparison.OrdinalIgnoreCase)
-                && System.Text.RegularExpressions.Regex.IsMatch(System.IO.File.ReadAllText(sourcePath), @"(?m)^\s*#pragma\s+surface\s+\w+\s+Unlit\b");
+            //Surface 的颜色程序由离线工具生成，自动光照 Pass 不作为额外颜色层重复绘制。
+            string sourcePath = BuiltInSurfaceSource.Path(material);
+            bool surface = sourcePath.EndsWith(".shader", StringComparison.OrdinalIgnoreCase)
+                && System.Text.RegularExpressions.Regex.IsMatch(System.IO.File.ReadAllText(sourcePath), @"(?m)^\s*#pragma\s+surface\b");
             bool builtInGraph = sourcePath.EndsWith(".shader", StringComparison.OrdinalIgnoreCase)
                 && System.IO.File.ReadAllText(sourcePath).Contains("BuiltInLitSubTarget");
-            if (unlitSurface || builtInGraph)
+            if (surface || builtInGraph)
                 data.members.Add(new MemberData { name = "shader", value = new ValueData { kind = "asset", text = resources.AddShader(material, ui, path, 0) } });
             else if (material.passCount > 1)
             {
@@ -108,9 +108,19 @@ namespace RimUnity.Editor
             else data.members.Add(new MemberData { name = "shader", value = new ValueData { kind = "asset", text = resources.AddShader(material, ui, path) } });
             void Put(string name, object value) => data.members.Add(new MemberData { name = name, value = writer.Write(value, path + "." + name) });
             var shader = material.shader;
+            for (int pass = 0; !ui && pass < material.passCount; pass++)
+                if (IsShadowPass(material, pass))
+                {
+                    data.members.Add(new MemberData { name = "shadowCaster", value = new ValueData { kind = "asset",
+                        text = resources.AddShader(material, false, path + ".shadowCaster", surface || builtInGraph ? -2 : pass) } });
+                    break;
+                }
+            if (BuiltInSurfaceSource.Supports(material)) Put("_RimUnityParticle", material.shader.name.StartsWith("Particles/", StringComparison.Ordinal) ? 1f : 0f);
             for (int i = 0; i < shader.GetPropertyCount(); i++)
             {
                 string name = shader.GetPropertyName(i);
+                //未启用淡化时 Unity 保存的倒数可能为无穷大；这些值不参与生成程序。
+                if (BuiltInSurfaceSource.Supports(material) && (name == "_CameraFadeParams" || name == "_SoftParticleFadeParams")) continue;
                 switch (shader.GetPropertyType(i))
                 {
                     case UnityEngine.Rendering.ShaderPropertyType.Color: Put(name, (Vector4)material.GetColor(name)); break;

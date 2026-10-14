@@ -12,6 +12,8 @@ namespace RimUnity.Editor
     {
         private static readonly Dictionary<string, string[]> Members = new Dictionary<string, string[]>
         {
+            ["UnityEngine.Camera"] = new[] { "orthographic", "orthographicSize", "nearClipPlane", "farClipPlane", "fieldOfView", "cullingMask", "rect", "targetTexture", "backgroundColor", "clearFlags", "depth" },
+            ["UnityEngine.Light"] = new[] { "type", "color", "intensity", "range", "spotAngle", "shadows", "shadowStrength", "shadowBias", "shadowNormalBias", "cullingMask" },
             ["UnityEngine.Canvas"] = new[] { "renderMode", "sortingOrder", "worldCamera", "scaleFactor", "referencePixelsPerUnit", "overrideSorting", "planeDistance" },
             ["UnityEngine.CanvasGroup"] = new[] { "alpha", "interactable", "blocksRaycasts", "ignoreParentGroups" },
             ["UnityEngine.UI.CanvasScaler"] = new[] { "uiScaleMode", "referencePixelsPerUnit", "scaleFactor", "referenceResolution", "screenMatchMode", "matchWidthOrHeight", "physicalUnit", "fallbackScreenDPI", "defaultSpriteDPI", "dynamicPixelsPerUnit" },
@@ -48,7 +50,7 @@ namespace RimUnity.Editor
             ["UnityEngine.Rigidbody"] = new[] { "mass", "drag", "angularDrag", "isKinematic", "useGravity", "detectCollisions", "velocity", "angularVelocity", "centerOfMass", "inertiaTensor", "inertiaTensorRotation", "constraints", "maxAngularVelocity" },
             ["UnityEngine.ParticleSystemForceField"] = new[] { "shape", "startRange", "endRange", "length", "directionX", "directionY", "directionZ", "gravity", "gravityFocus", "rotationSpeed", "rotationAttraction", "rotationRandomness", "drag", "multiplyDragByParticleSize", "multiplyDragByParticleVelocity", "vectorField", "vectorFieldSpeed", "vectorFieldAttraction" },
             ["UnityEngine.WindZone"] = new[] { "mode", "radius", "windMain", "windTurbulence", "windPulseMagnitude", "windPulseFrequency" },
-            ["UnityEngine.MeshRenderer"] = new[] { "sharedMaterials", "enabled" },
+            ["UnityEngine.MeshRenderer"] = new[] { "sharedMaterials", "enabled", "shadowCastingMode", "receiveShadows" },
             ["UnityEngine.SpriteRenderer"] = new[] { "sprite", "color", "flipX", "flipY", "sharedMaterial", "sortingOrder", "enabled" },
             ["UnityEngine.SkinnedMeshRenderer"] = new[] { "sharedMesh", "sharedMaterials", "bones", "rootBone", "localBounds", "enabled", "updateWhenOffscreen" },
             ["UnityEngine.Animator"] = new[] { "runtimeAnimatorController", "speed", "updateMode", "fireEvents" },
@@ -153,7 +155,13 @@ namespace RimUnity.Editor
         //当前还未接通的非默认设置必须阻止导出，不能降级后假报成功。
         private static void Validate(Component component, string path, bool root)
         {
-            if (component is Renderer shadowRenderer && shadowRenderer.shadowCastingMode != UnityEngine.Rendering.ShadowCastingMode.Off
+            if (component is Camera camera && (camera.targetTexture == null || camera.clearFlags != CameraClearFlags.SolidColor))
+                throw new NotSupportedException(path + "：离屏相机需要目标纹理与纯色清屏。");
+            if (component is MeshRenderer twoSided && twoSided.shadowCastingMode == UnityEngine.Rendering.ShadowCastingMode.TwoSided)
+                throw new NotSupportedException(path + "：双面投影需独立的阴影剔除状态。");
+            if (component is Light localLight && (localLight.type != LightType.Directional || localLight.cookie != null))
+                throw new NotSupportedException(path + "：预制体光源目前支持不带 Cookie 的方向光。");
+            if (component is Renderer shadowRenderer && !(component is MeshRenderer) && shadowRenderer.shadowCastingMode != UnityEngine.Rendering.ShadowCastingMode.Off
                 && shadowRenderer.sharedMaterials.Any(m => m != null && Enumerable.Range(0, m.passCount).Any(i => MaterialWriter.IsShadowPass(m, i))))
                 throw new NotSupportedException(path + "：此 Renderer 启用了阴影投射，宿主投影阶段尚未接通。");
             if (component is Rigidbody body && (body.collisionDetectionMode != CollisionDetectionMode.Discrete || body.interpolation != RigidbodyInterpolation.None))

@@ -5,6 +5,7 @@ using Brutal.VulkanApi;
 using Waylith.Graphics;
 using Waylith.Rendering;
 using Waylith.Rendering.PostFx;
+using NativeRenderTexture = Waylith.Rendering.RenderTexture;
 
 namespace RimUnity.Rendering;
 
@@ -16,7 +17,7 @@ internal sealed class BloomPipeline : IDisposable
     private readonly PostEffectPass[] down = new PostEffectPass[Levels], up = new PostEffectPass[Levels - 1];
     private readonly PostEffectPass combine, hdrCombine;
     private readonly HdrDrawTarget layers = new("RimUnity.BloomLayers");
-    private RenderTexture[][] targets;
+    private NativeRenderTexture[][] targets;
     private bool prepared;
     private int width, height;
     internal readonly IRenderPass[] Passes;
@@ -39,21 +40,21 @@ internal sealed class BloomPipeline : IDisposable
         => new("RimUnity.Bloom." + name, PathFor(shader), bindings, pushConstantSize: 16);
 
     //UNorm 场景保存显示颜色；sRGB 附件由采样器解码，浮点场景则约定为线性 HDR。
-    private static bool Gamma(RenderTexture texture) => texture.ColorFormat is VkFormat.B8G8R8A8UNorm or VkFormat.R8G8B8A8UNorm;
+    private static bool Gamma(NativeRenderTexture texture) => texture.ColorFormat is VkFormat.B8G8R8A8UNorm or VkFormat.R8G8B8A8UNorm;
 
     //按宿主帧槽位分配，窗口尺寸变化由宿主的安全重建点统一释放。
-    private void Ensure(in FrameContext ctx, RenderTexture source)
+    private void Ensure(in FrameContext ctx, NativeRenderTexture source)
     {
         if (targets != null && width == source.Width && height == source.Height) return;
         ReleaseTargets(); width = source.Width; height = source.Height;
-        targets = new RenderTexture[ctx.RenderContext.FramesInFlight][];
+        targets = new NativeRenderTexture[ctx.RenderContext.FramesInFlight][];
         for (int frame = 0; frame < targets.Length; frame++)
         {
-            targets[frame] = new RenderTexture[Levels * 2 - 1];
+            targets[frame] = new NativeRenderTexture[Levels * 2 - 1];
             for (int i = 0; i < targets[frame].Length; i++)
             {
                 int level = i < Levels ? i : i - Levels;
-                targets[frame][i] = new RenderTexture(Math.Max(1, width >> (level + 1)), Math.Max(1, height >> (level + 1)),
+                targets[frame][i] = new NativeRenderTexture(Math.Max(1, width >> (level + 1)), Math.Max(1, height >> (level + 1)),
                     VkFormat.R16G16B16A16SFloat, name: $"RimUnity.Bloom.{frame}.{i}");
             }
         }
@@ -62,8 +63,14 @@ internal sealed class BloomPipeline : IDisposable
     //软阈值保留临界亮度的平滑过渡；只在线性光强上做模糊和合成。
     private void Prepare(in FrameContext ctx, BloomFrame settings)
     {
+        NativeRenderTexture source = scene.Source?.Invoke(ctx.SubmissionFrameIndex);
+        Prepare(in ctx, settings, source);
+    }
+
+    //地图与离屏预览共用亮部提取、金字塔与图层捕获。
+    private void Prepare(in FrameContext ctx, BloomFrame settings, NativeRenderTexture source)
+    {
         prepared = false;
-        RenderTexture source = scene.Source?.Invoke(ctx.SubmissionFrameIndex);
         if (source == null) return;
         if (settings.Draws == null || settings.Draws.Frame.Draws.Count == 0) return;
         Ensure(in ctx, source);
@@ -89,10 +96,22 @@ internal sealed class BloomPipeline : IDisposable
         prepared = true;
     }
 
+    //预览已有完整的线性场景与深度，只复用统一 Bloom 并输出显示颜色。
+    internal void RenderPreview(in FrameContext ctx, NativeRenderTexture source, NativeRenderTexture linearScene,
+        NativeRenderTexture destination, BloomFrame settings)
+    {
+        Prepare(in ctx, settings, source);
+        hdrCombine.SetInput(0, linearScene);
+        hdrCombine.SetInput(1, prepared ? targets[ctx.SubmissionFrameIndex][Levels] : linearScene);
+        hdrCombine.SetPushConstants(new Vector4(prepared ? settings.Intensity : 0, 1, 0, 0));
+        hdrCombine.Output = destination;
+        hdrCombine.Record(in ctx, settings);
+    }
+
     //浮点场景在最后一次合成才编码；普通场景继续沿用宿主的显示颜色路径。
     private void Composite(in FrameContext ctx, BloomFrame settings)
     {
-        RenderTexture source = scene.Source?.Invoke(ctx.SubmissionFrameIndex);
+        NativeRenderTexture source = scene.Source?.Invoke(ctx.SubmissionFrameIndex);
         if (source == null) return;
         var hdr = HdrMapHooks.LinearScene(source, settings.FrameNumber);
         if (hdr != null)

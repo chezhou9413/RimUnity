@@ -28,7 +28,19 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
     private Vector3[] sourcePositions;
     private Vector2[] sourceUV;
     private int[] sourceTriangles;
-    public Material material { get => sharedMaterial; set => sharedMaterial = value; }
+    private readonly List<Material> ownedMaterials = new();
+    //实例参数不能污染其他粒子系统共用的模板材质。
+    public Material material
+    {
+        get
+        {
+            if (sharedMaterial == null || ownedMaterials.Contains(sharedMaterial)) return sharedMaterial;
+            sharedMaterial = new Material(sharedMaterial);
+            ownedMaterials.Add(sharedMaterial);
+            return sharedMaterial;
+        }
+        set => sharedMaterial = value;
+    }
     public void GetActiveVertexStreams(List<ParticleSystemVertexStream> target) { target.Clear(); target.AddRange(streams); }
     public void SetActiveVertexStreams(List<ParticleSystemVertexStream> value) => vertexStreams = value.ToArray();
 
@@ -47,7 +59,12 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
 
     //网格缓存随组件销毁，不持有已卸载实例。
     internal void ReleaseGeometry() { if (batch != null) Destroy(batch); if (trailBatch != null) Destroy(trailBatch); batch = trailBatch = null; ReleaseSpriteBatches(); meshGeometry.Clear(); foreach (var material in uiMaterials.Values) Destroy(material); uiMaterials.Clear(); }
-    private void OnDestroy() => ReleaseGeometry();
+    private void OnDestroy()
+    {
+        ReleaseGeometry();
+        foreach (var material in ownedMaterials) Destroy(material);
+        ownedMaterials.Clear();
+    }
     internal void Draw(ParticleSystem system, Camera camera)
     {
         if (!enabled || !gameObject.activeInHierarchy) return;

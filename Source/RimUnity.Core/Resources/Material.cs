@@ -8,6 +8,26 @@ namespace RimUnity;
 public sealed class Material : Object
 {
     private Shader currentShader;
+    public Shader shadowCaster { get; set; }
+    private Material shadowMaterial;
+    private int shadowVersion = -1;
+    //阴影与颜色通道共享参数快照，但分别持有管线状态。
+    public Material GetShadowMaterial()
+    {
+        if (shadowCaster == null) return null;
+        if (shadowMaterial == null || shadowMaterial.shader != shadowCaster)
+        {
+            if (shadowMaterial != null) Destroy(shadowMaterial);
+            shadowMaterial = new Material(shadowCaster); shadowVersion = -1;
+        }
+        if (shadowVersion != engineMaterial.Version)
+        {
+            shadowMaterial.CopyPropertiesFromMaterial(this);
+            shadowMaterial.renderQueue = 2000;
+            shadowVersion = engineMaterial.Version;
+        }
+        return shadowMaterial;
+    }
     private readonly List<Waylith.Rendering.Material> passes = new();
     private int passVersion = -1;
     private int shaderPassVersion = -1;
@@ -38,6 +58,7 @@ public sealed class Material : Object
         if (source == null) throw new ArgumentNullException(nameof(source));
         currentShader = source.shader; engineMaterial = new(source.engineMaterial);
         overridePasses = source.overridePasses;
+        shadowCaster = source.shadowCaster;
     }
     public int renderQueue { get => engineMaterial.RenderQueue; set => engineMaterial.RenderQueue = value; }
     public int passCount => EffectivePasses.Length;
@@ -157,5 +178,5 @@ public sealed class Material : Object
         return passes[index - 1];
     }
     private void ReleasePasses() { foreach (var pass in passes) pass.Dispose(); passes.Clear(); passVersion = -1; }
-    protected override void Release() { ReleasePasses(); engineMaterial.Dispose(); }
+    protected override void Release() { ReleasePasses(); if (shadowMaterial != null) Destroy(shadowMaterial); engineMaterial.Dispose(); }
 }

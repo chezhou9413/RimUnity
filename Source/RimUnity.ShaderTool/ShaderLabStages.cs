@@ -40,7 +40,8 @@ internal static class ShaderLabStages
         }
         foreach (var item in fragmentTextures)
             if (!vertexTextures.ContainsKey(item.Key)) vertex = Insert(vertex, item.Value.Value);
-        if (manifest.colorSpace == "Linear") (vertex, fragment) = RimUnity.Rendering.ShaderColorSpace.Convert(vertex, fragment);
+        if (manifest.colorSpace == "Linear" && manifest.tags.GetValueOrDefault("LightMode") != "ShadowCaster")
+            (vertex, fragment) = RimUnity.Rendering.ShaderColorSpace.Convert(vertex, fragment);
         //此 API 的返回值表示发现错误，不能按 Try 风格反向解释。
         if (ShaderMetadataParser.ValidateStageInterface(vertex, fragment, vertexPath, fragmentPath))
             throw new InvalidDataException("顶点输出与片元输入不一致。");
