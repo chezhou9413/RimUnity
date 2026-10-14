@@ -1,6 +1,6 @@
 # Custom IMGUI materials
 
-[简体中文](../ImmediateUI.md) | [English](ImmediateUI.md)
+[简体中文](../zh-CN/ImmediateUI.md) | [English](ImmediateUI.md)
 
 ## Export the material
 

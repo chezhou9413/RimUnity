@@ -1,6 +1,6 @@
 # MonoBehaviour and common methods
 
-[简体中文](../MonoBehaviour.md) | [English](MonoBehaviour.md)
+[简体中文](../zh-CN/MonoBehaviour.md) | [English](MonoBehaviour.md)
 
 Game-side scripts inherit from `RimUnity.MonoBehaviour` and use `RimUnity.GameObject`, Transform and math types. RimUnity manages object hierarchies, field and event binding, lifecycle messages and coroutines. Resources and rendering call Waylith directly. This guide covers common APIs; see [supported features](Status.md) for their scope.
 

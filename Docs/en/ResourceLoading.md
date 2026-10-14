@@ -1,6 +1,6 @@
 # Loading assets and directory layout
 
-[简体中文](../ResourceLoading.md) | [English](ResourceLoading.md)
+[简体中文](../zh-CN/ResourceLoading.md) | [English](ResourceLoading.md)
 
 ## Asset ownership and logical paths
 

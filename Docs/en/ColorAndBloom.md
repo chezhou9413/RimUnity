@@ -1,6 +1,6 @@
 # Color, transparent blending and Bloom
 
-[简体中文](../ColorAndBloom.md) | [English](ColorAndBloom.md)
+[简体中文](../zh-CN/ColorAndBloom.md) | [English](ColorAndBloom.md)
 
 ## Color and materials
 

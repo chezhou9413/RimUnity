@@ -1,6 +1,6 @@
 # Plain-text asset build manager
 
-[简体中文](../Publishing.md) | [English](Publishing.md)
+[简体中文](../zh-CN/Publishing.md) | [English](Publishing.md)
 
 Unity menu: `RimUnity / 明文资源构建管理器` (Plain-text asset build manager). When installed as a local UPM package, the window uses the package source directly. There is no need to copy scripts into Assets.
 

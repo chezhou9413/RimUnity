@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 if ([string]::IsNullOrEmpty($AssemblyDirectory)) { $AssemblyDirectory = Join-Path $repo '1.7\Assemblies' }
 #发布前确认两侧产物齐全，避免生成缺少 Core 或离线工具的包。
-$runtimeFiles = @('RimUnity.dll','RimUnity.pdb','RimUnity.Core.dll','RimUnity.Core.pdb')
+$runtimeFiles = @('RimUnity.dll','RimUnity.Core.dll')
 $toolFiles = @('RimUnity.ShaderTool.exe','RimUnity.ShaderTool.dll','RimUnity.ShaderTool.deps.json','RimUnity.ShaderTool.runtimeconfig.json','RimUnity.ShaderTool.pdb')
 $toolDirectory = Join-Path $repo 'Tools\bin\ShaderTool'
 foreach ($name in $runtimeFiles) {
@@ -16,10 +16,8 @@ $version = (Get-Content -LiteralPath (Join-Path $repo 'UnityPackage\package.json
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $stage = Join-Path $TempRoot ([Guid]::NewGuid().ToString('N'))
 $mod = Join-Path $stage 'RimUnity'
-foreach ($directory in @($Output,$mod,(Join-Path $mod '1.7\Assemblies'))) { [IO.Directory]::CreateDirectory($directory) | Out-Null }
-foreach ($name in @('About','LoadFolders.xml','README.md','README.en.md','Docs','ThirdParty','LICENSE')) { Copy-Item -LiteralPath (Join-Path $repo $name) -Destination $mod -Recurse }
-foreach ($name in @('Defs','Shaders')) { Copy-Item -LiteralPath (Join-Path $repo "1.7\$name") -Destination (Join-Path $mod '1.7') -Recurse }
-foreach ($name in $runtimeFiles) { Copy-Item -LiteralPath (Join-Path $AssemblyDirectory $name) -Destination (Join-Path $mod '1.7\Assemblies') }
+[IO.Directory]::CreateDirectory($Output) | Out-Null
+& (Join-Path $PSScriptRoot 'Copy-RuntimePackage.ps1') -Destination $mod -AssemblyDirectory $AssemblyDirectory
 #框架只发布运行时和内置 Shader；导出资源由各内容模组自行打包。
 $modZip = Join-Path $Output "RimUnity-$version-preview-$stamp.zip"
 Compress-Archive -LiteralPath $mod -DestinationPath $modZip

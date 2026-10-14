@@ -1,6 +1,6 @@
 # 粒子模块与使用限制
 
-[简体中文](ParticleExpansion.md) | [English](en/ParticleExpansion.md)
+[简体中文](ParticleExpansion.md) | [English](../en/ParticleExpansion.md)
 
 桥接层提供自有模拟与简化物理实现，不等同完整 Unity／PhysX。
 

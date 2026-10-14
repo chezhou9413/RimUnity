@@ -1,6 +1,6 @@
 # 颜色、透明混合与 Bloom
 
-[简体中文](ColorAndBloom.md) | [English](en/ColorAndBloom.md)
+[简体中文](ColorAndBloom.md) | [English](../en/ColorAndBloom.md)
 
 ## 颜色与材质
 

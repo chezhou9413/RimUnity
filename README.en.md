@@ -41,6 +41,7 @@ instance.transform.position = new RimUnity.Vector3(x, y, z);
 - [Custom shaders](Docs/en/CustomShaderConversion.md) · [IMGUI materials](Docs/en/ImmediateUI.md)
 - [Color and Bloom](Docs/en/ColorAndBloom.md)
 - [Supported features and limitations](Docs/en/Status.md)
+- [Built-in defs](Docs/en/Defs.md) · [Shader directory](Docs/en/Shaders.md)
 
 ## License
 

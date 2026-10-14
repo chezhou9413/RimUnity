@@ -1,6 +1,6 @@
 # API 快速接入
 
-[简体中文](ApiQuickStart.md) | [English](en/ApiQuickStart.md)
+[简体中文](ApiQuickStart.md) | [English](../en/ApiQuickStart.md)
 
 本文面向内容模组作者。制作端使用 Unity 原生组件；游戏端由 RimUnity 执行已适配的部分。资源准备和编译见 [工作流](Workflow.md)，完整路径规则见 [资源加载](ResourceLoading.md)。
 

@@ -1,6 +1,6 @@
 # Types, directories and scripts
 
-[简体中文](../Usage.md) | [English](Usage.md)
+[简体中文](../zh-CN/Usage.md) | [English](Usage.md)
 
 A content mod's catalog is stored at `1.7/Data/RimUnity/catalog.json`. Logical paths are separate from physical file paths. `PrefabLoader.Load(contentMod, path)` resolves resources from the specified mod; it does not search other mods to fill missing dependencies.
 

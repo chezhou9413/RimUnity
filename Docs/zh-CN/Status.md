@@ -1,6 +1,6 @@
 # 支持范围与限制
 
-[简体中文](Status.md) | [English](en/Status.md)
+[简体中文](Status.md) | [English](../en/Status.md)
 
 制作环境：Unity 2022.3 LTS，Built-in 或 URP 14。运行环境：Windows x64、RimWorld 1.7 Waylith、.NET 10。
 

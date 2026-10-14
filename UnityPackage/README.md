@@ -8,7 +8,7 @@
 
 使用 Unity 2022.3，打开 `Window → Package Manager`。源码包通过 `+ → Add package from disk` 选择本包的 `package.json`；发布的 `.tgz` 通过 `+ → Add package from tarball` 安装，无需解压或复制脚本到 Assets。
 
-下载入口：[GitHub Releases](https://github.com/chezhou9413/RimUnity/releases)。选择 `com.chezhou.rimunity-*.tgz`，游戏模组 ZIP 不能作为插件安装。若尚无附件，可从源码安装并构建 ShaderTool。完整步骤见[导出工具安装与第一次导出](https://github.com/chezhou9413/RimUnity/blob/main/Docs/ExporterSetup.md)。
+下载入口：[GitHub Releases](https://github.com/chezhou9413/RimUnity/releases)。选择 `com.chezhou.rimunity-*.tgz`，游戏模组 ZIP 不能作为插件安装。若尚无附件，可从源码安装并构建 ShaderTool。完整步骤见[导出工具安装与第一次导出](https://github.com/chezhou9413/RimUnity/blob/main/Docs/zh-CN/ExporterSetup.md)。
 
 制作时使用 Unity 原生 GameObject、Transform、UGUI、ParticleSystem 和受支持的模型／动画组件。
 

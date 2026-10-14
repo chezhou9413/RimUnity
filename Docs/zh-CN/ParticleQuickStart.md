@@ -1,6 +1,6 @@
 # 粒子导出与使用
 
-[简体中文](ParticleQuickStart.md) | [English](en/ParticleQuickStart.md)
+[简体中文](ParticleQuickStart.md) | [English](../en/ParticleQuickStart.md)
 
 在 Unity 使用原生 ParticleSystem 制作 Prefab，通过 RimUnity 的预制体或批量粒子导出窗口写入内容模组。材质、贴图、网格和受支持的 Shader 自动收集；不需要为每个材质手写 ShaderDef。
 

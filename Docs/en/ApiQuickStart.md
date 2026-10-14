@@ -1,6 +1,6 @@
 # API quick start
 
-[简体中文](../ApiQuickStart.md) | [English](ApiQuickStart.md)
+[简体中文](../zh-CN/ApiQuickStart.md) | [English](ApiQuickStart.md)
 
 This guide is for content mod authors. Use native Unity components for authoring; RimUnity runs the supported functionality in the game. See [the workflow guide](Workflow.md) for asset preparation and builds, and [asset loading](ResourceLoading.md) for path conventions.
 

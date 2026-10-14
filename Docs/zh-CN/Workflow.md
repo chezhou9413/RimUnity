@@ -1,6 +1,6 @@
 # 制作、导出、接入与发布工作流
 
-[简体中文](Workflow.md) | [English](en/Workflow.md)
+[简体中文](Workflow.md) | [English](../en/Workflow.md)
 
 ## 1. 准备两侧环境
 

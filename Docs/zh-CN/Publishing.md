@@ -1,6 +1,6 @@
 # 明文资源构建管理器
 
-[简体中文](Publishing.md) | [English](en/Publishing.md)
+[简体中文](Publishing.md) | [English](../en/Publishing.md)
 
 Unity 菜单：`RimUnity / 明文资源构建管理器`。通过本地 UPM 包安装时，窗口直接使用包内源码，无需复制脚本到 Assets。
 

@@ -1,6 +1,6 @@
 # 类型、目录与脚本用法
 
-[简体中文](Usage.md) | [English](en/Usage.md)
+[简体中文](Usage.md) | [English](../en/Usage.md)
 
 一个内容模组的清单位于 `1.7/Data/RimUnity/catalog.json`。逻辑路径与磁盘文件路径分离，`PrefabLoader.Load(contentMod, path)` 总是从指定模组解析，不搜索其它模组补齐缺失资源。
 

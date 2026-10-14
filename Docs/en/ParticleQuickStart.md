@@ -1,6 +1,6 @@
 # Exporting and using particles
 
-[简体中文](../ParticleQuickStart.md) | [English](ParticleQuickStart.md)
+[简体中文](../zh-CN/ParticleQuickStart.md) | [English](ParticleQuickStart.md)
 
 Author a prefab with Unity's native ParticleSystem, then export it to a content mod through RimUnity's prefab or batch particle window. Materials, textures, meshes and supported shaders are collected automatically. You do not need to write a ShaderDef for every material.
 

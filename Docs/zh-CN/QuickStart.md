@@ -1,6 +1,6 @@
 # 快速开始
 
-[简体中文](QuickStart.md) | [English](en/QuickStart.md)
+[简体中文](QuickStart.md) | [English](../en/QuickStart.md)
 
 普通玩家只需安装游戏侧前置和内容模组。下面面向模组作者；第一次使用请先看[导出工具安装与第一次导出](ExporterSetup.md)，了解应下载的文件、Package Manager 安装入口及工具路径设置。
 

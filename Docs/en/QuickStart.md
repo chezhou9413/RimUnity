@@ -1,6 +1,6 @@
 # Getting started
 
-[简体中文](../QuickStart.md) | [English](QuickStart.md)
+[简体中文](../zh-CN/QuickStart.md) | [English](QuickStart.md)
 
 Players only need the game-side dependencies and content mods. The steps below are for authors. Start with [exporter installation and your first export](ExporterSetup.md) for downloads, Package Manager instructions and tool path setup.
 

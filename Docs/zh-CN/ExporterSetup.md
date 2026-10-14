@@ -1,6 +1,6 @@
 # 导出工具安装与第一次导出
 
-[简体中文](ExporterSetup.md) | [English](en/ExporterSetup.md)
+[简体中文](ExporterSetup.md) | [English](../en/ExporterSetup.md)
 
 ## 先选对需要的文件
 

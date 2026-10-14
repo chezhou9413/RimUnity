@@ -1,6 +1,6 @@
 # Supported features and limitations
 
-[简体中文](../Status.md) | [English](Status.md)
+[简体中文](../zh-CN/Status.md) | [English](Status.md)
 
 Authoring: Unity 2022.3 LTS, Built-in or URP 14. Runtime: Windows x64, RimWorld 1.7 with Waylith, .NET 10.
 

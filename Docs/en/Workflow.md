@@ -1,6 +1,6 @@
 # Authoring, exporting, integration and publishing
 
-[简体中文](../Workflow.md) | [English](Workflow.md)
+[简体中文](../zh-CN/Workflow.md) | [English](Workflow.md)
 
 ## 1. Prepare both environments
 

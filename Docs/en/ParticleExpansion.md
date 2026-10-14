@@ -1,6 +1,6 @@
 # Particle modules and limitations
 
-[简体中文](../ParticleExpansion.md) | [English](ParticleExpansion.md)
+[简体中文](../zh-CN/ParticleExpansion.md) | [English](ParticleExpansion.md)
 
 RimUnity provides its own particle simulation and simplified physics. It is not a complete implementation of Unity or PhysX.
 

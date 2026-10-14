@@ -1,6 +1,6 @@
 # 资源载入与目录约定
 
-[简体中文](ResourceLoading.md) | [English](en/ResourceLoading.md)
+[简体中文](ResourceLoading.md) | [English](../en/ResourceLoading.md)
 
 ## 内容归属与逻辑路径
 

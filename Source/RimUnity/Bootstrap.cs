@@ -20,7 +20,7 @@ public sealed class RimUnityMod : Mod
         Rendering.ShaderMaterialDefaults.Install();
         new Harmony("Chezhou.RimUnity").PatchAll(typeof(RimUnityMod).Assembly);
         LongEventHandler.ExecuteWhenFinished(HostFrame.Install);
-        Log.Message("[RimUnity] 运行时已加载；功能及验收状态见 Docs/Status.md。");
+        Log.Message("[RimUnity] 运行时已加载；使用文档见 Docs/zh-CN 和 Docs/en。");
     }
 
     //渲染设置属于桥接框架，内容模组无需各自提供后处理窗口。

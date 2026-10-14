@@ -2,7 +2,7 @@
 
 [h2]模组作者：导出工具下载与安装[/h2]
 [b][url=https://github.com/chezhou9413/RimUnity/releases/download/v0.1.5/com.chezhou.rimunity-0.1.5.tgz]直接下载 RimUnity Exporter 0.1.5（含 ShaderTool）[/url][/b]
-[url=https://github.com/chezhou9413/RimUnity/blob/main/Docs/ExporterSetup.md]安装教程：下载 → Unity 安装 → 首次导出 → 游戏加载[/url]
+[url=https://github.com/chezhou9413/RimUnity/blob/main/Docs/zh-CN/ExporterSetup.md]安装教程：下载 → Unity 安装 → 首次导出 → 游戏加载[/url]
 [url=https://github.com/chezhou9413/RimUnity/releases]全部发布版本与配套游戏模组[/url]
 
 在 Unity 2022.3 中打开 Window → Package Manager → + → Add package from tarball，选择下载的 TGZ 即可安装。工具供模组作者使用，普通玩家只需启用游戏模组，无需下载工具或安装 Unity。当前为预览版，支持范围见下文。
@@ -61,14 +61,14 @@ RimUnity 提供明确范围内的 Unity 风格功能，不能直接运行任意 
 
 目前不支持 Shader Graph、Live2D、Humanoid／IK、完整 Unity 光照与后处理栈。物理为简化实现，地图粒子 Lights 用于格子照明；原版建筑和 Pawn 不会自动成为碰撞体。随机粒子轨迹、部分渲染参数与最终画面可能与 Unity 存在差异，具体效果需在游戏中核对。
 
-[url=https://github.com/chezhou9413/RimUnity/blob/main/Docs/Status.md]查看完整支持范围与限制[/url]
+[url=https://github.com/chezhou9413/RimUnity/blob/main/Docs/zh-CN/Status.md]查看完整支持范围与限制[/url]
 
 [h2]源码与文档[/h2]
 
 [url=https://github.com/chezhou9413/RimUnity]GitHub 仓库[/url]
-[url=https://github.com/chezhou9413/RimUnity/blob/main/Docs/QuickStart.md]中文快速开始[/url]
-[url=https://github.com/chezhou9413/RimUnity/blob/main/Docs/ApiQuickStart.md]API 接入与资源加载[/url]
-[url=https://github.com/chezhou9413/RimUnity/blob/main/Docs/Workflow.md]制作、导出与发布工作流[/url]
+[url=https://github.com/chezhou9413/RimUnity/blob/main/Docs/zh-CN/QuickStart.md]中文快速开始[/url]
+[url=https://github.com/chezhou9413/RimUnity/blob/main/Docs/zh-CN/ApiQuickStart.md]API 接入与资源加载[/url]
+[url=https://github.com/chezhou9413/RimUnity/blob/main/Docs/zh-CN/Workflow.md]制作、导出与发布工作流[/url]
 [url=https://github.com/chezhou9413/RimUnity/blob/main/README.en.md]English documentation[/url]
 [url=https://github.com/chezhou9413/RimUnity/issues]反馈问题[/url]
 

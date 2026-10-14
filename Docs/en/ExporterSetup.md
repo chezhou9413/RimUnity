@@ -1,6 +1,6 @@
 # Installing the exporter and exporting your first prefab
 
-[简体中文](../ExporterSetup.md) | [English](ExporterSetup.md)
+[简体中文](../zh-CN/ExporterSetup.md) | [English](ExporterSetup.md)
 
 ## Choose the files you need
 

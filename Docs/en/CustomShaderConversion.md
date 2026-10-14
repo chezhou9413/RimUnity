@@ -1,6 +1,6 @@
 # Exporting custom shaders
 
-[简体中文](../CustomShaderConversion.md) | [English](CustomShaderConversion.md)
+[简体中文](../zh-CN/CustomShaderConversion.md) | [English](CustomShaderConversion.md)
 
 ## Export from Unity
 

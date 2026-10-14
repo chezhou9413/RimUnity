@@ -1,6 +1,6 @@
 # IMGUI 自定义材质
 
-[简体中文](ImmediateUI.md) | [English](en/ImmediateUI.md)
+[简体中文](ImmediateUI.md) | [English](../en/ImmediateUI.md)
 
 ## 导出材质
 

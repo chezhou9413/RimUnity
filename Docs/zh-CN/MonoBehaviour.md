@@ -1,6 +1,6 @@
 # MonoBehaviour 与常用方法
 
-[简体中文](MonoBehaviour.md) | [English](en/MonoBehaviour.md)
+[简体中文](MonoBehaviour.md) | [English](../en/MonoBehaviour.md)
 
 游戏侧脚本继承 `RimUnity.MonoBehaviour`，使用 `RimUnity.GameObject`、`Transform` 和数学类型。RimUnity 负责对象树、字段与事件绑定、生命周期和协程；资源与绘制直接调用 Waylith。本文介绍常用 API，支持范围见 [功能说明](Status.md)。
 
