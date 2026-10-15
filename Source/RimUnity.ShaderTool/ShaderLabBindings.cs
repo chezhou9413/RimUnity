@@ -20,6 +20,7 @@ internal static class ShaderLabBindings
         source = ShaderLoopScopes.Adapt(source);
         source = ShaderSamplerFunctions.Adapt(source);
         source = GroundDepthAdapter.Adapt(source, shader.Manifest);
+        source = UnityDitherMask.Adapt(source, shader.Manifest);
         //共享包含会声明仅阴影变体使用的纹理；实际变体没有任何引用时不产生绑定。
         source = Regex.Replace(source, @"\b(?:uniform\s+)?(?:sampler2D|sampler3D)\s+(\w+)\s*;", m =>
             Regex.Matches(source, @"\b" + Regex.Escape(m.Groups[1].Value) + @"\b").Count == 1 ? "" : m.Value);
@@ -107,8 +108,9 @@ internal static class ShaderLabBindings
             header.AppendLine("// @rimunity-combined " + marker.Groups[1].Value + " " + binding);
             header.AppendLine("[[vk::binding(" + binding++ + ", 2)]] SamplerState " + entry.Key + ";");
         }
-        if (Regex.IsMatch(source, @"\b(?:Texture\w*|Sampler\w*|sampler(?:1D|2D|3D|CUBE)|cbuffer|RW\w*)\b\s*(?:<[^>]+>\s*)?\w+"))
-            throw new NotSupportedException("源程序含未适配的资源声明；当前支持 sampler2D、Texture2D、SamplerState 和 UnityPerMaterial。");
+        Match unsupportedResource = Regex.Match(source, @"\b(?:Texture\w*|Sampler\w*|sampler(?:1D|2D|3D|CUBE)|cbuffer|RW\w*)\b\s*(?:<[^>]+>\s*)?\w+");
+        if (unsupportedResource.Success)
+            throw new NotSupportedException("源程序含未适配的资源声明：" + unsupportedResource.Value + "；当前支持 sampler2D、samplerCUBE、Texture2D、SamplerState 和 UnityPerMaterial。");
         //直接对象采样缺少统一 UV 适配，要求调用标准采样宏，避免悄悄漏翻转。
         if (Regex.IsMatch(source, @"\.\s*(Sample\w*|Load|Gather\w*)\s*\("))
             throw new NotSupportedException("Texture2D 直接采样请改用 SAMPLE_TEXTURE2D/LOD/BIAS 宏后转换。");

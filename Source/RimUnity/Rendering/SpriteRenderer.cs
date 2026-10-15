@@ -9,6 +9,16 @@ public sealed class SpriteRenderer : MonoBehaviour
     public bool flipX, flipY;
     public Material sharedMaterial;
     public int sortingOrder;
+
+    //动画写入 material.* 时使用这份副本，避免改动资源目录里的共享材质。
+    public Material material
+    {
+        get
+        {
+            EnsureMaterialInstance();
+            return materialInstance;
+        }
+    }
     private Sprite previousSprite;
     private Color previousColor;
     private bool previousFlipX, previousFlipY;
@@ -55,15 +65,23 @@ public sealed class SpriteRenderer : MonoBehaviour
             mesh.triangles = geometry.Triangles; mesh.RecalculateBounds(); filter.sharedMesh = mesh;
             previousSprite = sprite; previousColor = color; previousFlipX = flipX; previousFlipY = flipY;
         }
-        if (previousMaterial != sharedMaterial)
+        bool materialChanged = materialInstance == null || previousMaterial != sharedMaterial;
+        EnsureMaterialInstance();
+        if ((spriteChanged || materialChanged) && materialInstance != null) materialInstance.mainTexture = sprite.texture;
+    }
+
+    //父级动画可能在本组件 OnEnable 之前绑定，因此实例材质要能提前创建。
+    private void EnsureMaterialInstance()
+    {
+        if (sharedMaterial == null) return;
+        if (materialInstance == null || previousMaterial != sharedMaterial)
         {
             if (materialInstance != null) Destroy(materialInstance);
             materialInstance = new Material(sharedMaterial);
-            renderer.sharedMaterial = materialInstance;
+            if (sprite != null) materialInstance.mainTexture = sprite.texture;
             previousMaterial = sharedMaterial;
-            spriteChanged = true;
         }
-        if (spriteChanged) materialInstance.mainTexture = sprite.texture;
+        if (renderer != null && renderer.sharedMaterial != materialInstance) renderer.sharedMaterial = materialInstance;
     }
 
     //共享资源由资源目录持有，这里只释放实例专用网格与材质。
