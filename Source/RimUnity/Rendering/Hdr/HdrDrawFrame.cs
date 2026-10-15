@@ -74,8 +74,6 @@ internal sealed class HdrDrawFrame : IDisposable
 
     //借用的 PersistentDraws 不归临时帧销毁，所有绘制项只由快照释放一次。
     internal static MeshDrawFrame Shell(MeshDrawFrame source, List<FinalDrawItem> draws, List<FinalDrawItem> persistent)
-        => new(source.FrameNumber, source.View, draws, persistent, source.SunDirection)
-        { CameraYaw = source.CameraYaw, CameraPitch = source.CameraPitch, SwayHead = source.SwayHead,
-            WindSpeed = source.WindSpeed, BillboardPitchDelta = source.BillboardPitchDelta };
+        => new(source.FrameNumber, source.View, draws, persistent, source.SunDirection);
     public void Dispose() => Frame.Dispose();
 }
