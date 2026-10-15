@@ -22,6 +22,14 @@ MyContentMod/
 
 The catalog records the format version, owner, stable asset IDs, names, descriptions, logical paths, relative file paths, types and dependencies. Load an asset by its logical path, such as `Effects/BasicBurst`, rather than a path such as `exports/<generation>/xxx.json`, which can change between exports. The loader does not look for similarly named resources in other mods to fill missing dependencies.
 
+## Loading-stage warmup
+
+Before the main menu appears, RimUnity reads enabled content catalogs and loads/compiles their shaders, linear HDR variants and referenced standard programs using the host compiler cache. This reads shader and material descriptors without creating effect instances or loading all textures.
+
+Before entering the first map, a loading event waits for the render thread to populate the actual map, HDR and enabled Bloom pipeline caches. It uses the current global keywords, common particle/ribbon layouts and actual exported mesh layouts. Exported meshes enter the existing resource cache at this stage, moving their loading cost into the loading screen. No visible draws are submitted and full-resolution HDR color targets remain lazy.
+
+Warmup runs once per process and adds no save data. Startup and initial map loading can take longer; in-game measurement is still required. Dynamic material states, later keywords and render-target rebuilds retain normal lazy creation. Failures are reported with lazy loading retained; headless operation skips pipelines and missing render frames do not cause an infinite wait. Logs report completion, elapsed time and actual assembly paths, including embedded frameworks.
+
 ## Public entry points
 
 | API | Result or purpose |

@@ -20,6 +20,8 @@ internal static class HdrMapHooks
     private static readonly ConditionalWeakTable<NativeTarget, Output> Outputs = new();
     private sealed record Output(int Frame, NativeTarget Texture);
     private static readonly Func<object, int, NativeTarget> Current = MakeCurrent();
+    internal static NativeTarget WarmupScene(object targets, int frame) => Current(targets, frame);
+    internal static HdrDrawTarget WarmupTarget(object owner) => Targets.GetValue(owner, _ => new HdrDrawTarget("RimUnity.HdrMap"));
 
     //主场景和后处理共用同一个目标身份，帧号防止菜单或空帧取到旧画面。
     internal static NativeTarget LinearScene(NativeTarget scene, int frame)

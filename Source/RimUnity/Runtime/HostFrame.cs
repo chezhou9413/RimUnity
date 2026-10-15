@@ -25,6 +25,7 @@ internal static class HostFrame
         application.OnUpdate += Update;
         application.FrameEnqueued += FinishFrame;
         application.BeforeGraphicsShutdown += Shutdown;
+        Rendering.LoadingWarmup.Install(application);
         lastGame = Current.Game;
     }
 
@@ -75,6 +76,7 @@ internal static class HostFrame
     private static void Shutdown(EngineApplication app)
     {
         FinishFrame(app);
+        Rendering.LoadingWarmup.Shutdown(app);
         NativeRuntime.ClearScene();
         Tweening.DOTween.Clear();
         app.OnUpdate -= Update;

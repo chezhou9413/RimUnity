@@ -20,7 +20,9 @@ public sealed class RimUnityMod : Mod
         Rendering.ShaderMaterialDefaults.Install();
         new Harmony("Chezhou.RimUnity").PatchAll(typeof(RimUnityMod).Assembly);
         LongEventHandler.ExecuteWhenFinished(HostFrame.Install);
-        Log.Message("[RimUnity] 运行时已加载；使用文档见 Docs/zh-CN 和 Docs/en。");
+        LongEventHandler.ExecuteWhenFinished(Rendering.LoadingWarmup.CompileBeforeMenu);
+        Log.Message("[RimUnity] 运行时已加载；使用文档见 Docs/zh-CN 和 Docs/en。程序集：" + typeof(RimUnityMod).Assembly.Location
+            + "；Core：" + typeof(Texture2D).Assembly.Location);
     }
 
     //渲染设置属于桥接框架，内容模组无需各自提供后处理窗口。

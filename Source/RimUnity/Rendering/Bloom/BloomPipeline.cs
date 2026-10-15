@@ -21,6 +21,8 @@ internal sealed class BloomPipeline : IDisposable
     private bool prepared;
     private int width, height;
     internal readonly IRenderPass[] Passes;
+    internal (MeshBatchRenderer renderer, VkRenderPass pass) PrepareWarmup(in FrameContext ctx, NativeRenderTexture source)
+        => layers.PrepareWarmup(in ctx, source);
 
     //资源路径在主线程模组初始化时确定；渲染线程仅使用已发布的路径。
     internal BloomPipeline(CompositePass scene)
@@ -46,7 +48,9 @@ internal sealed class BloomPipeline : IDisposable
     private void Ensure(in FrameContext ctx, NativeRenderTexture source)
     {
         if (targets != null && width == source.Width && height == source.Height) return;
-        ReleaseTargets(); width = source.Width; height = source.Height;
+        //The first target allocation must retain the pipeline cache prepared during map loading.
+        if (targets != null) ReleaseTargets();
+        width = source.Width; height = source.Height;
         targets = new NativeRenderTexture[ctx.RenderContext.FramesInFlight][];
         for (int frame = 0; frame < targets.Length; frame++)
         {

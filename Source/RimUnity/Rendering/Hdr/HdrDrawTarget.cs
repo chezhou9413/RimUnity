@@ -20,6 +20,11 @@ internal sealed unsafe partial class HdrDrawTarget : IDisposable
     private int current;
     internal NativeTarget Result { get; private set; }
     internal HdrDrawTarget(string name) => this.name = name;
+    internal (MeshBatchRenderer renderer, VkRenderPass pass) PrepareWarmup(in FrameContext ctx, NativeTarget scene)
+    {
+        EnsurePipelineResources(in ctx, scene);
+        return (renderer, pass);
+    }
     internal static bool Gamma(NativeTarget texture) => texture.ColorFormat is VkFormat.B8G8R8A8UNorm or VkFormat.R8G8B8A8UNorm;
 
     //地图先保留已清屏的背景；Bloom 从透明黑开始，不把背景计入亮部。
@@ -98,10 +103,8 @@ internal sealed unsafe partial class HdrDrawTarget : IDisposable
 
     private void Initialize(in FrameContext ctx, NativeTarget scene)
     {
-        device = ctx.Device;
-        renderer = new MeshBatchRenderer(ctx.GraphicsDevice, ctx.RenderContext);
+        EnsurePipelineResources(in ctx, scene);
         transfer = new HdrTransferPass(name + ".Transfer"); output = new HdrTransferPass(name + ".Output");
-        pass = CreatePass(device, scene.DepthFormat);
         colors = new NativeTarget[ctx.RenderContext.FramesInFlight][];
         sceneCopies = new NativeTarget[colors.Length];
         framebuffers = new VkFramebuffer[colors.Length][];
@@ -111,6 +114,16 @@ internal sealed unsafe partial class HdrDrawTarget : IDisposable
             for (int mode = 0; mode < 2; mode++)
                 colors[i][mode] = new NativeTarget(scene.Width, scene.Height, VkFormat.R16G16B16A16SFloat, name: $"{name}.{i}.{mode}");
         }
+    }
+
+    //Prewarming must not allocate full-resolution color targets or discard its warmed renderer later.
+    private void EnsurePipelineResources(in FrameContext ctx, NativeTarget scene)
+    {
+        if (renderer != null) return;
+        device = ctx.Device;
+        var created = new MeshBatchRenderer(ctx.GraphicsDevice, ctx.RenderContext);
+        try { pass = CreatePass(device, scene.DepthFormat); renderer = created; }
+        catch { created.Dispose(); throw; }
     }
 
     //各在途帧的深度视图不同，等到实际使用该帧时绑定。
