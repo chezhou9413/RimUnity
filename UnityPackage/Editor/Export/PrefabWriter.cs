@@ -17,8 +17,7 @@ namespace RimUnity.Editor
             if (string.IsNullOrEmpty(assetPath) || !PrefabUtility.IsPartOfPrefabAsset(prefab)) throw new ArgumentException("必须选择工程中的 Prefab 资产。");
             //FBX 导入模型本身就是只读对象树，不能传给只接收 .prefab 的 LoadPrefabContents。
             bool importedModel = PrefabUtility.GetPrefabAssetType(prefab) == PrefabAssetType.Model;
-            // Imported models have no LoadPrefabContents handle. Clone them when the
-            // export policy mutates render state; never alter the imported asset.
+            //Imported models have no LoadPrefabContents handle; processors receive a copy.
             bool clonedModel = importedModel;
             GameObject root = importedModel ? (clonedModel ? Object.Instantiate(prefab) : prefab) : PrefabUtility.LoadPrefabContents(assetPath);
             try
@@ -28,15 +27,15 @@ namespace RimUnity.Editor
                 context.ExportAsset = root;
                 return resources.Processors.Run(context, current =>
                 {
-                var exportRoot = (GameObject)current.ExportAsset;
-                resources.Options.Prepare(exportRoot, assetPath);
-                var objects = new Dictionary<Object, string>();
-                Collect(exportRoot.transform, "root", objects);
-                var writer = new ValueWriter(objects, resources);
-                var data = new PrefabData();
-                Walk(exportRoot.transform, null, objects, writer, data);
-                write(data, current);
-                return data;
+                    var exportRoot = (GameObject)current.ExportAsset;
+                    resources.Options.Prepare(exportRoot, assetPath);
+                    var objects = new Dictionary<Object, string>();
+                    Collect(exportRoot.transform, "root", objects);
+                    var writer = new ValueWriter(objects, resources);
+                    var data = new PrefabData();
+                    Walk(exportRoot.transform, null, objects, writer, data);
+                    write(data, current);
+                    return data;
                 });
             }
             finally { if (clonedModel) Object.DestroyImmediate(root); else if (!importedModel) PrefabUtility.UnloadPrefabContents(root); }

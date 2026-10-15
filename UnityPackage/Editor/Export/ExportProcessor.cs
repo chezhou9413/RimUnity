@@ -133,7 +133,12 @@ namespace RimUnity.Editor
             catch (Exception error) { context.Succeeded = false; context.Error = error; errors.Add(error); }
             finally { context.Cleanup(errors); }
             if (errors.Count > 0)
-                throw new AggregateException("资源导出或清理失败：" + context.SourcePath + " (" + context.ReferencePath + ")", errors);
+            {
+                context.Succeeded = false;
+                var failure = new AggregateException("资源导出或清理失败：" + context.SourcePath + " (" + context.ReferencePath + ")", errors);
+                context.Error = failure;
+                throw failure;
+            }
             return result;
         }
     }

@@ -1,0 +1,260 @@
+[
+  {
+    "title": "README.txt · 1.6/README.txt",
+    "source": "1.6/README.txt",
+    "file": "Sources/1.6/README.txt",
+    "category": "其他原文"
+  },
+  {
+    "title": "显存归责窗口 · Docs/显存归责.md",
+    "source": "Docs/显存归责.md",
+    "file": "Sources/Docs/显存归责.md",
+    "category": "其他原文"
+  },
+  {
+    "title": "API quick start · Docs/en/ApiQuickStart.md",
+    "source": "Docs/en/ApiQuickStart.md",
+    "file": "Sources/Docs/en/ApiQuickStart.md",
+    "category": "原文·English"
+  },
+  {
+    "title": "Color, transparent blending and Bloom · Docs/en/ColorAndBloom.md",
+    "source": "Docs/en/ColorAndBloom.md",
+    "file": "Sources/Docs/en/ColorAndBloom.md",
+    "category": "原文·English"
+  },
+  {
+    "title": "Exporting custom shaders · Docs/en/CustomShaderConversion.md",
+    "source": "Docs/en/CustomShaderConversion.md",
+    "file": "Sources/Docs/en/CustomShaderConversion.md",
+    "category": "原文·English"
+  },
+  {
+    "title": "Defs.md · Docs/en/Defs.md",
+    "source": "Docs/en/Defs.md",
+    "file": "Sources/Docs/en/Defs.md",
+    "category": "原文·English"
+  },
+  {
+    "title": "Installing the exporter and exporting your first prefab · Docs/en/ExporterSetup.md",
+    "source": "Docs/en/ExporterSetup.md",
+    "file": "Sources/Docs/en/ExporterSetup.md",
+    "category": "原文·English"
+  },
+  {
+    "title": "Export processors · Docs/en/ExportProcessors.md",
+    "source": "Docs/en/ExportProcessors.md",
+    "file": "Sources/Docs/en/ExportProcessors.md",
+    "category": "原文·English"
+  },
+  {
+    "title": "Custom IMGUI materials · Docs/en/ImmediateUI.md",
+    "source": "Docs/en/ImmediateUI.md",
+    "file": "Sources/Docs/en/ImmediateUI.md",
+    "category": "原文·English"
+  },
+  {
+    "title": "MonoBehaviour and common methods · Docs/en/MonoBehaviour.md",
+    "source": "Docs/en/MonoBehaviour.md",
+    "file": "Sources/Docs/en/MonoBehaviour.md",
+    "category": "原文·English"
+  },
+  {
+    "title": "Particle modules and limitations · Docs/en/ParticleExpansion.md",
+    "source": "Docs/en/ParticleExpansion.md",
+    "file": "Sources/Docs/en/ParticleExpansion.md",
+    "category": "原文·English"
+  },
+  {
+    "title": "Exporting and using particles · Docs/en/ParticleQuickStart.md",
+    "source": "Docs/en/ParticleQuickStart.md",
+    "file": "Sources/Docs/en/ParticleQuickStart.md",
+    "category": "原文·English"
+  },
+  {
+    "title": "Plain-text asset build manager · Docs/en/Publishing.md",
+    "source": "Docs/en/Publishing.md",
+    "file": "Sources/Docs/en/Publishing.md",
+    "category": "原文·English"
+  },
+  {
+    "title": "Getting started · Docs/en/QuickStart.md",
+    "source": "Docs/en/QuickStart.md",
+    "file": "Sources/Docs/en/QuickStart.md",
+    "category": "原文·English"
+  },
+  {
+    "title": "Loading assets and directory layout · Docs/en/ResourceLoading.md",
+    "source": "Docs/en/ResourceLoading.md",
+    "file": "Sources/Docs/en/ResourceLoading.md",
+    "category": "原文·English"
+  },
+  {
+    "title": "Shaders.md · Docs/en/Shaders.md",
+    "source": "Docs/en/Shaders.md",
+    "file": "Sources/Docs/en/Shaders.md",
+    "category": "原文·English"
+  },
+  {
+    "title": "Supported features and limitations · Docs/en/Status.md",
+    "source": "Docs/en/Status.md",
+    "file": "Sources/Docs/en/Status.md",
+    "category": "原文·English"
+  },
+  {
+    "title": "Types, directories and scripts · Docs/en/Usage.md",
+    "source": "Docs/en/Usage.md",
+    "file": "Sources/Docs/en/Usage.md",
+    "category": "原文·English"
+  },
+  {
+    "title": "Authoring, exporting, integration and publishing · Docs/en/Workflow.md",
+    "source": "Docs/en/Workflow.md",
+    "file": "Sources/Docs/en/Workflow.md",
+    "category": "原文·English"
+  },
+  {
+    "title": "API 快速接入 · Docs/zh-CN/ApiQuickStart.md",
+    "source": "Docs/zh-CN/ApiQuickStart.md",
+    "file": "Sources/Docs/zh-CN/ApiQuickStart.md",
+    "category": "原文·中文"
+  },
+  {
+    "title": "颜色、透明混合与 Bloom · Docs/zh-CN/ColorAndBloom.md",
+    "source": "Docs/zh-CN/ColorAndBloom.md",
+    "file": "Sources/Docs/zh-CN/ColorAndBloom.md",
+    "category": "原文·中文"
+  },
+  {
+    "title": "自定义 Shader 导出 · Docs/zh-CN/CustomShaderConversion.md",
+    "source": "Docs/zh-CN/CustomShaderConversion.md",
+    "file": "Sources/Docs/zh-CN/CustomShaderConversion.md",
+    "category": "原文·中文"
+  },
+  {
+    "title": "Defs.md · Docs/zh-CN/Defs.md",
+    "source": "Docs/zh-CN/Defs.md",
+    "file": "Sources/Docs/zh-CN/Defs.md",
+    "category": "原文·中文"
+  },
+  {
+    "title": "导出工具安装与第一次导出 · Docs/zh-CN/ExporterSetup.md",
+    "source": "Docs/zh-CN/ExporterSetup.md",
+    "file": "Sources/Docs/zh-CN/ExporterSetup.md",
+    "category": "原文·中文"
+  },
+  {
+    "title": "导出前后处理 · Docs/zh-CN/ExportProcessors.md",
+    "source": "Docs/zh-CN/ExportProcessors.md",
+    "file": "Sources/Docs/zh-CN/ExportProcessors.md",
+    "category": "原文·中文"
+  },
+  {
+    "title": "IMGUI 自定义材质 · Docs/zh-CN/ImmediateUI.md",
+    "source": "Docs/zh-CN/ImmediateUI.md",
+    "file": "Sources/Docs/zh-CN/ImmediateUI.md",
+    "category": "原文·中文"
+  },
+  {
+    "title": "MonoBehaviour 与常用方法 · Docs/zh-CN/MonoBehaviour.md",
+    "source": "Docs/zh-CN/MonoBehaviour.md",
+    "file": "Sources/Docs/zh-CN/MonoBehaviour.md",
+    "category": "原文·中文"
+  },
+  {
+    "title": "粒子模块与使用限制 · Docs/zh-CN/ParticleExpansion.md",
+    "source": "Docs/zh-CN/ParticleExpansion.md",
+    "file": "Sources/Docs/zh-CN/ParticleExpansion.md",
+    "category": "原文·中文"
+  },
+  {
+    "title": "粒子导出与使用 · Docs/zh-CN/ParticleQuickStart.md",
+    "source": "Docs/zh-CN/ParticleQuickStart.md",
+    "file": "Sources/Docs/zh-CN/ParticleQuickStart.md",
+    "category": "原文·中文"
+  },
+  {
+    "title": "首次特效卡顿采集 · Docs/zh-CN/ParticleSpikeDiagnostics.md",
+    "source": "Docs/zh-CN/ParticleSpikeDiagnostics.md",
+    "file": "Sources/Docs/zh-CN/ParticleSpikeDiagnostics.md",
+    "category": "原文·中文"
+  },
+  {
+    "title": "明文资源构建管理器 · Docs/zh-CN/Publishing.md",
+    "source": "Docs/zh-CN/Publishing.md",
+    "file": "Sources/Docs/zh-CN/Publishing.md",
+    "category": "原文·中文"
+  },
+  {
+    "title": "快速开始 · Docs/zh-CN/QuickStart.md",
+    "source": "Docs/zh-CN/QuickStart.md",
+    "file": "Sources/Docs/zh-CN/QuickStart.md",
+    "category": "原文·中文"
+  },
+  {
+    "title": "一次性场景与显存诊断 · Docs/zh-CN/RenderDiagnostics.md",
+    "source": "Docs/zh-CN/RenderDiagnostics.md",
+    "file": "Sources/Docs/zh-CN/RenderDiagnostics.md",
+    "category": "原文·中文"
+  },
+  {
+    "title": "资源载入与目录约定 · Docs/zh-CN/ResourceLoading.md",
+    "source": "Docs/zh-CN/ResourceLoading.md",
+    "file": "Sources/Docs/zh-CN/ResourceLoading.md",
+    "category": "原文·中文"
+  },
+  {
+    "title": "Shaders.md · Docs/zh-CN/Shaders.md",
+    "source": "Docs/zh-CN/Shaders.md",
+    "file": "Sources/Docs/zh-CN/Shaders.md",
+    "category": "原文·中文"
+  },
+  {
+    "title": "支持范围与限制 · Docs/zh-CN/Status.md",
+    "source": "Docs/zh-CN/Status.md",
+    "file": "Sources/Docs/zh-CN/Status.md",
+    "category": "原文·中文"
+  },
+  {
+    "title": "类型、目录与脚本用法 · Docs/zh-CN/Usage.md",
+    "source": "Docs/zh-CN/Usage.md",
+    "file": "Sources/Docs/zh-CN/Usage.md",
+    "category": "原文·中文"
+  },
+  {
+    "title": "制作、导出、接入与发布工作流 · Docs/zh-CN/Workflow.md",
+    "source": "Docs/zh-CN/Workflow.md",
+    "file": "Sources/Docs/zh-CN/Workflow.md",
+    "category": "原文·中文"
+  },
+  {
+    "title": "RimUnity · README.en.md",
+    "source": "README.en.md",
+    "file": "Sources/README.en.md",
+    "category": "原文·English"
+  },
+  {
+    "title": "RimUnity · README.md",
+    "source": "README.md",
+    "file": "Sources/README.md",
+    "category": "原文·中文"
+  },
+  {
+    "title": "Steam 图文简介 / Illustrated Steam description · Tools/Steam/README.md",
+    "source": "Tools/Steam/README.md",
+    "file": "Sources/Tools/Steam/README.md",
+    "category": "原文·中文"
+  },
+  {
+    "title": "RimUnity Exporter · UnityPackage/README.en.md",
+    "source": "UnityPackage/README.en.md",
+    "file": "Sources/UnityPackage/README.en.md",
+    "category": "原文·English"
+  },
+  {
+    "title": "RimUnity Exporter · UnityPackage/README.md",
+    "source": "UnityPackage/README.md",
+    "file": "Sources/UnityPackage/README.md",
+    "category": "原文·中文"
+  }
+]

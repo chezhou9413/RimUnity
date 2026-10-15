@@ -5,6 +5,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../UnityPackage/Editor/Publishing/ExportHistory.cs" Link="ExportHistory.cs" />
+    <Compile Include="../../UnityPackage/Editor/Publishing/ResourceInventory.cs" Link="ResourceInventory.cs" />
+    <Compile Include="../../UnityPackage/Editor/Publishing/InventoryGeometry.cs" Link="InventoryGeometry.cs" />
     <Compile Include="../../UnityPackage/Editor/Publishing/ResourceOwnership.cs" Link="ResourceOwnership.cs" />
     <Compile Include="../../UnityPackage/Editor/Publishing/RimUnityPublisher.cs" Link="RimUnityPublisher.cs" />
     <Compile Include="../../UnityPackage/Editor/Export/ExportStorage.cs" Link="ExportStorage.cs" />

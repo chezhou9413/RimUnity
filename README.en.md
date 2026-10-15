@@ -29,6 +29,8 @@ instance.transform.position = new RimUnity.Vector3(x, y, z);
 
 ## Documentation
 
+Open **RimUnity → 百科全书** in Unity for the offline handbook, full-text search, and bundled README/documentation originals. Export callbacks are described in [export processors](Docs/en/ExportProcessors.md).
+
 - [Getting started](Docs/en/QuickStart.md)
 - [Installing the exporter and your first export](Docs/en/ExporterSetup.md)
 - [API quick start](Docs/en/ApiQuickStart.md)

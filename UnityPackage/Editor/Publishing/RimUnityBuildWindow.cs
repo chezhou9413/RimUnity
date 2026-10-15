@@ -14,7 +14,7 @@ namespace RimUnity.Editor { public sealed partial class RimUnityBuildWindow : Ed
     private readonly List<string> messages = new List<string>();
     private Vector2 resourcesScroll, settingsScroll, logScroll;
     private string search = "", error = "";
-    private int tab, destination;
+    private int tab;
     private bool rebuild = true, onlyIssues, initialized;
     private GUIStyle titleStyle, subtitleStyle, pathStyle;
     private const string PresetPath = RimUnityWorkflow.WindowPresetPath;
@@ -29,11 +29,13 @@ namespace RimUnity.Editor { public sealed partial class RimUnityBuildWindow : Ed
     public static void Open()
     {
         var window = GetWindow<RimUnityBuildWindow>("RimUnity 构建管理");
-        window.minSize = new Vector2(860, 580);
+        window.minSize = new Vector2(1100, 650);
         window.Show();
     }
     private void OnEnable()
     {
+        minSize = new Vector2(760, 600);
+        LoadExportHistory();
         RefreshEntries();
         try
         {
@@ -50,6 +52,7 @@ namespace RimUnity.Editor { public sealed partial class RimUnityBuildWindow : Ed
     private void OnDisable()
     {
         SavePreset();
+        inventoryAssets.Clear();
     }
     private void SavePreset()
     {
@@ -77,6 +80,7 @@ namespace RimUnity.Editor { public sealed partial class RimUnityBuildWindow : Ed
                 else { current.bundle = item.bundle; current.mod = item.mod; current.ui = item.ui; }
             }
             RefreshDuplicates();
+            RebuildInventory();
             initialized = true;
             error = "";
         }
@@ -93,76 +97,23 @@ namespace RimUnity.Editor { public sealed partial class RimUnityBuildWindow : Ed
     private void OnGUI()
     {
         Styles();
-        GUILayout.Space(8);
-        GUILayout.Label("RIMUNITY  /  明文资源构建", titleStyle);
-        GUILayout.Label("沿用 Unity 制作资源，按 AssetBundle 归属输出。检查、导出与版本替换在这里完成。", subtitleStyle);
-        var accent = EditorGUIUtility.isProSkin ? new Color(0.20f, 0.68f, 0.78f) : new Color(0.12f, 0.48f, 0.60f);
-        EditorGUI.DrawRect(GUILayoutUtility.GetRect(1, 3, GUILayout.ExpandWidth(true)), accent);
-        GUILayout.Space(10);
-        if (!string.IsNullOrEmpty(error)) EditorGUILayout.HelpBox(error, MessageType.Error);
-        if (profile == null) { if (GUILayout.Button("重新载入配置")) RefreshEntries(); return; }
-        GUILayout.BeginHorizontal();
-        Card("源入口", entries.Count.ToString());
-        Card("可发布", entries.Count(e => e.status == "pending").ToString());
-        Card("检查阻碍", entries.Count(e => e.status != "pending").ToString());
-        Card("输出目录", profile.mappings.Select(m => m.mod).Where(m => !string.IsNullOrWhiteSpace(m)).Distinct().Count().ToString());
-        GUILayout.EndHorizontal();
-        GUILayout.Space(8);
-        tab = GUILayout.Toolbar(tab, new[] { "资源清单", "输出与工具配置", "执行记录" }, GUILayout.Height(28));
-        GUILayout.Space(8);
-        if (tab == 0) Resources(); else if (tab == 1) Settings(); else Logs();
-        GUILayout.Space(8);
-        Footer();
-        GUILayout.Space(8);
-    }
-    private static void Card(string label, string value)
-    {
-        GUILayout.BeginVertical(EditorStyles.helpBox);
-        GUILayout.Label(label, EditorStyles.miniLabel);
-        GUILayout.Label(value, new GUIStyle(EditorStyles.boldLabel) { fontSize = 18 });
-        GUILayout.EndVertical();
-    }
-    private string[] Destinations() => profile.mappings.Select(m => m.bundle + " → " + m.mod).ToArray();
-    private void Resources()
-    {
-        GUILayout.BeginHorizontal(EditorStyles.toolbar);
-        search = GUILayout.TextField(search, GUI.skin.FindStyle("ToolbarSearchTextField") ?? EditorStyles.toolbarTextField);
-        onlyIssues = GUILayout.Toggle(onlyIssues, "仅看检查问题", EditorStyles.toolbarButton, GUILayout.Width(105));
-        if (GUILayout.Button("刷新检查", EditorStyles.toolbarButton, GUILayout.Width(85))) RefreshEntries(true);
-        if (GUILayout.Button("定位首个问题", EditorStyles.toolbarButton, GUILayout.Width(100))) Ping(entries.FirstOrDefault(e => e.status != "pending"));
-        GUILayout.EndHorizontal();
-        DrawBundleFilter();
-        var visible = entries.Where(e => MatchesBundle(e.bundle) && (!onlyIssues || e.status != "pending" || e.missingScripts > 0) &&
-            (string.IsNullOrWhiteSpace(search) || (e.path + " " + e.bundle + " " + e.status).IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0)).ToArray();
-        resourcesScroll = EditorGUILayout.BeginScrollView(resourcesScroll);
-        DrawDuplicates();
-        foreach (var group in visible.GroupBy(e => e.bundle ?? "未分配"))
+        InventoryStyles();
+        DrawBuildHeader();
+        var layout = InventoryGeometry.Calculate(position.width, position.height, !string.IsNullOrEmpty(error));
+        Rect body = InventoryRect(layout.Content);
+        if (!string.IsNullOrEmpty(error))
         {
-            GUILayout.Space(6);
-            GUILayout.Label(group.Key + "  ·  " + group.Count() + " 个入口", EditorStyles.boldLabel);
-            foreach (var entry in group)
-            {
-                GUILayout.BeginVertical(EditorStyles.helpBox);
-                GUILayout.BeginHorizontal();
-                if (GUILayout.Button(new GUIContent(Path.GetFileName(entry.path), entry.path), EditorStyles.label, GUILayout.MinWidth(170))) Ping(entry);
-                GUILayout.FlexibleSpace();
-                bool ui = GUILayout.Toggle(entry.ui, new GUIContent("UI", "为屏幕界面材质/Shader 导出 GUI 顶点布局"), GUILayout.Width(45));
-                if (ui != entry.ui) { entry.ui = ui; SavePreset(); }
-                GUILayout.Label(Status(entry), EditorStyles.miniLabel, GUILayout.Width(105));
-                GUILayout.EndHorizontal();
-                GUILayout.Label(entry.path, pathStyle);
-                if (!string.IsNullOrEmpty(entry.error)) EditorGUILayout.HelpBox(entry.error, MessageType.Warning);
-                if (entry.missingScripts > 0) EditorGUILayout.HelpBox("含 " + entry.missingScripts + " 个缺失脚本，将随资源记录警告。", MessageType.Warning);
-                GUILayout.EndVertical();
-            }
+            EditorGUI.HelpBox(InventoryRect(layout.Error), error, MessageType.Error);
         }
-        EditorGUILayout.EndScrollView();
-        GUILayout.BeginHorizontal();
-        if (profile.mappings.Length > 0) destination = EditorGUILayout.Popup(Math.Min(destination, profile.mappings.Length - 1), Destinations());
-        using (new EditorGUI.DisabledScope(profile.mappings.Length == 0))
-            if (GUILayout.Button("加入 Project 中选中的资源", GUILayout.Width(215))) AddSelection();
-        GUILayout.EndHorizontal();
-        GUILayout.Label("清单由 AssetBundle 标签和手动加入的入口组成，发布时整份清单都会导出。单击资源名定位到 Project；依赖自动随入口导出。界面材质/Shader 请勾选 UI。", pathStyle);
+        if (profile == null)
+        {
+            if (GUI.Button(new Rect(body.x + 12, body.y + 12, 160, 34), "重新载入配置", inventoryButton)) RefreshEntries();
+            return;
+        }
+        if (tab == 0) Resources(layout);
+        else if (tab == 1) Settings(body);
+        else Logs(body);
+        Footer(InventoryRect(layout.Footer));
     }
     private static string Status(RimUnityWorkflow.Entry entry)
     {
@@ -183,7 +134,9 @@ namespace RimUnity.Editor { public sealed partial class RimUnityBuildWindow : Ed
     }
     private void AddSelection()
     {
-        var mapping = profile.mappings[destination];
+        var mapping = profile.mappings.FirstOrDefault(m => m.bundle == batchBundle)
+            ?? profile.mappings.FirstOrDefault(m => !string.IsNullOrWhiteSpace(m.bundle));
+        if (mapping == null) return;
         foreach (var asset in Selection.objects)
         {
             string path = AssetDatabase.GetAssetPath(asset);
@@ -200,94 +153,12 @@ namespace RimUnity.Editor { public sealed partial class RimUnityBuildWindow : Ed
             if (!manual.Any(e => e.path == path)) manual.Add(entry);
         }
         SavePreset();
-        RefreshDuplicates();
-    }
-    private void Settings()
-    {
-        settingsScroll = EditorGUILayout.BeginScrollView(settingsScroll);
-        GUILayout.Label("内容包输出位置", EditorStyles.boldLabel);
-        EditorGUILayout.HelpBox("选择含 About/About.xml 的 Mod 根目录。程序会在其下生成 1.7/Data/RimUnity，不要选择 exports 子目录。多个包可输出到同一个 Mod。", MessageType.Info);
-        var mappings = profile.mappings.ToList();
-        int remove = -1;
-        for (int i = 0; i < mappings.Count; i++)
-        {
-            var mapping = mappings[i];
-            GUILayout.BeginVertical(EditorStyles.helpBox);
-            GUILayout.BeginHorizontal();
-            mapping.bundle = EditorGUILayout.TextField("包名 / AB 标签", mapping.bundle);
-            if (GUILayout.Button("移除", GUILayout.Width(55))) remove = i;
-            GUILayout.EndHorizontal();
-            GUILayout.BeginHorizontal();
-            mapping.mod = EditorGUILayout.TextField("目标 Mod 根目录", mapping.mod);
-            if (GUILayout.Button("浏览", GUILayout.Width(55)))
-            {
-                string path = EditorUtility.OpenFolderPanel("选择内容 Mod 根目录", profile.repository, "");
-                if (!string.IsNullOrEmpty(path)) mapping.mod = path.Replace('\\', '/');
-            }
-            GUILayout.EndHorizontal();
-            if (!string.IsNullOrWhiteSpace(mapping.mod))
-                GUILayout.Label("明文输出：" + Path.GetFullPath(Path.Combine(profile.repository, mapping.mod, "1.7/Data/RimUnity")), pathStyle);
-            GUILayout.EndVertical();
-        }
-        if (remove >= 0) mappings.RemoveAt(remove);
-        if (GUILayout.Button("新增输出映射")) mappings.Add(new RimUnityWorkflow.Mapping { bundle = "", mod = "" });
-        profile.mappings = mappings.ToArray();
-        GUILayout.Space(14);
-        GUILayout.Label("导出设置", EditorStyles.boldLabel);
-        profile.disableCastShadows = EditorGUILayout.Toggle("自动关闭 Cast Shadows", profile.disableCastShadows);
-        profile.disableReceiveShadows = EditorGUILayout.Toggle("自动关闭接收阴影", profile.disableReceiveShadows);
-        profile.disableLightProbes = EditorGUILayout.Toggle("自动关闭光照探针", profile.disableLightProbes);
-        profile.disableReflectionProbes = EditorGUILayout.Toggle("自动关闭反射探针", profile.disableReflectionProbes);
-        EditorGUILayout.HelpBox("勾选后仅关闭导出副本中的对应 Renderer 设置，并记录位置；原 prefab 不变。未勾选项保持严格检查。反射探针选项不会删除材质自身的 Cubemap。设置后点击下方保存配置。", MessageType.Info);
-        GUILayout.Space(14);
-        GUILayout.Label("制作工具链", EditorStyles.boldLabel);
-        profile.repository = Folder("内容仓库", profile.repository);
-        profile.gameRoot = Folder("RimWorld 1.7", profile.gameRoot);
-        GUILayout.BeginHorizontal();
-        profile.shaderTool = EditorGUILayout.TextField("ShaderTool", profile.shaderTool);
-        if (GUILayout.Button("浏览", GUILayout.Width(55)))
-        {
-            string path = EditorUtility.OpenFilePanel("选择 RimUnity.ShaderTool.exe", Path.GetDirectoryName(profile.shaderTool), "exe");
-            if (!string.IsNullOrEmpty(path)) profile.shaderTool = path;
-        }
-        GUILayout.EndHorizontal();
-        profile.auditOnReload = EditorGUILayout.Toggle("会话首次载入时检查", profile.auditOnReload);
-        GUILayout.Space(12);
-        EditorGUILayout.HelpBox("AB 标签就是发布范围。打上已配置包名的资源会进入清单；没有标签的独立入口，请在资源页手动加入并指定目标包。材质、贴图、Shader 和动画依赖由 RimUnity 自动收集。", MessageType.Info);
-        GUILayout.Space(10);
-        if (GUILayout.Button("保存配置并刷新检查", GUILayout.Height(30)))
-        {
-            File.WriteAllText(RimUnityWorkflow.ProfilePath, JsonConvert.SerializeObject(profile, Formatting.Indented));
-            RefreshEntries();
-        }
-        EditorGUILayout.EndScrollView();
-    }
-    private static string Folder(string label, string value)
-    {
-        GUILayout.BeginHorizontal(); value = EditorGUILayout.TextField(label, value);
-        if (GUILayout.Button("浏览", GUILayout.Width(55)))
-        { string path = EditorUtility.OpenFolderPanel(label, value, ""); if (!string.IsNullOrEmpty(path)) value = path; }
-        GUILayout.EndHorizontal(); return value;
-    }
-    private void Logs()
-    {
-        GUILayout.BeginHorizontal();
-        if (GUILayout.Button("打开检查报告"))
-        {
-            string path = Path.GetFullPath("Library/RimUnity/Reports/inventory.json");
-            if (File.Exists(path)) EditorUtility.RevealInFinder(path);
-        }
-        if (GUILayout.Button("复制执行记录")) EditorGUIUtility.systemCopyBuffer = string.Join("\n", messages);
-        if (GUILayout.Button("保存执行记录")) SaveLog();
-        if (GUILayout.Button("清空记录")) messages.Clear();
-        GUILayout.EndHorizontal();
-        logScroll = EditorGUILayout.BeginScrollView(logScroll);
-        foreach (string message in messages) GUILayout.Label(message, EditorStyles.wordWrappedLabel);
-        EditorGUILayout.EndScrollView();
+        RefreshEntries();
     }
     private void Log(string text)
     {
         messages.Add(DateTime.Now.ToString("HH:mm:ss") + "  " + text);
+        if (activeExport != null) activeExport.messages.Add(messages[messages.Count - 1]);
         if (messages.Count > 2000) messages.RemoveAt(0);
         Repaint();
     }
@@ -297,53 +168,65 @@ namespace RimUnity.Editor { public sealed partial class RimUnityBuildWindow : Ed
         Directory.CreateDirectory(directory);
         string path = Path.Combine(directory, "window-export.log");
         File.WriteAllText(path, string.Join("\n", messages));
+        SaveExportHistory();
         Debug.Log("RimUnity 窗口执行记录：" + path);
     }
-    private void Footer()
+    private void Footer(Rect area)
     {
-        var blocked = entries.Where(e => e.status != "pending").ToArray();
-        if (blocked.Length > 0)
-        {
-            EditorGUILayout.HelpBox("清单中有 " + blocked.Length + " 个检查问题。首个：" + blocked[0].path + "\n" +
-                (blocked[0].error ?? blocked[0].status), MessageType.Warning);
-            if (GUILayout.Button("查看检查问题并定位首个阻碍"))
-            { tab = 0; onlyIssues = true; search = ""; Ping(blocked[0]); }
-        }
-        rebuild = EditorGUILayout.Popup("发布方式", rebuild ? 0 : 1, new[] { "完整重建 · 成功后删除旧版本", "增量更新 · 保留其他入口" }) == 0;
-        EditorGUILayout.HelpBox(rebuild ? "新清单只保留当前入口及依赖。没有 AssetBundle 归属、也不在手动入口中的旧资源会移除；全部成功后才替换和清理旧文件。" :
-            "更新当前清单中的入口，保留其他旧入口及其依赖。失败或取消不替换正式目录。", MessageType.Info);
+        EditorGUI.DrawRect(area, PanelColor());
+        EditorGUI.DrawRect(new Rect(area.x, area.y, area.width, 1), DividerColor());
+        GUI.Label(new Rect(12, area.y + 12, Mathf.Max(100, area.width - 395), 34),
+            inventory.Length + " 个资源 · " + bundleNames.Length + " 个 AB 包 · " + inventory.Count(r => r.Unassigned) + " 个未归属", inventoryCaption);
+        float x = area.xMax - 374;
+        rebuild = EditorGUI.Popup(new Rect(x, area.y + 13, 104, 32), rebuild ? 0 : 1, new[] { "完整重建", "增量更新" }, inventoryPopup) == 0;
+        using (new EditorGUI.DisabledScope(resourceSelection.Count == 0))
+            if (GUI.Button(new Rect(x + 114, area.y + 13, 110, 32), new GUIContent("导出选中", "增量导出选中资源，保留其他已发布入口"), inventoryButton)) Publish(SelectedEntries(), false);
         using (new EditorGUI.DisabledScope(entries.Count == 0))
-            if (GUILayout.Button(rebuild ? "完整重建并发布" : "增量导出并发布", GUILayout.Height(36)))
+            if (PrimaryButton(new Rect(x + 234, area.y + 13, 128, 32), rebuild ? "构建并导出" : "增量导出")) Publish(entries.ToArray(), rebuild);
+    }
+    private void Publish(RimUnityWorkflow.Entry[] choice, bool full)
+    {
+        if (choice.Length == 0) return;
+        BeginExportHistory(choice, full);
+        try
+        {
+            foreach (var entry in choice)
             {
-                var choice = entries.ToArray();
-                string blockers = RimUnityPublisher.DescribeBlockers(choice);
-                if (blockers != null)
-                {
-                    error = blockers; Log(blockers); Debug.LogError(blockers); SaveLog(); tab = 0; onlyIssues = true; search = "";
-                    Ping(choice.First(e => e.status != "pending"));
-                    return;
-                }
-                if (rebuild && !EditorUtility.DisplayDialog("确认完整重建", "将以 " + choice.Length + " 个入口重建目标 Mod 的清单。没有 AssetBundle 归属的旧入口会删除。导出失败不替换正式目录。", "重建并发布", "取消")) return;
-                tab = 2;
-                try
-                {
-                    SavePreset();
-                    foreach (var entry in choice)
-                    {
-                        var asset = AssetDatabase.LoadMainAssetAtPath(entry.path);
-                        if (asset == null) throw new InvalidOperationException("源资源不存在：" + entry.path);
-                        if (asset is GameObject prefab && prefab.GetComponentsInChildren<Component>(true).Any(c => c == null))
-                            throw new InvalidOperationException("预制体含缺失脚本：" + entry.path);
-                        var mappings = profile.mappings.Where(m => m.bundle == entry.bundle).ToArray();
-                        if (mappings.Length != 1 || string.IsNullOrWhiteSpace(mappings[0].mod))
-                            throw new InvalidOperationException("包必须对应一个明确的目标目录：" + entry.bundle);
-                        entry.mod = mappings[0].mod;
-                    }
-                    RimUnityPublisher.Export(profile, choice, rebuild, Log); error = ""; RefreshEntries();
-                }
-                catch (Exception exception) { error = exception.Message; Log(exception.ToString()); Debug.LogException(exception); }
-                finally { SaveLog(); }
+                var asset = AssetDatabase.LoadMainAssetAtPath(entry.path);
+                if (asset == null) throw new InvalidOperationException("源资源不存在：" + entry.path);
+                if (asset is GameObject prefab && prefab.GetComponentsInChildren<Component>(true).Any(c => c == null))
+                    throw new InvalidOperationException("预制体含缺失脚本：" + entry.path);
+                var mappings = profile.mappings.Where(m => m.bundle == entry.bundle).ToArray();
+                if (mappings.Length != 1 || string.IsNullOrWhiteSpace(mappings[0].mod))
+                    throw new InvalidOperationException("包必须对应一个明确的目标目录：" + entry.bundle);
+                entry.mod = mappings[0].mod;
             }
+            activeExport.targets = choice.Select(e => Path.GetFullPath(Path.Combine(profile.repository, e.mod, "1.7/Data/RimUnity")))
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            var inputPaths = new HashSet<string>(choice.Select(e => e.path), StringComparer.OrdinalIgnoreCase);
+            activeExport.dependencies = AssetDatabase.GetDependencies(inputPaths.ToArray(), true)
+                .Where(p => !inputPaths.Contains(p) && !AssetDatabase.IsValidFolder(p)).Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(p => p, StringComparer.Ordinal).ToArray();
+            string blockers = RimUnityPublisher.DescribeBlockers(choice);
+            if (blockers != null) throw new InvalidOperationException(blockers);
+            if (full && !EditorUtility.DisplayDialog("确认完整重建", "将以 " + choice.Length + " 个入口重建目标 Mod 的清单。没有 AssetBundle 归属的旧入口会删除。导出失败不替换正式目录。", "重建并发布", "取消"))
+            { activeExport.status = "已取消"; Log("用户取消完整重建，未执行导出。"); return; }
+            tab = 2;
+            SavePreset();
+            RimUnityPublisher.Export(profile, choice, full, Log);
+            activeExport.status = "成功";
+            try { activeExport.CaptureOutputs(); }
+            catch (Exception reportError) { Log("发布已成功，但输出快照读取失败：" + reportError.Message); }
+            error = ""; RefreshEntries();
+        }
+        catch (Exception exception) { activeExport.status = exception is OperationCanceledException ? "已取消" : "失败"; error = exception.Message; Log(exception.ToString()); Debug.LogException(exception); }
+        finally
+        {
+            activeExport.finished = DateTime.Now;
+            activeExport = null;
+            InvalidateExportDetails();
+            try { SaveLog(); } catch (Exception reportError) { Debug.LogWarning("导出记录保存失败：" + reportError.Message); }
+        }
     }
 }
 

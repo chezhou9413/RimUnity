@@ -149,3 +149,6 @@ Check(((JObject)ExportStorage.Read(Path.Combine(migrationCopy, "catalog.json"))[
 var duplicates = ResourceOwnership.Scan(new[] { new Entry { path = "Assets/a.prefab", bundle = "A" }, new Entry { path = "Assets/b.prefab", bundle = "B" } });
 Check(duplicates.Length == 1 && duplicates[0].path == "Assets/shared.png" && duplicates[0].bundles.SequenceEqual(new[] { "A", "B" }), "duplicate scan includes automatic dependency and excludes scripts");
 Console.WriteLine("All publication tests passed. Scratch data: " + run);
+
+InventoryCases.Run();
+ExportHistoryCases.Run();

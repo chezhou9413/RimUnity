@@ -81,6 +81,9 @@ namespace RimUnity.Editor
 
         private string WriteResource(Object asset, string path, string id, string sourcePath, bool ui, bool cameraUi)
         {
+            //Copies have no AssetDatabase path; replacements may be persistent assets.
+            string inputPath = AssetDatabase.GetAssetPath(asset);
+            if (string.IsNullOrEmpty(inputPath)) inputPath = sourcePath;
             Begin();
             try
             {
@@ -97,7 +100,7 @@ namespace RimUnity.Editor
                 else if (asset is UnityEngine.Video.VideoClip video)
                 {
                     data.type = "VideoClip";
-                    string source = sourcePath;
+                    string source = inputPath;
                     string file = id + Path.GetExtension(source).ToLowerInvariant();
                     File.Copy(Path.GetFullPath(source), Path.Combine(directory, file));
                     Put("file", relative + "/" + file);
@@ -105,7 +108,7 @@ namespace RimUnity.Editor
                 else if (asset is AudioClip audio)
                 {
                     data.type = "AudioClip";
-                    string source = sourcePath;
+                    string source = inputPath;
                     string file = id + Path.GetExtension(source).ToLowerInvariant();
                     if (!new[] { ".ogg", ".wav", ".mp3" }.Contains(Path.GetExtension(file)))
                         throw new NotSupportedException(path + "：音频源文件需要 OGG、WAV 或 MP3。");
@@ -144,7 +147,7 @@ namespace RimUnity.Editor
                     bool numeric = IsFloatTexture(texture.format);
                     bool compressed = IsGpuCompressed(texture.format);
                     string file = id + (numeric ? ".bytes" : compressed ? ".rutex" : ".png");
-                    var importer = AssetImporter.GetAtPath(sourcePath) as TextureImporter;
+                    var importer = AssetImporter.GetAtPath(inputPath) as TextureImporter;
                     bool linear = importer != null ? !importer.sRGBTexture : !texture.isDataSRGB;
                     File.WriteAllBytes(Path.Combine(directory, file), numeric ? FloatTextureBytes(texture) : compressed ? GpuTextureBytes(texture, linear) : TextureBytes(texture, linear));
                     Put("file", relative + "/" + file); Put("linear", linear);
@@ -195,7 +198,7 @@ namespace RimUnity.Editor
                 else if (asset is Font font)
                 {
                     data.type = "Font";
-                    string source = sourcePath;
+                    string source = inputPath;
                     bool builtin = source == "Resources/unity_builtin_extra" || source == "Library/unity default resources";
                     Put("builtin", builtin);
                     if (!builtin)

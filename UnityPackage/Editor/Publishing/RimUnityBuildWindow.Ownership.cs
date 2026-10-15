@@ -11,89 +11,14 @@ namespace RimUnity.Editor
     public sealed partial class RimUnityBuildWindow
     {
         private string bundleFilter = "";
-        private ResourceOwnership.Duplicate[] duplicates = Array.Empty<ResourceOwnership.Duplicate>();
-        private readonly Dictionary<string, string> migrationTargets = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        private bool showDuplicates;
         private string batchBundle = "";
-        private readonly HashSet<string> migrationSelection = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         private void RefreshDuplicates()
         {
-            duplicates = ResourceOwnership.Scan(entries);
-            migrationSelection.IntersectWith(duplicates.Select(d => d.path));
+            var duplicates = ResourceOwnership.Scan(entries);
             var assigned = new HashSet<string>((profile.resourceOwners ?? Array.Empty<RimUnityWorkflow.ResourceOwner>()).Select(p => p.path), StringComparer.OrdinalIgnoreCase);
             int unresolved = duplicates.Count(d => !assigned.Contains(d.path));
-            if (unresolved > 0) Debug.LogWarning("[RimUnity] " + unresolved + " 个跨 AB 包重复引用的资源尚未指定归属。可在构建窗口的重复资源区迁移。");
-        }
-        private bool MatchesBundle(string bundle) => string.IsNullOrEmpty(bundleFilter) || bundle == bundleFilter;
-        private void DrawBundleFilter()
-        {
-            var bundles = profile.mappings.Select(m => m.bundle).Where(b => !string.IsNullOrWhiteSpace(b)).Distinct().OrderBy(b => b).ToArray();
-            var options = new[] { "全部 AB 包" }.Concat(bundles).ToArray();
-            int index = Array.IndexOf(bundles, bundleFilter) + 1;
-            int chosen = EditorGUILayout.Popup("AB 包筛选", Math.Max(0, index), options);
-            bundleFilter = chosen == 0 ? "" : bundles[chosen - 1];
-            showDuplicates = EditorGUILayout.Foldout(showDuplicates, "重复引用资源 · " + duplicates.Length + " 项", true);
-        }
-        private void DrawDuplicates()
-        {
-            if (!showDuplicates) return;
-            var mappings = profile.mappings.Where(m => !string.IsNullOrWhiteSpace(m.bundle) && !string.IsNullOrWhiteSpace(m.mod))
-                .GroupBy(m => m.bundle).Where(g => g.Count() == 1).Select(g => g.Single()).OrderBy(m => m.bundle).ToArray();
-            string[] labels = mappings.Select(m => m.bundle + " → " + m.mod).ToArray();
-            var visible = duplicates.Where(d => (string.IsNullOrEmpty(bundleFilter) || d.bundles.Contains(bundleFilter)) &&
-                (string.IsNullOrWhiteSpace(search) || (d.path + " " + string.Join(" ", d.bundles)).IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0)).ToArray();
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("全选当前筛选", GUILayout.Width(110))) migrationSelection.UnionWith(visible.Select(d => d.path));
-            if (GUILayout.Button("清空选择", GUILayout.Width(85))) migrationSelection.Clear();
-            GUILayout.Label("已选 " + migrationSelection.Count + " 项（含筛选外选择）", EditorStyles.miniLabel);
-            GUILayout.EndHorizontal();
-            if (mappings.Length > 0)
-            {
-                int target = Math.Max(0, Array.FindIndex(mappings, m => m.bundle == batchBundle));
-                target = EditorGUILayout.Popup("批量迁移目标", target, labels);
-                batchBundle = mappings[target].bundle;
-                using (new EditorGUI.DisabledScope(migrationSelection.Count == 0))
-                    if (GUILayout.Button("将勾选的 " + migrationSelection.Count + " 项迁移到 " + batchBundle))
-                    {
-                        try { MigrateResources(migrationSelection.ToArray(), mappings[target]); migrationSelection.Clear(); }
-                        catch (Exception exception) { Log(exception.ToString()); Debug.LogException(exception); }
-                        GUIUtility.ExitGUI();
-                    }
-            }
-            foreach (var duplicate in visible)
-            {
-                GUILayout.BeginVertical(EditorStyles.helpBox);
-                bool chosen = GUILayout.Toggle(migrationSelection.Contains(duplicate.path), "加入批量迁移");
-                if (chosen) migrationSelection.Add(duplicate.path); else migrationSelection.Remove(duplicate.path);
-                if (GUILayout.Button(new GUIContent(duplicate.path, duplicate.path), EditorStyles.label))
-                    Ping(new RimUnityWorkflow.Entry { path = duplicate.path });
-                GUILayout.Label("引用包：" + string.Join("、", duplicate.bundles), EditorStyles.wordWrappedMiniLabel);
-                var pin = (profile.resourceOwners ?? Array.Empty<RimUnityWorkflow.ResourceOwner>()).FirstOrDefault(p => p.path == duplicate.path);
-                if (pin != null) GUILayout.Label("已指定内容归属：" + pin.bundle + "（其他包仍保留加载引用）", EditorStyles.miniLabel);
-                GUILayout.BeginHorizontal();
-                if (mappings.Length > 0)
-                {
-                    if (!migrationTargets.TryGetValue(duplicate.path, out string selected)) selected = pin?.bundle ?? duplicate.bundles[0];
-                    int index = Math.Max(0, Array.FindIndex(mappings, m => m.bundle == selected));
-                    index = EditorGUILayout.Popup(index, labels);
-                    migrationTargets[duplicate.path] = mappings[index].bundle;
-                    if (GUILayout.Button("迁移归属", GUILayout.Width(85)))
-                    {
-                        try { MigrateResource(duplicate.path, mappings[index]); }
-                        catch (Exception exception) { Log(exception.ToString()); Debug.LogException(exception); }
-                        GUIUtility.ExitGUI();
-                    }
-                    if (pin != null && GUILayout.Button("取消指定", GUILayout.Width(75)))
-                    {
-                        profile.resourceOwners = profile.resourceOwners.Where(p => p.path != duplicate.path).ToArray();
-                        SaveOwnership();
-                    }
-                }
-                GUILayout.EndHorizontal();
-                GUILayout.EndVertical();
-            }
-            GUILayout.Space(8);
+            if (unresolved > 0) Debug.LogWarning("[RimUnity] " + unresolved + " 个跨 AB 包重复引用的资源尚未指定归属。可在资源清点页选择资源，拖到左侧 AB 包指定归属。");
         }
         private void SaveOwnership()
         {
@@ -105,6 +30,11 @@ namespace RimUnity.Editor
         private void MigrateResources(IEnumerable<string> paths, RimUnityWorkflow.Mapping mapping)
         {
             var selected = paths.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            if (mapping == null || string.IsNullOrWhiteSpace(mapping.bundle)
+                || profile.mappings.Count(m => m.bundle == mapping.bundle) != 1)
+                throw new InvalidOperationException("迁移目标必须对应唯一的 AB 输出映射。");
+            if (selected.Any(p => !p.StartsWith("Assets/", StringComparison.Ordinal)))
+                throw new InvalidOperationException("只能修改 Assets 下工程资源的归属；Packages 资源保持只读。");
             //先核对整批资源，再改标签；保存与依赖扫描各执行一次。
             var importers = selected.Select(path => {
                 if (AssetDatabase.LoadMainAssetAtPath(path) == null) throw new InvalidOperationException("源资源不存在：" + path);

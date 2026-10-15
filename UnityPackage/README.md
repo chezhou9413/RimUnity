@@ -24,6 +24,10 @@
 
 批量粒子入口：`Tools → RimUnity → 一键导出项目粒子`。
 
+离线说明书：`RimUnity → 百科全书`，支持主题导航、全文搜索及中英文原文阅读。
+
+导出扩展：自定义 `ExportProcessor` 并标记 `[RimUnityExportProcessor]`，可对每个源资源及递归依赖执行前后处理；或通过 `ExportOptions.processors` 挂载函数。临时修改优先使用 `ExportContext.CreateExportCopy<T>()`，需要恢复的操作用 `DeferCleanup` 登记。完整示例见百科全书“给导出挂处理函数”。
+
 脚本批量入口：`RimUnity.Editor.PrefabExporter.Export(modDirectory, ExportRequest[])`。
 
 ## 游戏侧使用

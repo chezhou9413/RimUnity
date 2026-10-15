@@ -4,9 +4,25 @@
 
 Unity menu: `RimUnity / 明文资源构建管理器` (Plain-text asset build manager). When installed as a local UPM package, the window uses the package source directly. There is no need to copy scripts into Assets.
 
-Configuration is stored in the authoring project's `ProjectSettings/RimUnity.json`. UI flags are stored in `ProjectSettings/RimUnityWindow.json`. No configuration file is required on first launch. In `输出与工具配置` (Output and tool configuration), set the content repository, ShaderTool, game directory and destination mod roots for AssetBundle labels, then save. Keep authoring-project configuration out of the RimUnity framework repository.
+Configuration is stored in the authoring project's `ProjectSettings/RimUnity.json`. UI flags are stored in `ProjectSettings/RimUnityWindow.json`. No configuration file is required on first launch. In `构建设置` (Build settings), set the content repository, ShaderTool, game directory and destination mod roots for AssetBundle labels, then save. Keep authoring-project configuration out of the RimUnity framework repository.
 
 Entries come from configured AssetBundle labels and manually added assets. Texture, material, shader and animation dependencies are collected automatically. Output goes to `1.7/Data/RimUnity` beneath the target mod root. Reports are stored in the authoring project's `Library/RimUnity/Reports`.
+
+## Build settings and export logs
+
+Build settings groups output mappings, export options and authoring tools into separate sections. The content scrolls while the save action remains visible at the bottom. Save your edits to write them to the project's configuration.
+
+Export logs lists one timestamped entry per publication attempt on the left, with full/incremental mode and success/failure/cancellation status. Select an entry to view its summary, inputs and dependencies, published resources and physical files, shared-file owners, absolute output paths and execution details. Incremental output includes retained entries. Failed or cancelled attempts do not show the old catalog as successful new output.
+
+The latest 50 records are saved in the project's `Library/RimUnity/Reports/export-history.json` and restored when reopening the window. Deleting Library removes this history. Output snapshots remain unchanged by later publications. Bottom actions copy or save the selected complete record; saving reveals its file. Legacy line logs are not converted to history entries.
+
+## Flat inventory and drag-and-drop ownership
+
+The `资源清点` (Inventory) tab lists AB packages on the left and a flat table of roots and dependencies on the right. Rows include a small asset preview, type, AB owner, output mod, source-file size and status. Shared source paths appear once and remain visible in referencing packages. Unlabeled automatic dependencies are distinguished from unassigned resources. Source-file size is not exported size or GPU memory usage.
+
+Filter by package, type, shared usage, issues or text; click headers to sort. Use checkboxes, Ctrl/Command selection or Shift ranges. Double-click a row to locate the asset. Drag selected rows onto an AB package to migrate ownership, or use the selection toolbar. Assets dragged from Project are also accepted. Package resources are read-only. An existing AB without an output mapping gets a blank mapping when assigned; configure its output before publishing.
+
+`新建 AB 包` creates an empty package mapping. `导出选中` incrementally publishes the selected resources as explicit entry points, preserving other published entries. The main build button still processes all configured entries regardless of filters. A shared dependency needs one unambiguous target before exporting it independently. Publication validation and rollback remain in effect.
 
 A full rebuild contains the currently configured entries. It replaces existing data after every target completes export and structural validation. Use incremental mode to retain other entries. Search and issue filters only affect the list display; remove unwanted entries from AssetBundle labels or manual entries to exclude them. Failed checks, failed exports and cancellation during preparation do not replace published data. A failure during publication restores the previous version. Structural validation does not establish visual correctness in the game.
 

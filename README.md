@@ -29,6 +29,8 @@ instance.transform.position = new RimUnity.Vector3(x, y, z);
 
 ## 使用文档
 
+Unity 内可打开 **RimUnity → 百科全书**：按主题整理的离线说明书、全文搜索，以及以下文档和 README 原文。导出扩展见[导出前后处理](Docs/zh-CN/ExportProcessors.md)。
+
 - [快速开始](Docs/zh-CN/QuickStart.md)
 - [导出工具安装与第一次导出](Docs/zh-CN/ExporterSetup.md)
 - [API 快速接入](Docs/zh-CN/ApiQuickStart.md)

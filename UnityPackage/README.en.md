@@ -26,6 +26,10 @@ Batch particle menu: `Tools → RimUnity → 一键导出项目粒子` (Batch ex
 
 Script entry point: `RimUnity.Editor.PrefabExporter.Export(modDirectory, ExportRequest[])`.
 
+Offline handbook: **RimUnity → 百科全书**, with topic navigation, full-text search and the original English/Chinese documentation.
+
+Export hooks: derive from `ExportProcessor` and add `[RimUnityExportProcessor]` for automatic discovery, or attach `DelegateExportProcessor` functions through `ExportOptions.processors`. Hooks cover source assets and recursive dependencies. Use `ExportContext.CreateExportCopy<T>()` for temporary changes and `DeferCleanup` for guaranteed restoration. See the handbook's export processor chapter.
+
 ## Game-side usage
 
 Reference `RimUnity.Core.dll` and `RimUnity.dll`, and use RimUnity object, component and asset types. Custom scripts must be compiled into a game-side .NET 10 assembly.

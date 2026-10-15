@@ -6,7 +6,7 @@ public static class RimUnityWorkflow
     public sealed class Profile { public string repository, shaderTool, gameRoot; public Mapping[] mappings; public ResourceOwner[] resourceOwners; public bool disableCastShadows, disableReceiveShadows, disableLightProbes, disableReflectionProbes; }
     public sealed class Mapping { public string mod, bundle; }
     public sealed class ResourceOwner { public string path, bundle; }
-    public sealed class Entry { public string path, mod, bundle, status, error; public bool ui; }
+    public sealed class Entry { public string path, mod, bundle, status, error, type; public bool ui; }
 }
 namespace UnityEngine { public sealed class Object { public string Path; } }
 namespace UnityEditor

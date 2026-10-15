@@ -49,12 +49,12 @@ namespace RimUnity.Editor
                         resources.Begin();
                         PrefabWriter.Read(prefab, resources, id, logical, (data, context) =>
                         {
-                        string file = id + ".json";
-                        ExportJson.Write(Path.Combine(directory, file), data);
-                        context.OutputFile = Path.Combine(directory, file);
-                        records.Add(id, new AssetRecord { id = id, sourcePath = AssetDatabase.GetAssetPath(prefab), name = prefab.name, description = (request.description ?? "")
-                            + (data.warnings.Count == 0 ? "" : "\n[降级导出] " + string.Join("\n", data.warnings)), path = logical,
-                            file = generation + "/" + file, type = "Prefab", dependencies = resources.End() });
+                            string file = id + ".json";
+                            ExportJson.Write(Path.Combine(directory, file), data);
+                            context.OutputFile = Path.Combine(directory, file);
+                            records.Add(id, new AssetRecord { id = id, sourcePath = AssetDatabase.GetAssetPath(prefab), name = prefab.name, description = (request.description ?? "")
+                                + (data.warnings.Count == 0 ? "" : "\n[降级导出] " + string.Join("\n", data.warnings)), path = logical,
+                                file = generation + "/" + file, type = "Prefab", dependencies = resources.End() });
                         });
                     }
                     else
