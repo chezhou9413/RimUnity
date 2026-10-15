@@ -19,6 +19,17 @@ dotnet build ./Source/RimUnity.ShaderTool/RimUnity.ShaderTool.csproj -c Release 
   -p:RimWorldDir='C:/Games/RimWorld'
 ```
 
+`Directory.Build.props` ships no default paths. Besides the `-p:` properties above, you can set environment variables and then call `dotnet build` directly:
+
+```powershell
+$env:RIMWORLD_DIR = 'C:/Games/RimWorld'                       # $(RimWorldDir)
+$env:HARMONY_PATH  = 'C:/Mods/Harmony/1.7/Assemblies/0Harmony.dll'   # $(HarmonyPath)
+$env:UNITY_EDITOR_DIR = 'C:/Program Files/Unity/2022.3.35f1/Editor/Data'
+$env:UNITY_PROJECT = 'C:/Projects/RimUnityBuiltIn'
+```
+
+When neither value is provided, the build fails while resolving references and names the missing path instead of silently using one machine's private directory.
+
 The runtime outputs `RimUnity.Core.dll` and `RimUnity.dll` to `1.7/Assemblies`. The offline tool goes to `Tools/bin/ShaderTool` and requires the target game's installation path. Game DLLs are not included in release packages.
 
 `Compile-Editor.ps1` is an optional package source compilation entry point. It needs a Unity Editor/Data directory and a UnityProject with UGUI and TMP imported. It does not launch Unity or replace the editor's package import checks.

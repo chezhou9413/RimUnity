@@ -27,6 +27,20 @@ instance.transform.position = new RimUnity.Vector3(x, y, z);
 
 `contentMod` 是资源所属模组。导出资源位于该模组的 `1.7/Data/RimUnity`，加载时使用导出窗口中填写的逻辑路径。
 
+## 从源码构建
+
+只使用框架或安装发行版时无需编译。修改框架源码则需要 RimWorld 1.7 安装目录、Harmony 的 `0Harmony.dll` 和 .NET 10 SDK。
+
+```powershell
+.\Tools\Build.ps1 -GameRoot 'C:\Games\RimWorld'
+.\Tools\Verify.ps1 -GameRoot 'C:\Games\RimWorld'
+.\Tools\Pack.ps1 -Output 'C:\out'
+```
+
+脚本在入口统一解析路径：显式参数优先，其次环境变量 `RIMWORLD_DIR` / `HARMONY_PATH` / `UNITY_EDITOR_DIR` / `UNITY_PROJECT`，最后是脚本默认值（如 `-BackupRoot` 落在 Mods 同级或系统临时目录）。路径缺失时报错并说明该传哪个参数，不再写入固定机器目录。
+
+直接调用 `dotnet build` 时需自行传入 `-p:RimWorldDir=`、`-p:HarmonyPath=`，或先设置同名环境变量（`Directory.Build.props` 不再提供默认值）。完整步骤见[制作、导出、接入与发布工作流](Docs/zh-CN/Workflow.md)。
+
 ## 使用文档
 
 - [快速开始](Docs/zh-CN/QuickStart.md)

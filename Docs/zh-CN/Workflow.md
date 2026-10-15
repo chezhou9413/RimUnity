@@ -19,6 +19,17 @@ dotnet build ./Source/RimUnity.ShaderTool/RimUnity.ShaderTool.csproj -c Release 
   -p:RimWorldDir='C:/Games/RimWorld'
 ```
 
+`Directory.Build.props` 不再提供任何默认路径。除上面的 `-p:` 参数外，也可以先设置环境变量，之后直接调用 `dotnet build`：
+
+```powershell
+$env:RIMWORLD_DIR = 'C:/Games/RimWorld'                       # $(RimWorldDir)
+$env:HARMONY_PATH  = 'C:/Mods/Harmony/1.7/Assemblies/0Harmony.dll'   # $(HarmonyPath)
+$env:UNITY_EDITOR_DIR = 'C:/Program Files/Unity/2022.3.35f1/Editor/Data'
+$env:UNITY_PROJECT = 'C:/Projects/RimUnityBuiltIn'
+```
+
+两个值都不提供时，构建会在引用解析阶段失败并指出缺失的路径，不会静默使用某台机器的私有目录。
+
 运行时的 `RimUnity.Core.dll` 和 `RimUnity.dll` 输出到 `1.7/Assemblies`，离线工具输出到 `Tools/bin/ShaderTool`。离线工具需要配置目标游戏安装目录。发布包不包含游戏 DLL。
 
 `Compile-Editor.ps1` 是可选的插件源码编译入口，需要指定 Unity Editor/Data 和一个已导入 UGUI／TMP 的 UnityProject。它不启动 Unity，不替代编辑器自身的包导入检查。
