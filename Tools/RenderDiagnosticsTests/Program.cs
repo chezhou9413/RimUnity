@@ -135,6 +135,27 @@ class P
         var copy = t.GetMethod("Copy", flags);
         Check(copy.GetCustomAttributes().Any(x => x.GetType().Name == "DebugActionAttribute"), "debug action registered");
 
+        //Use the host's actual visibility predicate; combined flags are AND constraints, not alternative states.
+        var hostAssembly = AssemblyLoadContext.Default.Assemblies.First(x => x.GetName().Name == "Assembly-CSharp");
+        var currentType = hostAssembly.GetType("Verse.Current", true);
+        var stateField = currentType.GetField("ProgramState", BindingFlags.Public | BindingFlags.Static);
+        var stateProperty = currentType.GetProperty("ProgramState", BindingFlags.Public | BindingFlags.Static);
+        var stateType = stateField?.FieldType ?? stateProperty.PropertyType;
+        object previousState = stateField != null ? stateField.GetValue(null) : stateProperty.GetValue(null);
+        void SetState(object value) { if (stateField != null) stateField.SetValue(null, value); else stateProperty.SetValue(null, value); }
+        var actions = a.GetTypes().Where(type => type.FullName is "RimUnity.Diagnostics.RenderDebugReport" or "RimUnity.Diagnostics.ParticleSpikeCapture")
+            .SelectMany(type => type.GetMethods(flags)).SelectMany(method => method.GetCustomAttributes().Where(attr => attr.GetType().Name == "DebugActionAttribute")).ToArray();
+        try
+        {
+            foreach (string state in new[] { "Entry", "Playing" })
+            {
+                SetState(Enum.Parse(stateType, state));
+                foreach (var action in actions)
+                    Check((bool)action.GetType().GetProperty("IsAllowedInCurrentGameState").GetValue(action), "diagnostic action visible in " + state + ": " + action.GetType().GetField("name").GetValue(action));
+            }
+            Check(actions.Length == 7, "all seven cross-scene diagnostic actions tested");
+        }
+        finally { SetState(previousState); }
         var copier = a.GetType("RimUnity.Rendering.FrameMetadataCopier", true).GetMethod("Build", flags);
 
         foreach (var shape in new[] {

@@ -28,25 +28,25 @@ internal static partial class ParticleSpikeCapture
     private static readonly object FrameGate = new();
     private static SpikeCaptureData.Token mainFrameToken, renderFrameToken;
 
-    [DebugAction("RimUnity", "卡顿诊断 1 · 开始采集（60秒）", allowedGameStates = AllowedGameStates.Entry | AllowedGameStates.Playing)]
+    [DebugAction("RimUnity", "卡顿诊断 1 · 开始采集（60秒）", allowedGameStates = (AllowedGameStates)0)]
     private static void Start60() => Start(60);
-    [DebugAction("RimUnity", "卡顿诊断 1 · 开始采集（120秒）", allowedGameStates = AllowedGameStates.Entry | AllowedGameStates.Playing)]
+    [DebugAction("RimUnity", "卡顿诊断 1 · 开始采集（120秒）", allowedGameStates = (AllowedGameStates)0)]
     private static void Start120() => Start(120);
-    [DebugAction("RimUnity", "卡顿诊断 2 · 添加触发标记", allowedGameStates = AllowedGameStates.Entry | AllowedGameStates.Playing)]
+    [DebugAction("RimUnity", "卡顿诊断 2 · 添加触发标记", allowedGameStates = (AllowedGameStates)0)]
     private static void Mark()
     {
         if (!Prefs.DevMode || current == null) return;
         current.Mark("用户触发标记 " + ++marker, observedFrame);
         Messages.Message("已记录标记 " + marker + "，现在触发特效。", MessageTypeDefOf.NeutralEvent, false);
     }
-    [DebugAction("RimUnity", "卡顿诊断 3 · 停止并导出", allowedGameStates = AllowedGameStates.Entry | AllowedGameStates.Playing)]
+    [DebugAction("RimUnity", "卡顿诊断 3 · 停止并导出", allowedGameStates = (AllowedGameStates)0)]
     private static void StopMenu()
     {
         if (!Prefs.DevMode) return;
         if (current == null) { Notify("当前没有采集；可用“再次导出上次报告”。"); return; }
         Stop("用户停止");
     }
-    [DebugAction("RimUnity", "卡顿诊断 · 再次导出上次报告", allowedGameStates = AllowedGameStates.Entry | AllowedGameStates.Playing)]
+    [DebugAction("RimUnity", "卡顿诊断 · 再次导出上次报告", allowedGameStates = (AllowedGameStates)0)]
     private static void ExportMenu()
     {
         if (!Prefs.DevMode) return;
@@ -54,7 +54,7 @@ internal static partial class ParticleSpikeCapture
         if (last == null) { Notify("还没有采集报告。"); return; }
         Export();
     }
-    [DebugAction("RimUnity", "卡顿诊断 · 状态", allowedGameStates = AllowedGameStates.Entry | AllowedGameStates.Playing)]
+    [DebugAction("RimUnity", "卡顿诊断 · 状态", allowedGameStates = (AllowedGameStates)0)]
     private static void Status()
     {
         if (!Prefs.DevMode) return;

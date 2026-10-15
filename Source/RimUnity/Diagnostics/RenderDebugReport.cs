@@ -28,7 +28,8 @@ internal static partial class RenderDebugReport
     private const BindingFlags Flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
     private const int MaxText = 4 * 1024 * 1024;
 
-    [DebugAction("RimUnity", "复制调试信息", allowedGameStates = AllowedGameStates.Entry | AllowedGameStates.Playing)]
+    //The host ANDs state flags; zero adds no scene constraint (Entry | Playing is impossible).
+    [DebugAction("RimUnity", "复制调试信息", allowedGameStates = (AllowedGameStates)0)]
     private static void Copy()
     {
         if (!Prefs.DevMode) return;
