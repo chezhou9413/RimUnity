@@ -26,6 +26,7 @@ namespace RimUnity.Editor
         private void OnGUI()
         {
             EditorGUILayout.LabelField("Unity → RimWorld 1.7", EditorStyles.boldLabel);
+            if (GUILayout.Button("打开 RimUnity 百科全书")) RimUnityEncyclopediaWindow.Open();
             prefab = (GameObject)EditorGUILayout.ObjectField("Prefab", prefab, typeof(GameObject), false);
             logicalPath = EditorGUILayout.TextField("逻辑路径", logicalPath);
             EditorGUILayout.LabelField("描述");

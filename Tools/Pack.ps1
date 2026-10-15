@@ -1,6 +1,7 @@
 param([string]$Output = 'E:\ModdevMics\Outputs\RimUnity', [string]$AssemblyDirectory = '', [string]$TempRoot = 'E:\ModdevMics\Temp\RimUnity\Packaging')
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
+& (Join-Path $PSScriptRoot 'Sync-Manual.ps1')
 if ([string]::IsNullOrEmpty($AssemblyDirectory)) { $AssemblyDirectory = Join-Path $repo '1.7\Assemblies' }
 #发布前确认两侧产物齐全，避免生成缺少 Core 或离线工具的包。
 $runtimeFiles = @('RimUnity.dll','RimUnity.Core.dll')

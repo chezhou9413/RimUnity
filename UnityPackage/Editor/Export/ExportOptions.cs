@@ -13,6 +13,17 @@ namespace RimUnity.Editor
         public bool cameraUi;
         internal bool MutatesRenderers => disableCastShadows || disableReceiveShadows || disableLightProbes || disableReflectionProbes;
         public Action<string> log;
+        public bool discoverProcessors = true;
+        public IExportProcessor[] processors = Array.Empty<IExportProcessor>();
+
+        internal ExportOptions Snapshot() => new ExportOptions
+        {
+            cameraUi = cameraUi, disableCastShadows = disableCastShadows,
+            disableReceiveShadows = disableReceiveShadows, disableLightProbes = disableLightProbes,
+            disableReflectionProbes = disableReflectionProbes, log = log,
+            discoverProcessors = discoverProcessors,
+            processors = (IExportProcessor[])(processors ?? Array.Empty<IExportProcessor>()).Clone()
+        };
 
         internal void Prepare(GameObject root, string assetPath)
         {

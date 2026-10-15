@@ -47,12 +47,15 @@ namespace RimUnity.Editor
                         string id = guid + "_prefab";
                         if (records.ContainsKey(id)) throw new ArgumentException("同一 Prefab 不能在同一批次使用多个逻辑路径。");
                         resources.Begin();
-                        PrefabData data = PrefabWriter.Read(prefab, resources);
+                        PrefabWriter.Read(prefab, resources, id, logical, (data, context) =>
+                        {
                         string file = id + ".json";
                         ExportJson.Write(Path.Combine(directory, file), data);
+                        context.OutputFile = Path.Combine(directory, file);
                         records.Add(id, new AssetRecord { id = id, sourcePath = AssetDatabase.GetAssetPath(prefab), name = prefab.name, description = (request.description ?? "")
                             + (data.warnings.Count == 0 ? "" : "\n[降级导出] " + string.Join("\n", data.warnings)), path = logical,
                             file = generation + "/" + file, type = "Prefab", dependencies = resources.End() });
+                        });
                     }
                     else
                     {

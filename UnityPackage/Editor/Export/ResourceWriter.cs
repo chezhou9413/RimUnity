@@ -15,10 +15,19 @@ namespace RimUnity.Editor
         private readonly string directory, relative;
         private readonly Dictionary<string, AssetRecord> records;
         private readonly HashSet<string> writing = new HashSet<string>();
+        private readonly Dictionary<string, string> standaloneShaders = new Dictionary<string, string>();
         private readonly Stack<HashSet<string>> dependencies = new Stack<HashSet<string>>();
         internal readonly ExportOptions Options;
+        internal readonly ExportProcessorPipeline Processors;
         internal ResourceWriter(string directory, string relative, Dictionary<string, AssetRecord> records, ExportOptions options = null)
-        { this.directory = directory; this.relative = relative; this.records = records; Options = new ExportOptions { cameraUi = options?.cameraUi ?? false, disableCastShadows = options?.disableCastShadows ?? false, disableReceiveShadows = options?.disableReceiveShadows ?? false, disableLightProbes = options?.disableLightProbes ?? false, disableReflectionProbes = options?.disableReflectionProbes ?? false, log = options?.log }; }
+        {
+            this.directory = directory; this.relative = relative; this.records = records;
+            Options = (options ?? new ExportOptions()).Snapshot();
+            Processors = new ExportProcessorPipeline(Options);
+        }
+
+        internal ExportContext Context(Object source, string path, string id, bool ui = false, bool cameraUi = false)
+            => new ExportContext(source, AssetDatabase.GetAssetPath(source), path, id, directory, ui, cameraUi);
 
         //预制体和资源共用同一个依赖收集栈。
         internal void Begin() => dependencies.Push(new HashSet<string>());
@@ -30,15 +39,25 @@ namespace RimUnity.Editor
             if (asset is Material && !ui) cameraUi |= Options.cameraUi;
             if (asset is Shader shader)
             {
+                string sourceKey = shader.GetInstanceID() + ":" + ui + ":" + cameraUi;
+                if (standaloneShaders.TryGetValue(sourceKey, out string cachedShader))
+                { if (dependencies.Count > 0) dependencies.Peek().Add(cachedShader); return cachedShader; }
+                return Processors.Run(Context(asset, path, "", ui, cameraUi), context =>
+                {
                 //独立 Shader 采用其默认材质参数，保留显式程序，不按名称替换材质。
-                var defaults = new Material(shader);
+                var defaults = new Material((Shader)context.ExportAsset);
                 try
                 {
                     int[] colorPasses = Enumerable.Range(0, defaults.passCount).Where(p => !MaterialWriter.IsShadowPass(defaults, p)).ToArray();
                     if (colorPasses.Length != 1) throw new NotSupportedException(path + "：独立 Shader 需要一个颜色 Pass；多 Pass 请导出材质资源。");
-                    return AddShader(defaults, ui, path, colorPasses[0], true);
+                    string shaderId = AddShader(defaults, ui, path, colorPasses[0], true);
+                    standaloneShaders.Add(sourceKey, shaderId);
+                    context.ResourceId = shaderId;
+                    context.OutputFile = Path.Combine(directory, Path.GetFileName(records[shaderId].file));
+                    return shaderId;
                 }
                 finally { Object.DestroyImmediate(defaults); }
+                });
             }
             if (!AssetDatabase.TryGetGUIDAndLocalFileIdentifier(asset, out string guid, out long local))
                 throw new NotSupportedException(path + "：引用不是可导出的工程资产：" + asset.name);
@@ -48,6 +67,20 @@ namespace RimUnity.Editor
             if (dependencies.Count > 0) dependencies.Peek().Add(id);
             if (records.ContainsKey(id)) return id;
             if (!writing.Add(id)) throw new NotSupportedException(path + "：资源形成循环引用。");
+            try
+            {
+                return Processors.Run(Context(asset, path, id, ui, cameraUi), context =>
+                {
+                    string result = WriteResource(context.ExportAsset, path, id, context.SourcePath, ui, cameraUi);
+                    context.OutputFile = Path.Combine(directory, id + ".json");
+                    return result;
+                });
+            }
+            finally { writing.Remove(id); }
+        }
+
+        private string WriteResource(Object asset, string path, string id, string sourcePath, bool ui, bool cameraUi)
+        {
             Begin();
             try
             {
@@ -64,7 +97,7 @@ namespace RimUnity.Editor
                 else if (asset is UnityEngine.Video.VideoClip video)
                 {
                     data.type = "VideoClip";
-                    string source = AssetDatabase.GetAssetPath(video);
+                    string source = sourcePath;
                     string file = id + Path.GetExtension(source).ToLowerInvariant();
                     File.Copy(Path.GetFullPath(source), Path.Combine(directory, file));
                     Put("file", relative + "/" + file);
@@ -72,7 +105,7 @@ namespace RimUnity.Editor
                 else if (asset is AudioClip audio)
                 {
                     data.type = "AudioClip";
-                    string source = AssetDatabase.GetAssetPath(audio);
+                    string source = sourcePath;
                     string file = id + Path.GetExtension(source).ToLowerInvariant();
                     if (!new[] { ".ogg", ".wav", ".mp3" }.Contains(Path.GetExtension(file)))
                         throw new NotSupportedException(path + "：音频源文件需要 OGG、WAV 或 MP3。");
@@ -111,7 +144,7 @@ namespace RimUnity.Editor
                     bool numeric = IsFloatTexture(texture.format);
                     bool compressed = IsGpuCompressed(texture.format);
                     string file = id + (numeric ? ".bytes" : compressed ? ".rutex" : ".png");
-                    var importer = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(texture)) as TextureImporter;
+                    var importer = AssetImporter.GetAtPath(sourcePath) as TextureImporter;
                     bool linear = importer != null ? !importer.sRGBTexture : !texture.isDataSRGB;
                     File.WriteAllBytes(Path.Combine(directory, file), numeric ? FloatTextureBytes(texture) : compressed ? GpuTextureBytes(texture, linear) : TextureBytes(texture, linear));
                     Put("file", relative + "/" + file); Put("linear", linear);
@@ -162,7 +195,7 @@ namespace RimUnity.Editor
                 else if (asset is Font font)
                 {
                     data.type = "Font";
-                    string source = AssetDatabase.GetAssetPath(font);
+                    string source = sourcePath;
                     bool builtin = source == "Resources/unity_builtin_extra" || source == "Library/unity default resources";
                     Put("builtin", builtin);
                     if (!builtin)
@@ -185,12 +218,11 @@ namespace RimUnity.Editor
                 else if (!SpineWriter.Resource(asset, data, writer, path)) throw new NotSupportedException(path + "：未实现的资源类型：" + asset.GetType().FullName);
                 string json = id + ".json";
                 ExportJson.Write(Path.Combine(directory, json), data);
-                records.Add(id, new AssetRecord { id = id, sourcePath = AssetDatabase.GetAssetPath(asset), name = asset.name, description = "", path = "__assets/" + id,
+                records.Add(id, new AssetRecord { id = id, sourcePath = sourcePath, name = asset.name, description = "", path = "__assets/" + id,
                     file = relative + "/" + json, type = data.type, dependencies = End() });
                 return id;
             }
             catch { End(); throw; }
-            finally { writing.Remove(id); }
         }
 
         //通过编辑器渲染读取导入后的纹理，不修改用户贴图的 Read/Write 设置。

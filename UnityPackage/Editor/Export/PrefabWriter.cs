@@ -10,7 +10,8 @@ namespace RimUnity.Editor
     //通过 PrefabUtility 得到已解析嵌套与覆盖值的最终对象树。
     internal static class PrefabWriter
     {
-        internal static PrefabData Read(GameObject prefab, ResourceWriter resources)
+        internal static PrefabData Read(GameObject prefab, ResourceWriter resources, string id, string path,
+            Action<PrefabData, ExportContext> write)
         {
             string assetPath = AssetDatabase.GetAssetPath(prefab);
             if (string.IsNullOrEmpty(assetPath) || !PrefabUtility.IsPartOfPrefabAsset(prefab)) throw new ArgumentException("必须选择工程中的 Prefab 资产。");
@@ -18,18 +19,25 @@ namespace RimUnity.Editor
             bool importedModel = PrefabUtility.GetPrefabAssetType(prefab) == PrefabAssetType.Model;
             // Imported models have no LoadPrefabContents handle. Clone them when the
             // export policy mutates render state; never alter the imported asset.
-            bool clonedModel = importedModel && resources.Options.MutatesRenderers;
+            bool clonedModel = importedModel;
             GameObject root = importedModel ? (clonedModel ? Object.Instantiate(prefab) : prefab) : PrefabUtility.LoadPrefabContents(assetPath);
             try
             {
                 if (clonedModel) { root.name = prefab.name; root.hideFlags = HideFlags.HideAndDontSave; }
-                resources.Options.Prepare(root, assetPath);
+                var context = resources.Context(prefab, path, id);
+                context.ExportAsset = root;
+                return resources.Processors.Run(context, current =>
+                {
+                var exportRoot = (GameObject)current.ExportAsset;
+                resources.Options.Prepare(exportRoot, assetPath);
                 var objects = new Dictionary<Object, string>();
-                Collect(root.transform, "root", objects);
+                Collect(exportRoot.transform, "root", objects);
                 var writer = new ValueWriter(objects, resources);
                 var data = new PrefabData();
-                Walk(root.transform, null, objects, writer, data);
+                Walk(exportRoot.transform, null, objects, writer, data);
+                write(data, current);
                 return data;
+                });
             }
             finally { if (clonedModel) Object.DestroyImmediate(root); else if (!importedModel) PrefabUtility.UnloadPrefabContents(root); }
         }
