@@ -10,6 +10,8 @@ internal sealed class HdrDrawFrame : IDisposable
 {
     internal static readonly byte MapPass = (byte)AccessTools.Field(
         AccessTools.TypeByName("RimWorldWaylith.Rendering.RenderPassIds"), "MapMain").GetValue(null);
+    internal static readonly string MetadataLayout;
+    private static readonly Action<MeshDrawFrame, MeshDrawFrame> CopyMetadata = FrameMetadataCopier.Build<MeshDrawFrame>(out MetadataLayout);
     internal readonly MeshDrawFrame Frame;
     internal readonly HashSet<FinalDrawItem> Linear = new();
     private delegate FinalDrawItem RentDraw(System.Numerics.Matrix4x4 matrix, byte passId, MeshDrawGeometry mesh, MaterialBinding binding,
@@ -74,6 +76,10 @@ internal sealed class HdrDrawFrame : IDisposable
 
     //借用的 PersistentDraws 不归临时帧销毁，所有绘制项只由快照释放一次。
     internal static MeshDrawFrame Shell(MeshDrawFrame source, List<FinalDrawItem> draws, List<FinalDrawItem> persistent)
-        => new(source.FrameNumber, source.View, draws, persistent, source.SunDirection);
+    {
+        var frame = new MeshDrawFrame(source.FrameNumber, source.View, draws, persistent, source.SunDirection);
+        CopyMetadata(source, frame);
+        return frame;
+    }
     public void Dispose() => Frame.Dispose();
 }

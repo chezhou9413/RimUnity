@@ -56,8 +56,12 @@ internal sealed class AssetCatalog
     //所有载荷均由共享格式定义解码。
     internal T Read<T>(string file)
     {
-        using var stream = ContentFiles.OpenJson(Resolve(file));
-        return JsonSerializer.Deserialize<T>(stream, Json) ?? throw new InvalidDataException($"空资源：{file}");
+        Stream stream;
+        using (Diagnostics.ParticleSpikeCapture.Measure("Asset.OpenJson", file))
+            stream = ContentFiles.OpenJson(Resolve(file));
+        using (stream)
+        using (Diagnostics.ParticleSpikeCapture.Measure("Asset.DeserializeJson", file))
+            return JsonSerializer.Deserialize<T>(stream, Json) ?? throw new InvalidDataException($"空资源：{file}");
     }
 
     //逻辑路径不暴露源 Unity 工程的文件结构。

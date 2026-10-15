@@ -34,6 +34,7 @@ internal sealed unsafe partial class HdrDrawTarget : IDisposable
     //只在颜色语义改变时做全屏转换，绘制仍逐项沿用宿主次序。
     internal void Record(in FrameContext ctx, NativeTarget scene, HdrDrawFrame snapshot, int queueMin = int.MinValue, int queueMax = int.MaxValue)
     {
+        using var spike = Diagnostics.ParticleSpikeCapture.Measure("HDR.Record");
         using var group = HdrDrawFrame.Shell(snapshot.Frame, MeshDrawFrame.RentList(), MeshDrawFrame.RentList());
         int groupMode = -1;
         foreach (var draw in snapshot.Frame.Draws)

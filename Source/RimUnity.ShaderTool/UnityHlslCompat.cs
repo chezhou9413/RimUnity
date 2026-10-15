@@ -12,6 +12,9 @@ internal static class UnityHlslCompat
     internal const string Macros = """
         #define UNITY_VERSION 202230
         #define SHADER_TARGET 30
+        //Vulkan fragment pixel coordinates use a four-component SV_Position.
+        #define UNITY_VPOS_TYPE float4
+        #define VPOS SV_Position
         #define UNITY_PI 3.14159265359
         #define UNITY_NEAR_CLIP_VALUE 0.0
         #define UNITY_REVERSED_Z 1
@@ -35,7 +38,8 @@ internal static class UnityHlslCompat
         #define UNITY_INITIALIZE_OUTPUT(type,name) name = (type)0
         #define V2F_SHADOW_CASTER float4 pos : SV_POSITION
         #define TRANSFER_SHADOW_CASTER_NORMALOFFSET(o) o.pos = UnityObjectToClipPos(v.vertex)
-        #define SHADOW_CASTER_FRAGMENT(i) return float4(i.pos.z,0,0,1)
+        #define SHADOW_CASTER_FRAGMENT(i) return float4(i.pos.z,0,0,1);
+        #define TRANSFER_SHADOW_CASTER_NOPOS(o,opos) opos = UnityObjectToClipPos(v.vertex)
         #define UNITY_DECLARE_DEPTH_TEXTURE(name) sampler2D name
         #define UNITY_DECLARE_SCREENSPACE_TEXTURE(name) sampler2D name;
         #define UNITY_SAMPLE_SCREENSPACE_TEXTURE(tex,uv) tex2D(tex,uv)
@@ -49,6 +53,26 @@ internal static class UnityHlslCompat
     //Unity 包包含由小型兼容头替代，本地自定义包含由转换入口先展开。
     internal static string Prepare(string source, string vertexEntry = null, string profile = "world")
     {
+        //NOPOS casters pass pixel position separately; retain alpha clipping before writing depth.
+        var pixelParameters = Regex.Matches(source, @"\bUNITY_VPOS_TYPE\s+(\w+)" );
+        foreach (Match parameter in pixelParameters.Cast<Match>().Reverse())
+        {
+            int start = source.IndexOf('{', parameter.Index + parameter.Length);
+            int declaration = source.IndexOf(';', parameter.Index + parameter.Length);
+            if (start < 0 || declaration >= 0 && declaration < start) continue;
+            int end = start + 1, depth = 1;
+            while (end < source.Length && depth > 0)
+            {
+                if (source[end] == '{') depth++;
+                else if (source[end] == '}') depth--;
+                end++;
+            }
+            if (depth != 0) throw new NotSupportedException("Unbalanced shadow fragment body.");
+            string body = source.Substring(start, end - start);
+            body = Regex.Replace(body, @"\bSHADOW_CASTER_FRAGMENT\s*\(\s*\w+\s*\)",
+                "return float4(" + parameter.Groups[1].Value + ".z,0,0,1);");
+            source = source.Substring(0, start) + body + source.Substring(end);
+        }
         //全屏图像程序使用与普通网格一致的顶点输入和投影入口。
         if (Regex.IsMatch(source, @"\b(?:vert_img|v2f_img)\b") && !Regex.IsMatch(source, @"\bstruct\s+v2f_img\b"))
             source = "struct appdata_img { float4 vertex : POSITION; float2 texcoord : TEXCOORD0; };\n"

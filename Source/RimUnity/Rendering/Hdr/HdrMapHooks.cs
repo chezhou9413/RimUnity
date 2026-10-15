@@ -42,6 +42,7 @@ internal static class HdrMapHooks
             if (__result is not MeshDrawFrame frame) return;
             HdrDrawFrame snapshot = null;
             if (HdrDrawFrame.Needed(frame)) { snapshot = new HdrDrawFrame(frame); Frames.Add(frame, snapshot); }
+            if (Diagnostics.RenderDebugReport.Collecting) Diagnostics.RenderDebugReport.Frame(frame, snapshot != null);
             Diagnostics.ParticleDebugWindow.CaptureFinalFrame(frame, snapshot?.Frame);
         }
     }
@@ -63,7 +64,9 @@ internal static class HdrMapHooks
         private static bool Prefix(object __instance, object ___sceneTargets, in FrameContext ctx,
             MeshDrawFrame meshFrame, PassAttachment attachment, bool clear, int queueMin, int queueMax)
         {
-            if (!Frames.TryGetValue(meshFrame, out var snapshot)) return true;
+            bool hdr = Frames.TryGetValue(meshFrame, out var snapshot);
+            if (Diagnostics.RenderDebugReport.Collecting) Diagnostics.RenderDebugReport.Stage("MapSlice", "frame=" + meshFrame.FrameNumber + "; slot=" + ctx.SubmissionFrameIndex + "; format=" + ctx.ColorFormat + "; depth=" + ctx.DepthFormat + "; samples=" + ctx.SampleCount + "; HDR=" + hdr + "; clear=" + clear + "; queue=" + queueMin + ".." + queueMax);
+            if (!hdr) return true;
             var scene = Current(___sceneTargets, ctx.SubmissionFrameIndex);
             var target = Targets.GetValue(__instance, _ => new HdrDrawTarget("RimUnity.HdrMap"));
             if (clear)

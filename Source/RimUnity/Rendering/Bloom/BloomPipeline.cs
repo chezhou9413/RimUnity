@@ -70,6 +70,7 @@ internal sealed class BloomPipeline : IDisposable
     //地图与离屏预览共用亮部提取、金字塔与图层捕获。
     private void Prepare(in FrameContext ctx, BloomFrame settings, NativeRenderTexture source)
     {
+        using var spike = Diagnostics.ParticleSpikeCapture.Measure("Bloom.Prepare");
         prepared = false;
         if (source == null) return;
         if (settings.Draws == null || settings.Draws.Frame.Draws.Count == 0) return;
@@ -114,6 +115,7 @@ internal sealed class BloomPipeline : IDisposable
         NativeRenderTexture source = scene.Source?.Invoke(ctx.SubmissionFrameIndex);
         if (source == null) return;
         var hdr = HdrMapHooks.LinearScene(source, settings.FrameNumber);
+        if (Diagnostics.RenderDebugReport.Collecting) Diagnostics.RenderDebugReport.Stage("CompositeInputs", "frame=" + settings.FrameNumber + "; slot=" + ctx.SubmissionFrameIndex + "; source=" + source.Width + "x" + source.Height + "/" + source.ColorFormat + "; sourceCreated=" + source.IsCreated + "; output=" + ctx.ColorFormat + "; depth=" + ctx.DepthFormat + "; samples=" + ctx.SampleCount + "; linearHDR=" + (hdr == null ? "none" : hdr.Width + "x" + hdr.Height + "/" + hdr.ColorFormat) + "; bloomPrepared=" + prepared + "; enabled=" + settings.Enabled + "; intensity=" + settings.Intensity + "; saturation=" + scene.Saturation + "; mask=" + settings.LayerMask + "; targets=" + (targets?.Length ?? 0));
         if (Diagnostics.ParticleDebugWindow.Capturing)
             Diagnostics.RendererDebugCapture.CompositeState = "场景合成：source=" + source.ColorFormat + " / output=" + ctx.ColorFormat
                 + " / hdr=" + (hdr == null ? "无" : hdr.ColorFormat.ToString()) + " / sourceGamma=" + Gamma(source)
@@ -127,11 +129,24 @@ internal sealed class BloomPipeline : IDisposable
             hdrCombine.RecordInline(in ctx, ctx.RenderPass, ctx.SampleCount);
             return;
         }
-        scene.Record(in ctx, settings);
+        RecordNative(in ctx, settings);
         if (!prepared) return;
         combine.SetInput(0, source); combine.SetInput(1, targets[ctx.SubmissionFrameIndex][Levels]);
         combine.SetPushConstants(new Vector4(settings.Intensity, Gamma(source) ? 1 : 0, scene.Saturation, 0));
         combine.RecordInline(in ctx, ctx.RenderPass, ctx.SampleCount);
+    }
+
+    //Observe the existing native call without detouring its readonly-reference signature.
+    private void RecordNative(in FrameContext ctx, object payload)
+    {
+        if (!Diagnostics.RenderDebugReport.Collecting) { scene.Record(in ctx, payload); return; }
+        bool completed = false;
+        try { scene.Record(in ctx, payload); completed = true; }
+        finally
+        {
+            Diagnostics.RenderDebugReport.Stage("NativeComposite", "completed=" + completed + "; payload=" + (payload?.GetType().FullName ?? "null")
+                + "; slot=" + ctx.SubmissionFrameIndex + "; format=" + ctx.ColorFormat + "; samples=" + ctx.SampleCount + "; saturation=" + scene.Saturation);
+        }
     }
 
     //宿主在等待在途帧后调用重建／释放入口，不能由设置窗口直接销毁 GPU 对象。
@@ -165,10 +180,11 @@ internal sealed class BloomPipeline : IDisposable
         //非地图帧继续提交宿主场景，不能因没有 Bloom 快照而跳过最终画面。
         public void Record(in FrameContext ctx, object featurePayload)
         {
+            if (Diagnostics.RenderDebugReport.Collecting) Diagnostics.RenderDebugReport.Stage(prepare ? "BloomPrepareStage" : "BloomCompositeStage", "payload=" + (featurePayload?.GetType().FullName ?? "null") + "; slot=" + ctx.SubmissionFrameIndex + "; format=" + ctx.ColorFormat + "; samples=" + ctx.SampleCount);
             if (prepare) owner.prepared = false;
             if (featurePayload is not BloomFrame settings)
             {
-                if (!prepare) owner.scene.Record(in ctx, featurePayload);
+                if (!prepare) owner.RecordNative(in ctx, featurePayload);
                 return;
             }
             if (prepare)
