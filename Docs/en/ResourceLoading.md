@@ -69,6 +69,10 @@ The resulting logical path is `Bundles/myeffects/Assets/Effects/Portal.prefab`. 
 
 ## Distributing content assets
 
+RimUnity 0.1.8 stores GPU texture payloads as `.rutex.gz` when the original is at least 4 KiB and lossless Gzip saves at least 5% and 256 bytes. Otherwise `.rutex` is retained. The exported GPU blocks, dimensions, opacity and mip chain are unchanged. The runtime streams directly into final mip buffers and retains existing resource and host disk caches, including recovery when cached data is missing. No GPU compression is performed during game loading.
+
+Both the exporter and `ExportStorage.CopyForPublish` apply this policy; compaction can also upgrade existing exports. Update RimUnity.Core and RimUnity together to 0.1.8 before using compressed textures. Older runtimes cannot read them; the new runtime still reads old `.rutex` files. Disk size decreases, GPU memory does not. Initial reads and recovery without cached data add CPU decompression work.
+
 Include `catalog.json` and all referenced files, including `blobs/`. The build manager compacts its output automatically. For direct `PrefabExporter.Export` calls or per-item particle exports, create a compact copy from your own Editor script without converting the Unity assets again:
 
 ```csharp

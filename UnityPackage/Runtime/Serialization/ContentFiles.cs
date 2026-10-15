@@ -32,7 +32,8 @@ namespace RimUnity.Serialization
         //只有内容寻址载荷允许跨模组共享，资源描述迁移时也需先转换为内容寻址文件。
         public static void RequireBlob(string relative)
         {
-            string name = Path.GetFileNameWithoutExtension(relative.EndsWith(".json.gz", StringComparison.OrdinalIgnoreCase) ? relative.Substring(0, relative.Length - 3) : relative);
+            bool compressed = relative.EndsWith(".json.gz", StringComparison.OrdinalIgnoreCase) || relative.EndsWith(".rutex.gz", StringComparison.OrdinalIgnoreCase);
+            string name = Path.GetFileNameWithoutExtension(compressed ? relative.Substring(0, relative.Length - 3) : relative);
             if (!relative.StartsWith("blobs/", StringComparison.Ordinal) || relative.IndexOf('/', 6) >= 0
                 || name.Length != 64
                 || !IsHex(name))

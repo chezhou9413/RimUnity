@@ -36,43 +36,18 @@ public sealed partial class Texture2D
     {
         cached = ReadCache(path, out var data);
         if (cached) return data;
+        if (IO.GpuTexturePayload.IsFile(path))
+        {
+            var payload = IO.GpuTexturePayload.Read(path);
+            return new LoadedTextureData(payload.width, payload.height, payload.mipCount,
+                (LoadedTextureFormat)payload.format, payload.levels, payload.opaque);
+        }
         byte[] bytes = File.ReadAllBytes(path);
-        if (Path.GetExtension(path).Equals(".rutex", StringComparison.OrdinalIgnoreCase))
-            return ReadGpuPayload(bytes);
         byte[] rgba = PngDecoder.TryDecodeRgba32(bytes, out int width, out int height);
         if (rgba != null)
             return new LoadedTextureData(width, height, 1, LoadedTextureFormat.Rgba32, new[] { rgba }, TexturePixelData.IsOpaqueRgba32(rgba));
         if (GpuTextureService.TryLoadTextureFromMemory(bytes, out var decoded)) return decoded;
         throw new InvalidDataException("无法解码纹理：" + path);
-    }
-
-    //标准载荷保存 GPU 格式及完整 mip 链，不在游戏加载阶段重新压缩。
-    private static LoadedTextureData ReadGpuPayload(byte[] bytes)
-    {
-        using var reader = new BinaryReader(new MemoryStream(bytes, false));
-        if (reader.ReadUInt32() != 0x58545552 || reader.ReadInt32() != 1)
-            throw new InvalidDataException("RimUnity 纹理载荷头无效。");
-        var format = (LoadedTextureFormat)reader.ReadInt32();
-        int width = reader.ReadInt32(), height = reader.ReadInt32(), count = reader.ReadInt32();
-        bool opaque = reader.ReadBoolean();
-        if (width <= 0 || height <= 0 || count <= 0 || count > TexturePixelData.CalculateMipCount(width, height))
-            throw new InvalidDataException("RimUnity 纹理尺寸或 mip 数量无效。");
-        int block = format switch
-        {
-            LoadedTextureFormat.Dxt1 or LoadedTextureFormat.Bc4 => 8,
-            LoadedTextureFormat.Dxt5 or LoadedTextureFormat.Bc5 or LoadedTextureFormat.Bc7 => 16,
-            _ => throw new NotSupportedException("纹理载荷不支持格式：" + format)
-        };
-        var levels = new byte[count][];
-        for (int i = 0; i < count; i++)
-        {
-            int length = checked(((Math.Max(1, width >> i) + 3) / 4) * ((Math.Max(1, height >> i) + 3) / 4) * block);
-            if (reader.ReadInt32() != length || reader.BaseStream.Length - reader.BaseStream.Position < length)
-                throw new InvalidDataException("RimUnity 压缩纹理 mip 长度不匹配。");
-            levels[i] = reader.ReadBytes(length);
-        }
-        if (reader.BaseStream.Position != reader.BaseStream.Length) throw new InvalidDataException("纹理载荷存在多余数据。");
-        return new LoadedTextureData(width, height, count, format, levels, opaque);
     }
 
     //缺失磁盘缓存时从标准源文件精确恢复，避免宿主通用 PNG 路径改变预乘透明度。

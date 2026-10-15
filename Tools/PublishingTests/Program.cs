@@ -2,6 +2,12 @@ using RimUnity.Editor;
 using Newtonsoft.Json.Linq;
 using Entry = RimUnityWorkflow.Entry;
 
+if (args.Length == 2 && args[0] == "--textures")
+{
+    GpuTextureCases.Run(Directory.GetFiles(args[1], "*.rutex", SearchOption.AllDirectories));
+    return;
+}
+
 if (args.Length > 1 && args[0] == "--validate")
 {
     foreach (string path in args.Skip(1)) { RimUnityPublisher.Validate(path); Console.WriteLine("PASS actual catalog: " + path); }
@@ -152,3 +158,4 @@ Console.WriteLine("All publication tests passed. Scratch data: " + run);
 
 InventoryCases.Run();
 ExportHistoryCases.Run();
+GpuTextureCases.Run();

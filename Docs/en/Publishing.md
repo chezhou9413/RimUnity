@@ -34,6 +34,8 @@ When publishing several mods together, the manager shares identical files with r
 
 Compressed publication uses catalog `formatVersion: 2` and requires RimUnity 0.1.7 or newer. Older runtimes cannot load it. PrefabLoader, AssetLoader and logical script paths are unchanged.
 
+Version 0.1.8 additionally compresses individual `.rutex` GPU texture payloads as `.rutex.gz` when worthwhile. These files require the matching 0.1.8 runtime; old textures remain supported. This changes disk storage and initial reads without reducing resolution or altering GPU blocks. Existing exports can be compacted offline without re-exporting in Unity.
+
 Missing scripts are recorded as warnings in the prefab and reported when the game loads it. Other exportable components remain usable. Shader Graph and script assets requiring separate compilation are identified in the list; remove those entries to export the remaining content.
 
 ## Renderer export settings

@@ -56,14 +56,22 @@ namespace RimUnity.Editor
             {
                 string file = Resolve(relative);
                 if (payloads.TryGetValue(file, out var cached)) return cached;
+                byte[] packed = file.EndsWith(".rutex", StringComparison.OrdinalIgnoreCase)
+                    ? RimUnity.IO.GpuTexturePayload.CompressIfUseful(File.ReadAllBytes(file)) : null;
                 string hash;
-                using (var stream = File.OpenRead(file))
+                using (Stream stream = packed == null ? (Stream)File.OpenRead(file) : new MemoryStream(packed, false))
                 using (var algorithm = SHA256.Create())
                     hash = BitConverter.ToString(algorithm.ComputeHash(stream)).Replace("-", "").ToLowerInvariant();
-                string target = "blobs/" + hash + Path.GetExtension(file).ToLowerInvariant();
+                string extension = packed != null || file.EndsWith(".rutex.gz", StringComparison.OrdinalIgnoreCase)
+                    ? ".rutex.gz" : Path.GetExtension(file).ToLowerInvariant();
+                string target = "blobs/" + hash + extension;
                 string output = Inside(destination, target);
                 Directory.CreateDirectory(Path.GetDirectoryName(output));
-                if (!File.Exists(output)) File.Copy(file, output);
+                if (!File.Exists(output))
+                {
+                    if (packed != null) File.WriteAllBytes(output, packed);
+                    else File.Copy(file, output);
+                }
                 payloads.Add(file, target);
                 return target;
             }

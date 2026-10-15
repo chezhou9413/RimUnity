@@ -5,6 +5,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../UnityPackage/Runtime/IO/GpuTexturePayload.cs" Link="Resources/GpuTexturePayload.cs" />
     <Reference Include="Waylith" HintPath="$(RimWorldDir)/Waylith.dll" />
     <Reference Include="Brutal.Core.Common" HintPath="$(RimWorldDir)/Brutal.Core.Common.dll" />
     <Reference Include="Brutal.Core.Memory" HintPath="$(RimWorldDir)/Brutal.Core.Memory.dll" />

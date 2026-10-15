@@ -6,6 +6,7 @@
     <UnityEditorDir Condition="'$(UnityEditorDir)' == ''">E:/UN/2022.3.35f1/Editor/Data</UnityEditorDir>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../UnityPackage/Runtime/IO/GpuTexturePayload.cs" Link="GpuTexturePayload.cs" />
     <Compile Include="../../UnityPackage/Editor/Export/ExportStorage.cs" Link="ExportStorage.cs" />
     <Compile Include="../../UnityPackage/Editor/Export/ExportSharing.cs" Link="ExportSharing.cs" />
     <Compile Include="../../UnityPackage/Editor/Export/ExportJson.cs" Link="ExportJson.cs" />

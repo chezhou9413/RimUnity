@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../UnityPackage/Runtime/IO/GpuTexturePayload.cs" Link="GpuTexturePayload.cs" />
     <Compile Include="../../UnityPackage/Editor/Publishing/ExportHistory.cs" Link="ExportHistory.cs" />
     <Compile Include="../../UnityPackage/Editor/Publishing/ResourceInventory.cs" Link="ResourceInventory.cs" />
     <Compile Include="../../UnityPackage/Editor/Publishing/InventoryGeometry.cs" Link="InventoryGeometry.cs" />

@@ -149,7 +149,10 @@ namespace RimUnity.Editor
                     string file = id + (numeric ? ".bytes" : compressed ? ".rutex" : ".png");
                     var importer = AssetImporter.GetAtPath(inputPath) as TextureImporter;
                     bool linear = importer != null ? !importer.sRGBTexture : !texture.isDataSRGB;
-                    File.WriteAllBytes(Path.Combine(directory, file), numeric ? FloatTextureBytes(texture) : compressed ? GpuTextureBytes(texture, linear) : TextureBytes(texture, linear));
+                    byte[] payload = numeric ? FloatTextureBytes(texture) : compressed ? GpuTextureBytes(texture, linear) : TextureBytes(texture, linear);
+                    byte[] packed = compressed ? RimUnity.IO.GpuTexturePayload.CompressIfUseful(payload) : null;
+                    if (packed != null) { payload = packed; file += ".gz"; }
+                    File.WriteAllBytes(Path.Combine(directory, file), payload);
                     Put("file", relative + "/" + file); Put("linear", linear);
                     Put("readable", texture.isReadable);
                     if (numeric) { Put("numericFormat", "RGBAFloatLE"); Put("width", texture.width); Put("height", texture.height); }
