@@ -38,6 +38,13 @@ namespace RimUnity.Editor { public static class RimUnityWorkflow
             throw new InvalidOperationException("RimUnity 工程配置无效：" + ProfilePath);
         return profile;
     }
+    public static string[] LoadUiPaths()
+    {
+        if (!File.Exists(WindowPresetPath)) return Array.Empty<string>();
+        var preset = JObject.Parse(File.ReadAllText(WindowPresetPath));
+        return (preset["uiPaths"] as JArray ?? new JArray()).Values<string>()
+            .Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
     public static List<Entry> Discover(Profile profile)
     {
         var catalogs = new Dictionary<string, HashSet<string>>();

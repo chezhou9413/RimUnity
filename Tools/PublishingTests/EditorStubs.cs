@@ -3,15 +3,22 @@ using Newtonsoft.Json.Linq;
 
 public static class RimUnityWorkflow
 {
+    public static string[] UiPaths = Array.Empty<string>();
+    public static string[] LoadUiPaths() => UiPaths;
     public sealed class Profile { public string repository, shaderTool, gameRoot; public Mapping[] mappings; public ResourceOwner[] resourceOwners; public bool disableCastShadows, disableReceiveShadows, disableLightProbes, disableReflectionProbes; }
     public sealed class Mapping { public string mod, bundle; }
     public sealed class ResourceOwner { public string path, bundle; }
     public sealed class Entry { public string path, mod, bundle, status, error, type; public bool ui; }
 }
-namespace UnityEngine { public sealed class Object { public string Path; } }
+namespace UnityEngine
+{
+    public class Object { public string Path; }
+    public sealed class Shader : Object { }
+    public sealed class Material : Object { public Shader shader; }
+}
 namespace UnityEditor
 {
-    public static class AssetDatabase { public static UnityEngine.Object LoadMainAssetAtPath(string path) => new() { Path = path }; public static string AssetPathToGUID(string path) => ""; public static bool IsValidFolder(string path) => false; public static string[] GetDependencies(string[] paths, bool recursive) => paths.Concat(new[] { "Assets/shared.png", "Assets/code.cs" }).ToArray(); }
+    public static class AssetDatabase { public static string GetAssetPath(UnityEngine.Object asset) => asset?.Path ?? ""; public static UnityEngine.Object LoadMainAssetAtPath(string path) => new() { Path = path }; public static string AssetPathToGUID(string path) => ""; public static bool IsValidFolder(string path) => false; public static string[] GetDependencies(string[] paths, bool recursive) => paths.Concat(new[] { "Assets/shared.png", "Assets/code.cs" }).ToArray(); }
     public static class EditorUtility
     {
         public static bool Cancel;
@@ -27,7 +34,7 @@ namespace UnityEditor
 }
 namespace RimUnity.Editor
 {
-    public sealed class ExportOptions { public bool disableCastShadows, disableReceiveShadows, disableLightProbes, disableReflectionProbes; public Action<string> log; }
+    public sealed class ExportOptions { public string[] uiResourcePaths; public bool disableCastShadows, disableReceiveShadows, disableLightProbes, disableReflectionProbes; public Action<string> log; }
     public sealed class ExportRequest { public UnityEngine.Object asset; public bool ui; public string path, description; }
     public static class PrefabExporter
     {

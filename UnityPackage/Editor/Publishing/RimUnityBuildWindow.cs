@@ -12,6 +12,7 @@ namespace RimUnity.Editor { public sealed partial class RimUnityBuildWindow : Ed
     private List<RimUnityWorkflow.Entry> entries = new List<RimUnityWorkflow.Entry>();
     private readonly List<RimUnityWorkflow.Entry> manual = new List<RimUnityWorkflow.Entry>();
     private readonly List<string> messages = new List<string>();
+    private readonly HashSet<string> uiResourcePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private Vector2 resourcesScroll, settingsScroll, logScroll;
     private string search = "", error = "";
     private int tab;
@@ -42,10 +43,9 @@ namespace RimUnity.Editor { public sealed partial class RimUnityBuildWindow : Ed
             if (!File.Exists(PresetPath)) return;
             var preset = JsonConvert.DeserializeObject<Preset>(File.ReadAllText(PresetPath));
             rebuild = preset.rebuild;
+            uiResourcePaths.UnionWith(preset.uiPaths ?? Array.Empty<string>());
             foreach (var entry in preset.manual ?? Array.Empty<RimUnityWorkflow.Entry>()) manual.Add(entry);
             RefreshEntries();
-            var ui = new HashSet<string>(preset.uiPaths ?? Array.Empty<string>());
-            foreach (var entry in entries) entry.ui = ui.Contains(entry.path);
         }
         catch (Exception exception) { error = "窗口预设读取失败：" + exception.Message; Log(error); Debug.LogException(exception); }
     }
@@ -60,7 +60,7 @@ namespace RimUnity.Editor { public sealed partial class RimUnityBuildWindow : Ed
         try
         {
             File.WriteAllText(PresetPath, JsonConvert.SerializeObject(new Preset {
-                rebuild = rebuild, uiPaths = entries.Where(e => e.ui).Select(e => e.path).ToArray(),
+                rebuild = rebuild, uiPaths = uiResourcePaths.OrderBy(p => p, StringComparer.Ordinal).ToArray(),
                 manual = manual.ToArray() }, Formatting.Indented));
         }
         catch (Exception exception) { Debug.LogWarning("窗口预设保存失败：" + exception.Message); }
@@ -79,6 +79,8 @@ namespace RimUnity.Editor { public sealed partial class RimUnityBuildWindow : Ed
                 if (current == null) entries.Add(item);
                 else { current.bundle = item.bundle; current.mod = item.mod; current.ui = item.ui; }
             }
+            if (!initialized) uiResourcePaths.UnionWith(entries.Where(e => e.ui).Select(e => e.path));
+            foreach (var item in entries) item.ui = uiResourcePaths.Contains(item.path);
             RefreshDuplicates();
             RebuildInventory();
             initialized = true;

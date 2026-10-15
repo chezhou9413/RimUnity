@@ -11,6 +11,8 @@ namespace RimUnity.Editor
         public bool disableCastShadows, disableReceiveShadows, disableLightProbes, disableReflectionProbes;
         //用于运行时才挂入相机画布的独立 UI 预制体，不改变源对象组件。
         public bool cameraUi;
+        //Explicit project UI classification, including automatic Material/Shader dependencies.
+        public string[] uiResourcePaths = Array.Empty<string>();
         internal bool MutatesRenderers => disableCastShadows || disableReceiveShadows || disableLightProbes || disableReflectionProbes;
         public Action<string> log;
         public bool discoverProcessors = true;
@@ -18,7 +20,8 @@ namespace RimUnity.Editor
 
         internal ExportOptions Snapshot() => new ExportOptions
         {
-            cameraUi = cameraUi, disableCastShadows = disableCastShadows,
+            cameraUi = cameraUi, uiResourcePaths = (string[])(uiResourcePaths ?? Array.Empty<string>()).Clone(),
+            disableCastShadows = disableCastShadows,
             disableReceiveShadows = disableReceiveShadows, disableLightProbes = disableLightProbes,
             disableReflectionProbes = disableReflectionProbes, log = log,
             discoverProcessors = discoverProcessors,

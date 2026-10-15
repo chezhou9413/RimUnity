@@ -15,6 +15,7 @@ namespace RimUnity.Editor
         private readonly string directory, relative;
         private readonly Dictionary<string, AssetRecord> records;
         private readonly HashSet<string> writing = new HashSet<string>();
+        private readonly HashSet<string> uiSources;
         private readonly Dictionary<string, string> standaloneShaders = new Dictionary<string, string>();
         private readonly Stack<HashSet<string>> dependencies = new Stack<HashSet<string>>();
         internal readonly ExportOptions Options;
@@ -23,6 +24,7 @@ namespace RimUnity.Editor
         {
             this.directory = directory; this.relative = relative; this.records = records;
             Options = (options ?? new ExportOptions()).Snapshot();
+            uiSources = new HashSet<string>(Options.uiResourcePaths, StringComparer.OrdinalIgnoreCase);
             Processors = new ExportProcessorPipeline(Options);
         }
 
@@ -36,6 +38,7 @@ namespace RimUnity.Editor
         //不可保存的场景外引用会报错，不用名字猜测对应资产。
         internal string Add(Object asset, string path, bool ui = false, bool cameraUi = false)
         {
+            if (ExportUiPolicy.IsMarked(asset, uiSources)) ui = true;
             if (asset is Material && !ui) cameraUi |= Options.cameraUi;
             if (asset is Shader shader)
             {

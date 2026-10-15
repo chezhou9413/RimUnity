@@ -45,9 +45,12 @@ void Failure(Action action, string name)
     throw new Exception("Expected failure: " + name);
 }
 var messages = new List<string>();
+RimUnityWorkflow.UiPaths = new[] { "Assets/Shared.mat" };
 string full = Mod("full");
 RimUnityPublisher.Export(profile, new[] { E(full) }, true, messages.Add);
 Check(!Old(full) && File.Exists(Path.Combine(full, "1.7/Data/RimUnity/new.json")), "full rebuild removes all old snapshot files after success");
+Check(PrefabExporter.LastOptions.uiResourcePaths.SequenceEqual(RimUnityWorkflow.UiPaths), "UI classification reaches dependency export options");
+RimUnityWorkflow.UiPaths = Array.Empty<string>();
 Check(!Directory.GetDirectories(Path.Combine(full, "1.7/Data"), ".rimunity-*").Any(), "owned stage and backup cleaned");
 string incremental = Mod("incremental");
 RimUnityPublisher.Export(profile, new[] { E(incremental) }, false, messages.Add);

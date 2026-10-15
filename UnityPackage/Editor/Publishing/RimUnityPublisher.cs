@@ -24,6 +24,7 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
         IEnumerable<RimUnityWorkflow.Entry> selection, bool rebuild, Action<string> log)
     {
         var entries = selection.ToArray();
+        var uiPaths = RimUnityWorkflow.LoadUiPaths();
         if (entries.Length == 0) throw new InvalidOperationException("没有可发布的入口。");
         string blockers = DescribeBlockers(entries);
         if (blockers != null) throw new InvalidOperationException(blockers);
@@ -95,7 +96,7 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
                 PrefabExporter.Export(target.Stage, new ExportOptions {
                     disableCastShadows = profile.disableCastShadows, disableReceiveShadows = profile.disableReceiveShadows,
                     disableLightProbes = profile.disableLightProbes, disableReflectionProbes = profile.disableReflectionProbes,
-                    log = log
+                    log = log, uiResourcePaths = uiPaths
                 }, requests.ToArray());
                 string compact = Path.Combine(target.Stage, "compact");
                 ExportStorage.CopyForPublish(target.Prepared, compact);

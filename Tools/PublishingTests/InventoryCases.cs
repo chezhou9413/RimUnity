@@ -39,6 +39,32 @@ internal static class InventoryCases
         Check(rows.All(r => r.InBundle("")), "all-packages view contains every row");
         Check(shared.Matches("military") && shared.Matches("shared.MAT") && automatic.Matches("texture2d") && !automatic.Matches("no-such-token"), "search matches type, owner, and path");
         Check(rows.Sum(r => r.bytes) == 395, "source size counts shared paths once");
+        var marked = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "assets/shared.MAT" };
+        var classified = ResourceInventory.Build(assets, new[] { root }, usage, profile, marked);
+        Check(classified.Single(r => r.Shared && r.type == "Material").ui, "dependency UI flag is explicit and path-case independent");
+        Check(classified.Count(r => r.MatchesUi(1)) == 1 && classified.Count(r => r.MatchesUi(2)) == 4 && classified.All(r => r.MatchesUi(0)), "UI and non-UI filters partition all resource rows");
+        root.ui = true;
+        Check(ResourceInventory.Build(assets, new[] { root }, usage, profile).Single(r => r.path == root.path).ui, "legacy entry UI flags remain readable");
+        marked.Clear();
+        Check(!ResourceInventory.Build(assets, new[] { root }, usage, profile, marked).Any(r => r.ui), "explicitly clearing flags overrides stale entry values");
+        root.ui = false;
+
+        var shader = new UnityEngine.Shader { Path = "Assets/Shared.shader" };
+        var material = new UnityEngine.Material { Path = "Assets/World.mat", shader = shader };
+        marked.Add("assets/SHARED.shader");
+        Check(ExportUiPolicy.IsMarked(shader, marked) && ExportUiPolicy.IsMarked(material, marked),
+            "shader-only UI flag propagates to referencing material before export identity is chosen");
+        Check(ExportUiPolicy.IsMarked(new UnityEngine.Material { Path = "Assets/Other.mat", shader = shader }, marked),
+            "shared marked shader applies to every referencing material");
+        Check(!ExportUiPolicy.IsMarked(new UnityEngine.Material { Path = "Assets/Plain.mat" }, marked)
+            && !ExportUiPolicy.IsMarked(new UnityEngine.Object { Path = shader.Path }, marked),
+            "missing shaders and non-rendering assets do not acquire UI export mode");
+        marked.Clear();
+        Check(!ExportUiPolicy.IsMarked(shader, marked) && !ExportUiPolicy.IsMarked(material, marked),
+            "clearing shader UI flag restores world export mode");
+        marked.Add(material.Path);
+        Check(ExportUiPolicy.IsMarked(material, marked) && !ExportUiPolicy.IsMarked(shader, marked),
+            "material-only UI flag does not change its shared shader classification");
         profile.mappings = profile.mappings.Concat(new[] { new RimUnityWorkflow.Mapping { bundle = "military", mod = "Conflict" } }).ToArray();
         var conflicted = ResourceInventory.Build(assets, new[] { root }, usage, profile).Single(r => r.path == shared.path);
         Check(conflicted.mod == null, "duplicate output mappings do not silently choose an owner");
@@ -48,7 +74,8 @@ internal static class InventoryCases
                 var layout = InventoryGeometry.Calculate(size.Item1, size.Item2, error);
                 var repaint = InventoryGeometry.Calculate(size.Item1, size.Item2, error);
                 Check(layout.Table.height >= 130 && layout.BundleList.height > 100, "visible list bounds at " + size + ", error=" + error);
-                Check(layout.Search.height == 32 && layout.Main.x > layout.Sidebar.Right, "full-size controls and separated columns at " + size);
+                Check(layout.Search.height == (layout.Main.width < 760 ? 70 : 32) && layout.Main.x > layout.Sidebar.Right, "full-size UI filters wrap in narrow windows at " + size);
+                Check(layout.Search.Bottom + 8 <= layout.Table.y && layout.Search.width >= 440, "filters fit without overlapping table at " + size);
                 Check(layout.Table.Bottom < layout.Selection.y && layout.Selection.Bottom < layout.Footer.y, "table, inspector and footer do not overlap at " + size);
                 Check(layout.Table.height == repaint.Table.height && layout.Table.y == repaint.Table.y, "layout remains identical across GUI passes at " + size);
             }

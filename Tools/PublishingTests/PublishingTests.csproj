@@ -11,6 +11,7 @@
     <Compile Include="../../UnityPackage/Editor/Publishing/InventoryGeometry.cs" Link="InventoryGeometry.cs" />
     <Compile Include="../../UnityPackage/Editor/Publishing/ResourceOwnership.cs" Link="ResourceOwnership.cs" />
     <Compile Include="../../UnityPackage/Editor/Publishing/RimUnityPublisher.cs" Link="RimUnityPublisher.cs" />
+    <Compile Include="../../UnityPackage/Editor/Export/ExportUiPolicy.cs" Link="ExportUiPolicy.cs" />
     <Compile Include="../../UnityPackage/Editor/Export/ExportStorage.cs" Link="ExportStorage.cs" />
     <Compile Include="../../UnityPackage/Editor/Export/ExportJson.cs" Link="ExportJson.cs" />
     <Compile Include="../../UnityPackage/Editor/Export/ExportSharing.cs" Link="ExportSharing.cs" />

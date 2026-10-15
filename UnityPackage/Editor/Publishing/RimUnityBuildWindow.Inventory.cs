@@ -22,7 +22,7 @@ namespace RimUnity.Editor
         private int inventoryDragControl;
         private string packageSearch = "", selectionAnchor, dragPath;
         private bool onlyShared, inventoryDirty = true, sortDescending;
-        private int inventoryType, inventorySort;
+        private int inventoryType, inventorySort, inventoryUi;
         private GUIStyle rowText, faintText;
 
         private void RebuildInventory()
@@ -55,7 +55,7 @@ namespace RimUnity.Editor
                     taggedBundle = importer == null || string.IsNullOrEmpty(importer.assetBundleVariant)
                         ? importer?.assetBundleName : importer.assetBundleName + "." + importer.assetBundleVariant, bytes = bytes });
             }
-            inventory = ResourceInventory.Build(assets, entries, usage, profile);
+            inventory = ResourceInventory.Build(assets, entries, usage, profile, uiResourcePaths);
             inventoryTypes = new[] { "全部类型" }.Concat(inventory.Select(r => r.type).Distinct().OrderBy(t => t)).ToArray();
             inventoryType = Math.Min(inventoryType, inventoryTypes.Length - 1);
             resourceSelection.IntersectWith(inventory.Select(r => r.path));
@@ -77,10 +77,10 @@ namespace RimUnity.Editor
             if (!inventoryDirty) return;
             var query = inventory.Where(r => r.InBundle(bundleFilter) && r.Matches(search)
                 && (inventoryType == 0 || r.type == inventoryTypes[inventoryType])
-                && (!onlyShared || r.Shared) && (!onlyIssues || InventoryIssue(r)));
-            Func<ResourceInventory.Row, object> key = inventorySort == 1 ? r => r.type : inventorySort == 2 ? r => r.bundle ?? ""
-                : inventorySort == 3 ? r => r.mod ?? "" : inventorySort == 4 ? r => (object)r.bytes
-                : inventorySort == 5 ? r => InventoryIssue(r) ? "需检查" : r.Shared ? "共享" : r.entry == null ? "依赖" : "就绪" : r => r.name;
+                && r.MatchesUi(inventoryUi) && (!onlyShared || r.Shared) && (!onlyIssues || InventoryIssue(r)));
+            Func<ResourceInventory.Row, object> key = inventorySort == 1 ? r => r.type : inventorySort == 2 ? r => (object)r.ui
+                : inventorySort == 3 ? r => r.bundle ?? "" : inventorySort == 4 ? r => r.mod ?? "" : inventorySort == 5 ? r => (object)r.bytes
+                : inventorySort == 6 ? r => InventoryIssue(r) ? "需检查" : r.Shared ? "共享" : r.entry == null ? "依赖" : "就绪" : r => r.name;
             visibleInventory = (sortDescending ? query.OrderByDescending(key) : query.OrderBy(key)).ThenBy(r => r.path).ToArray();
             inventoryDirty = false;
         }
@@ -93,17 +93,19 @@ namespace RimUnity.Editor
             EditorGUI.DrawRect(InventoryRect(layout.Main), EditorGUIUtility.isProSkin ? new Color(.16f, .17f, .18f) : new Color(.91f, .92f, .93f));
             DrawPackageSidebar(layout);
             Rect toolbar = InventoryRect(layout.Search);
-            float filters = 328;
-            float searchWidth = Mathf.Max(100, toolbar.width - filters);
+            bool compact = toolbar.height > 32;
+            float searchWidth = compact ? toolbar.width : toolbar.width - 450;
             EditorGUI.BeginChangeCheck();
             search = GUI.TextField(new Rect(toolbar.x, toolbar.y, searchWidth, 32), search, inventorySearch);
-            float x = toolbar.x + searchWidth + 8;
-            inventoryType = EditorGUI.Popup(new Rect(x, toolbar.y, 106, 32), inventoryType, inventoryTypes, inventoryPopup);
-            onlyShared = GUI.Toggle(new Rect(x + 114, toolbar.y, 70, 32), onlyShared, "仅共享", inventoryButton);
-            onlyIssues = GUI.Toggle(new Rect(x + 192, toolbar.y, 70, 32), onlyIssues, "仅问题", inventoryButton);
+            float x = compact ? toolbar.x : toolbar.x + searchWidth + 8;
+            float y = compact ? toolbar.y + 38 : toolbar.y;
+            inventoryType = EditorGUI.Popup(new Rect(x, y, 106, 32), inventoryType, inventoryTypes, inventoryPopup);
+            inventoryUi = EditorGUI.Popup(new Rect(x + 114, y, 112, 32), inventoryUi, new[] { "全部 UI 状态", "UI 资源", "非 UI 资源" }, inventoryPopup);
+            onlyShared = GUI.Toggle(new Rect(x + 234, y, 70, 32), onlyShared, "仅共享", inventoryButton);
+            onlyIssues = GUI.Toggle(new Rect(x + 312, y, 70, 32), onlyIssues, "仅问题", inventoryButton);
             if (EditorGUI.EndChangeCheck()) { inventoryDirty = true; resourcesScroll = Vector2.zero; }
             FilterInventory();
-            GUI.Label(new Rect(x + 268, toolbar.y, 50, 32), visibleInventory.Length + " 项", faintText);
+            GUI.Label(new Rect(x + 390, y, 50, 32), visibleInventory.Length + " 项", faintText);
             DrawInventoryTable(InventoryRect(layout.Table));
             DrawInventorySelection(InventoryRect(layout.Selection));
             EditorGUI.DrawRect(new Rect(layout.Sidebar.Right, layout.Sidebar.y, 1, layout.Sidebar.height), DividerColor());
@@ -174,9 +176,9 @@ namespace RimUnity.Editor
 
         private void DrawInventoryTable(Rect rect)
         {
-            float width = Mathf.Max(840, rect.width - 16);
-            var starts = new[] { 30f, 30 + (width - 30) * .34f, 30 + (width - 30) * .46f,
-                30 + (width - 30) * .64f, 30 + (width - 30) * .79f, 30 + (width - 30) * .89f, width };
+            float width = Mathf.Max(900, rect.width - 16), flexible = width - 86;
+            var starts = new[] { 30f, 30 + flexible * .34f, 30 + flexible * .46f,
+                86 + flexible * .46f, 86 + flexible * .64f, 86 + flexible * .79f, 86 + flexible * .89f, width };
             Rect header = new Rect(rect.x, rect.y, rect.width, 32);
             GUI.Box(header, GUIContent.none, EditorStyles.toolbar);
             GUI.BeginGroup(header);
@@ -184,12 +186,12 @@ namespace RimUnity.Editor
             bool chooseAll = GUI.Toggle(new Rect(6, 7, 19, 18), all, GUIContent.none);
             if (chooseAll != all)
                 foreach (var row in visibleInventory) { if (chooseAll) resourceSelection.Add(row.path); else resourceSelection.Remove(row.path); }
-            string[] labels = { "资源名称", "类型", "AB 归属", "输出模组", "源大小", "状态" };
+            string[] labels = { "资源名称", "类型", "UI", "AB 归属", "输出模组", "源大小", "状态" };
             GUI.BeginGroup(new Rect(30, 0, Mathf.Max(1, header.width - 30), 32));
             for (int i = 0; i < labels.Length; i++)
             {
                 Rect column = new Rect(starts[i] - 30 - resourcesScroll.x, 0, starts[i + 1] - starts[i], 32);
-                if (GUI.Button(column, new GUIContent(labels[i] + (inventorySort == i ? sortDescending ? " ▾" : " ▴" : ""), i == 4 ? "源文件体积，不代表导出后或运行时内存大小" : labels[i]), inventoryButton))
+                if (GUI.Button(column, new GUIContent(labels[i] + (inventorySort == i ? sortDescending ? " ▾" : " ▴" : ""), i == 5 ? "源文件体积，不代表导出后或运行时内存大小" : labels[i]), inventoryButton))
                 { sortDescending = inventorySort == i && !sortDescending; inventorySort = i; inventoryDirty = true; }
             }
             GUI.EndGroup();
@@ -223,15 +225,19 @@ namespace RimUnity.Editor
             if (asset != null && AssetPreview.IsLoadingAssetPreview(asset.GetInstanceID())) Repaint();
             GUI.Label(new Rect(starts[0] + 30, rect.y + 3, starts[1] - starts[0] - 30, 22), new GUIContent(row.name, row.path), rowText);
             void Cell(int column, string text, string tip = null) => GUI.Label(new Rect(starts[column], rect.y + 3, starts[column + 1] - starts[column], 22), new GUIContent(text, tip ?? text), rowText);
-            Cell(1, row.type); Cell(2, string.IsNullOrEmpty(row.bundle) ? row.Unassigned ? "未归属" : "自动依赖" : row.bundle,
+            Cell(1, row.type);
+            bool nextUi = GUI.Toggle(new Rect(starts[2] + 18, rect.y + 6, 24, 22), row.ui,
+                new GUIContent("", "标记为 UI 资源；材质和 Shader 按 UI 模式导出，其余类型用于分类。"));
+            if (nextUi != row.ui) SetInventoryUi(new[] { row }, nextUi);
+            Cell(3, string.IsNullOrEmpty(row.bundle) ? row.Unassigned ? "未归属" : "自动依赖" : row.bundle,
                 "归属：" + (row.bundle ?? "自动") + "\n引用包：" + string.Join("、", row.references));
-            Cell(3, string.IsNullOrEmpty(row.mod) ? row.Shared && string.IsNullOrEmpty(row.bundle) ? "自动共享" : "未配置" : Path.GetFileName(row.mod.TrimEnd('/', '\\')), row.mod);
-            Cell(4, EditorUtility.FormatBytes(row.bytes), "源文件：" + row.path + "\n不是导出后大小或内存占用");
+            Cell(4, string.IsNullOrEmpty(row.mod) ? row.Shared && string.IsNullOrEmpty(row.bundle) ? "自动共享" : "未配置" : Path.GetFileName(row.mod.TrimEnd('/', '\\')), row.mod);
+            Cell(5, EditorUtility.FormatBytes(row.bytes), "源文件：" + row.path + "\n不是导出后大小或内存占用");
             string status = InventoryIssue(row) ? "需检查" : row.Shared ? "共享" : row.entry != null ? "就绪" : "依赖";
             bool issue = InventoryIssue(row);
             Color indicator = issue ? new Color(.94f, .66f, .24f) : row.Shared ? new Color(.39f, .68f, .91f) : new Color(.36f, .72f, .46f);
-            EditorGUI.DrawRect(new Rect(starts[5] + 7, rect.y + 13, 6, 6), indicator);
-            GUI.Label(new Rect(starts[5] + 17, rect.y + 3, starts[6] - starts[5] - 17, 26),
+            EditorGUI.DrawRect(new Rect(starts[6] + 7, rect.y + 13, 6, 6), indicator);
+            GUI.Label(new Rect(starts[6] + 17, rect.y + 3, starts[7] - starts[6] - 17, 26),
                 new GUIContent(status, row.entry == null ? "依赖随入口导出；拖动可以明确指定 AB 归属" : Status(row.entry) + "\n" + row.entry.error), rowText);
             HandleInventoryMouse(rect, row, index);
         }
@@ -313,21 +319,31 @@ namespace RimUnity.Editor
                     profile.resourceOwners = profile.resourceOwners.Where(p => !resourceSelection.Contains(p.path)).ToArray();
                     SaveOwnership(); RefreshEntries(); GUIUtility.ExitGUI();
                 }
-            using (new EditorGUI.DisabledScope(selected.Length == 0 || selected.Any(r => r.entry == null)))
+            using (new EditorGUI.DisabledScope(selected.Length == 0))
             {
                 bool mixed = EditorGUI.showMixedValue;
                 try
                 {
-                    EditorGUI.showMixedValue = selected.Any(r => r.entry?.ui == true) && selected.Any(r => r.entry?.ui != true);
-                    bool ui = selected.Length > 0 && selected.All(r => r.entry?.ui == true);
-                    bool nextUi = GUI.Toggle(Take(80), ui, new GUIContent("屏幕 UI", "独立入口的材质/Shader 使用 UI 顶点布局"), inventoryButton);
-                    if (nextUi != ui) { foreach (var row in selected) if (row.entry != null) row.entry.ui = nextUi; SavePreset(); }
+                    EditorGUI.showMixedValue = selected.Any(r => r.ui) && selected.Any(r => !r.ui);
+                    bool ui = selected.Length > 0 && selected.All(r => r.ui);
+                    bool nextUi = GUI.Toggle(Take(80), ui, new GUIContent("UI 资源", "批量设置所选资源的 UI 标记；与每行复选框一致"), inventoryButton);
+                    if (nextUi != ui) SetInventoryUi(selected, nextUi);
                 }
                 finally { EditorGUI.showMixedValue = mixed; }
             }
             using (new EditorGUI.DisabledScope(mappings.Length == 0))
                 if (GUI.Button(Take(128), "加入 Project 选择", inventoryButton)) AddSelection();
             if (GUI.Button(Take(50), "清空", inventoryButton)) resourceSelection.Clear();
+        }
+        private void SetInventoryUi(ResourceInventory.Row[] rows, bool ui)
+        {
+            var paths = new HashSet<string>(rows.Select(r => r.path), StringComparer.OrdinalIgnoreCase);
+            foreach (string path in paths) { if (ui) uiResourcePaths.Add(path); else uiResourcePaths.Remove(path); }
+            foreach (var row in inventory.Where(r => paths.Contains(r.path))) row.ui = ui;
+            foreach (var entry in entries.Concat(manual).Where(e => paths.Contains(e.path))) entry.ui = ui;
+            inventoryDirty = true;
+            SavePreset();
+            Repaint();
         }
         private void MoveInventory(string[] paths, string bundle)
         {
@@ -349,7 +365,7 @@ namespace RimUnity.Editor
         {
             string bundle = row.bundle ?? (row.references.Length == 1 ? row.references[0] : null);
             return row.entry ?? new RimUnityWorkflow.Entry { path = row.path, bundle = bundle, mod = row.mod, type = row.type,
-                status = string.IsNullOrEmpty(bundle) ? "unassigned-owner" : "pending" };
+                ui = row.ui, status = string.IsNullOrEmpty(bundle) ? "unassigned-owner" : "pending" };
         }).ToArray();
 
         private static Color SelectionColor() => EditorGUIUtility.isProSkin ? new Color(.17f, .32f, .49f) : new Color(.56f, .74f, .94f);
