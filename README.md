@@ -39,7 +39,7 @@ instance.transform.position = new RimUnity.Vector3(x, y, z);
 
 脚本在入口统一解析路径：显式参数优先，其次环境变量 `RIMWORLD_DIR` / `HARMONY_PATH` / `UNITY_EDITOR_DIR` / `UNITY_PROJECT`，最后是脚本默认值（如 `-BackupRoot` 落在 Mods 同级或系统临时目录）。路径缺失时报错并说明该传哪个参数，不再写入固定机器目录。
 
-直接调用 `dotnet build` 时需自行传入 `-p:RimWorldDir=`、`-p:HarmonyPath=`，或先设置同名环境变量（`Directory.Build.props` 不再提供默认值）。完整步骤见[制作、导出、接入与发布工作流](Docs/zh-CN/Workflow.md)。
+直接调用 `dotnet build` 时需自行传入 `-p:RimWorldDir=`、`-p:HarmonyPath=`，或先设置同名环境变量（`Directory.Build.props` 不再提供默认值）。路径缺失时引用会解析不到，先给 `warning MSB3245`（只指出找不到哪个程序集），再在用到这些类型的编译步骤报 `CS0246`。完整步骤见[制作、导出、接入与发布工作流](Docs/zh-CN/Workflow.md)。
 
 ## 使用文档
 

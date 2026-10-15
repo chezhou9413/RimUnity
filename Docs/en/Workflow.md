@@ -28,7 +28,7 @@ $env:UNITY_EDITOR_DIR = 'C:/Program Files/Unity/2022.3.35f1/Editor/Data'
 $env:UNITY_PROJECT = 'C:/Projects/RimUnityBuiltIn'
 ```
 
-When neither value is provided, the build fails while resolving references and names the missing path instead of silently using one machine's private directory.
+When neither value is provided, the references cannot be resolved (a `warning MSB3245` names the missing assembly but not the missing path), and the real failure surfaces later as a `CS0246` at the compile step that uses those types. Neither mode silently falls back to one machine's private directory.
 
 The runtime outputs `RimUnity.Core.dll` and `RimUnity.dll` to `1.7/Assemblies`. The offline tool goes to `Tools/bin/ShaderTool` and requires the target game's installation path. Game DLLs are not included in release packages.
 

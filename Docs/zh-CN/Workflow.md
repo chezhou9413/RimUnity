@@ -28,7 +28,7 @@ $env:UNITY_EDITOR_DIR = 'C:/Program Files/Unity/2022.3.35f1/Editor/Data'
 $env:UNITY_PROJECT = 'C:/Projects/RimUnityBuiltIn'
 ```
 
-两个值都不提供时，构建会在引用解析阶段失败并指出缺失的路径，不会静默使用某台机器的私有目录。
+两个值都不提供时，引用会解析不到（`warning MSB3245` 指出找不到哪个程序集，但不写出缺失的路径），随后在用到这些类型的编译步骤报 `CS0246`；无论哪种方式都不会静默使用某台机器的私有目录。
 
 运行时的 `RimUnity.Core.dll` 和 `RimUnity.dll` 输出到 `1.7/Assemblies`，离线工具输出到 `Tools/bin/ShaderTool`。离线工具需要配置目标游戏安装目录。发布包不包含游戏 DLL。
 

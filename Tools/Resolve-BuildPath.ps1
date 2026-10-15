@@ -2,7 +2,9 @@
 #规则：显式参数优先，其次环境变量，最后内置回退值；最终必须存在。
 function Resolve-BuildPath {
     param(
-        [Parameter(Mandatory = $true)][string]$Path,
+        # 不能用 Mandatory：调用方在未传参时会传空字符串占位，
+        # Mandatory 会先抛 "Cannot bind argument ... empty string"，把下面带指引的报错整个吃掉。
+        [string]$Path,
         [string]$EnvVar = '',
         [string]$Fallback = '',
         [Parameter(Mandatory = $true)][string]$ParamName,
