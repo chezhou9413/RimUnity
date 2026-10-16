@@ -7,7 +7,7 @@
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Resolve-BuildPath.ps1')
 $GameRoot = Resolve-BuildGameRoot -Path $(if ($PSBoundParameters.ContainsKey('GameRoot')) { $GameRoot } else { '' }) -Required
-if ([string]::IsNullOrEmpty($BackupRoot)) { $BackupRoot = Resolve-BuildBackupRoot -Path '' }
+$BackupRoot = Resolve-BuildBackupRoot -Path $BackupRoot -GameRoot $GameRoot
 if ([string]::IsNullOrEmpty($StageRoot)) { $StageRoot = Join-Path ([IO.Path]::GetFullPath([IO.Path]::GetTempPath())) 'RimUnity/LinearExports-Stage' }
 #仅用于确认来自 Linear 工程、且程序已选择 Linear 分支的既有导出；Gamma 工程必须通过 Unity 重新导出。
 $root = [IO.Path]::GetFullPath($DataRoot).TrimEnd('\','/')
@@ -15,8 +15,10 @@ $catalog = Get-Content -LiteralPath "$root/catalog.json" -Encoding UTF8 -Raw | C
 $tool = Join-Path $PSScriptRoot 'bin/ShaderTool/RimUnity.ShaderTool.exe'
 $assembly = [Reflection.Assembly]::LoadFrom([IO.Path]::ChangeExtension($tool, '.dll'))
 $convert = $assembly.GetType('RimUnity.Rendering.ShaderColorSpace').GetMethod('Convert', [Reflection.BindingFlags]'Static,NonPublic')
-$stage = Join-Path $StageRoot "Stage-$([Guid]::NewGuid().ToString('N'))"
+$stage = Join-Path ([IO.Path]::GetFullPath($StageRoot)) "Stage-$([Guid]::NewGuid().ToString('N'))"
 $backup = Join-Path $BackupRoot "LinearExports-$([Guid]::NewGuid().ToString('N'))"
+Write-Output "暂存目录：$stage"
+Write-Output "计划备份目录：$backup"
 $pending = [Collections.Generic.Dictionary[string,string]]::new([StringComparer]::OrdinalIgnoreCase)
 $verified = [Collections.Generic.HashSet[string]]::new()
 $pairs = [Collections.Generic.HashSet[string]]::new()
@@ -77,3 +79,4 @@ foreach ($entry in $pending.GetEnumerator()) {
 [IO.Directory]::CreateDirectory($backup) | Out-Null
 [IO.File]::WriteAllText((Join-Path $backup 'changes.json'), (ConvertTo-Json -InputObject @($pending.Keys) -Depth 5), $encoding)
 Write-Output "已更新 $($pending.Count) 个文件，$($verified.Count) 个不同阶段程序通过编译；备份：$backup"
+Write-Output "暂存目录：$stage"

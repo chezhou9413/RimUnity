@@ -32,7 +32,7 @@ $env:UNITY_PROJECT = 'C:/Projects/RimUnityBuiltIn'
 
 构建脚本在入口不只检查目录存在，还核对该用途的必需文件：游戏目录要含 `Assembly-CSharp.dll` 与 `Waylith.dll`，Unity Editor/Data 要含 `Managed/Newtonsoft.Json.dll` 与 UnityEngine 程序集，Unity 工程要含 UGUI／TMP 程序集。路径指错时脚本直接说明缺哪个文件，不会走到编译才失败。`Tools/` 下的 `ResourcePacker` 与 `PublishingTests` 通过 `Tools/Directory.Build.props` 读取同一个 `UNITY_EDITOR_DIR`，也可以用 `-p:UnityEditorDir=` 覆盖。
 
-部署和升级的备份根默认取游戏安装目录下的 `.rimunity-backups`（位于 `Mods` 之外，不会被模组扫描读到），也可用 `-BackupRoot` 或环境变量 `RIMUNITY_BACKUP_DIR` 指定；升级的暂存目录仍在系统临时区，备份与暂存都会在结束时打印完整路径。
+部署和升级的备份根默认取本次 `-GameRoot` 或 `RIMWORLD_DIR` 解析出的游戏安装目录下的 `.rimunity-backups`（位于 `Mods` 之外，不会被模组扫描读到），也可用 `-BackupRoot` 或环境变量 `RIMUNITY_BACKUP_DIR` 指定。备份子目录按需创建，不会因默认路径不可用而改存临时目录。升级的暂存目录仍在系统临时区；转换前打印暂存与计划备份路径，完成后再次打印实际路径。部署失败会保留原始原因，并区分旧版已恢复、回滚失败和没有旧版备份的情况，给出对应恢复位置。
 
 运行时的 `RimUnity.Core.dll` 和 `RimUnity.dll` 输出到 `1.7/Assemblies`，离线工具输出到 `Tools/bin/ShaderTool`。离线工具需要配置目标游戏安装目录。发布包不包含游戏 DLL。
 
