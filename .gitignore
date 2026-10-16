@@ -9,6 +9,7 @@ Source/.build/
 Tools/bin/
 Tools/**/bin/
 Tools/**/obj/
+artifacts/
 *.user
 *.tgz
 *.zip

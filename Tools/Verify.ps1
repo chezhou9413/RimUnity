@@ -1,5 +1,7 @@
-param([string]$GameRoot = 'E:\steam\steamapps\common\RimWorld', [string]$DataRoot = '')
+﻿param([string]$GameRoot = '', [string]$DataRoot = '')
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Resolve-BuildPath.ps1')
+$GameRoot = Resolve-BuildGameRoot -Path $(if ($PSBoundParameters.ContainsKey('GameRoot')) { $GameRoot } else { '' }) -Required
 $repo = Split-Path $PSScriptRoot -Parent
 & (Join-Path $PSScriptRoot 'Build.ps1') -GameRoot $GameRoot
 & dotnet build (Join-Path $repo 'Source\RimUnity.ShaderTool\RimUnity.ShaderTool.csproj') -c Release --nologo "-p:RimWorldDir=$GameRoot"
