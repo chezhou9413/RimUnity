@@ -37,7 +37,7 @@ instance.transform.position = new RimUnity.Vector3(x, y, z);
 .\Tools\Pack.ps1 -Output 'C:\out'
 ```
 
-脚本在入口统一解析路径：显式参数优先，其次环境变量 `RIMWORLD_DIR` / `HARMONY_PATH` / `UNITY_EDITOR_DIR` / `UNITY_PROJECT`，最后是脚本默认值（如 `-BackupRoot` 落在 Mods 同级或系统临时目录）。路径缺失时报错并说明该传哪个参数，不再写入固定机器目录。
+脚本在入口统一解析路径：显式参数优先，其次环境变量 `RIMWORLD_DIR` / `HARMONY_PATH` / `UNITY_EDITOR_DIR` / `UNITY_PROJECT` / `RIMUNITY_BACKUP_DIR`，最后是脚本默认值。目录存在之外还会核对必需文件（游戏目录要含 `Assembly-CSharp.dll` 与 `Waylith.dll`；Unity Editor/Data 要含 `Managed/Newtonsoft.Json.dll` 与 UnityEngine 程序集；Unity 工程要含 UGUI/TMP 程序集），路径指错时在入口直接说明缺什么，而不是等到编译或运行时才报错。部署与升级备份默认放在游戏安装目录下的 `.rimunity-backups`（在 `Mods` 之外，不会被模组扫描读到）。
 
 直接调用 `dotnet build` 时需自行传入 `-p:RimWorldDir=`、`-p:HarmonyPath=`，或先设置同名环境变量（`Directory.Build.props` 不再提供默认值）。路径缺失时引用会解析不到，先给 `warning MSB3245`（只指出找不到哪个程序集），再在用到这些类型的编译步骤报 `CS0246`。完整步骤见[制作、导出、接入与发布工作流](Docs/zh-CN/Workflow.md)。
 

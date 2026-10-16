@@ -30,6 +30,10 @@ $env:UNITY_PROJECT = 'C:/Projects/RimUnityBuiltIn'
 
 When neither value is provided, the references cannot be resolved (a `warning MSB3245` names the missing assembly but not the missing path), and the real failure surfaces later as a `CS0246` at the compile step that uses those types. Neither mode silently falls back to one machine's private directory.
 
+The build scripts also verify required files instead of only checking that a directory exists: the game directory must contain `Assembly-CSharp.dll` and `Waylith.dll`; Unity Editor/Data must contain `Managed/Newtonsoft.Json.dll` and the UnityEngine assemblies; the Unity project must contain the UGUI/TMP assemblies. A wrong path is reported at the entry point with the missing file named, instead of failing later at compile time. `ResourcePacker` and `PublishingTests` under `Tools/` read the same `UNITY_EDITOR_DIR` through `Tools/Directory.Build.props`, and `-p:UnityEditorDir=` still overrides it.
+
+Deploy and upgrade backups default to `.rimunity-backups` under the game directory resolved from this invocation's `-GameRoot` or `RIMWORLD_DIR` (outside `Mods`, so the mod scanner does not see them). Override with `-BackupRoot` or `RIMUNITY_BACKUP_DIR`. Backup subdirectories are created when needed; an unavailable default path does not silently fall back to temporary storage. The upgrade tool stages into the system temp area and prints the stage and planned backup paths before conversion, then prints the actual paths on completion. Deployment errors preserve the original cause and distinguish a restored installation, a failed rollback, and an installation without a previous backup, with the relevant recovery paths.
+
 The runtime outputs `RimUnity.Core.dll` and `RimUnity.dll` to `1.7/Assemblies`. The offline tool goes to `Tools/bin/ShaderTool` and requires the target game's installation path. Game DLLs are not included in release packages.
 
 `Compile-Editor.ps1` is an optional package source compilation entry point. It needs a Unity Editor/Data directory and a UnityProject with UGUI and TMP imported. It does not launch Unity or replace the editor's package import checks.

@@ -27,6 +27,20 @@ instance.transform.position = new RimUnity.Vector3(x, y, z);
 
 `contentMod` 是资源所属模组。导出资源位于该模组的 `1.7/Data/RimUnity`，加载时使用导出窗口中填写的逻辑路径。
 
+## 从源码构建
+
+只使用框架或安装发行版时无需编译。修改框架源码则需要 RimWorld 1.7 安装目录、Harmony 的 `0Harmony.dll` 和 .NET 10 SDK。
+
+```powershell
+.\Tools\Build.ps1 -GameRoot 'C:\Games\RimWorld'
+.\Tools\Verify.ps1 -GameRoot 'C:\Games\RimWorld'
+.\Tools\Pack.ps1 -Output 'C:\out'
+```
+
+脚本在入口统一解析路径：显式参数优先，其次环境变量 `RIMWORLD_DIR` / `HARMONY_PATH` / `UNITY_EDITOR_DIR` / `UNITY_PROJECT` / `RIMUNITY_BACKUP_DIR`，最后是脚本默认值。目录存在之外还会核对必需文件（游戏目录要含 `Assembly-CSharp.dll` 与 `Waylith.dll`；Unity Editor/Data 要含 `Managed/Newtonsoft.Json.dll` 与 UnityEngine 程序集；Unity 工程要含 UGUI/TMP 程序集），路径指错时在入口直接说明缺什么，而不是等到编译或运行时才报错。部署与升级备份默认放在游戏安装目录下的 `.rimunity-backups`（在 `Mods` 之外，不会被模组扫描读到）。
+
+直接调用 `dotnet build` 时需自行传入 `-p:RimWorldDir=`、`-p:HarmonyPath=`，或先设置同名环境变量（`Directory.Build.props` 不再提供默认值）。路径缺失时引用会解析不到，先给 `warning MSB3245`（只指出找不到哪个程序集），再在用到这些类型的编译步骤报 `CS0246`。完整步骤见[制作、导出、接入与发布工作流](Docs/zh-CN/Workflow.md)。
+
 ## 使用文档
 
 Unity 内可打开 **RimUnity → 百科全书**：按主题整理的离线说明书、全文搜索，以及以下文档和 README 原文。导出扩展见[导出前后处理](Docs/zh-CN/ExportProcessors.md)。
