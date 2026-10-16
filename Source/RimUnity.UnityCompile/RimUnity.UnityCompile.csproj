@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework><LangVersion>9.0</LangVersion><EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <UnityEditorDir Condition="'$(UnityEditorDir)' == ''">E:/UN/2022.3.35f1/Editor/Data</UnityEditorDir>
-    <UnityProject Condition="'$(UnityProject)' == ''">E:/ModdevMics/Temp/RimUnity/BuiltIn</UnityProject>
-    <OutputPath>E:/ModdevMics/Temp/RimUnity/Compilation/</OutputPath>
+    <UnityEditorDir Condition="'$(UnityEditorDir)' == ''">$(UNITY_EDITOR_DIR)</UnityEditorDir>
+    <UnityProject Condition="'$(UnityProject)' == ''">$(UNITY_PROJECT)</UnityProject>
+    <OutputPath Condition="'$(OutputPath)' == ''">$(TEMP)/RimUnity/UnityCompile/</OutputPath>
     <DefineConstants>UNITY_EDITOR;UNITY_2022_3_OR_NEWER</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
