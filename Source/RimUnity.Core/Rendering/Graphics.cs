@@ -29,7 +29,8 @@ public static class Graphics
         byte pass = LayerPassRouter.Resolve(layer);
         for (int i = 0; i < material.passCount; i++)
         {
-            var command = new MeshDrawCommand(geometry, material.GetNativePass(i), range, transform, submesh, pass, layer: layer, storage: storage);
+            var passGeometry = material.UsesTriangleEdges(i) ? mesh.TriangleEdges().GetDrawMesh(transform.GetDeterminant() < 0) : geometry;
+            var command = new MeshDrawCommand(passGeometry, material.GetNativePass(i), range, transform, submesh, pass, layer: layer, storage: storage);
             if (capture != null) capture.Add(command);
             else MeshDrawSubmission.Enqueue(in command);
         }

@@ -41,32 +41,31 @@ public class Canvas : MonoBehaviour
         if (scaler != null && scaler.enabled)
         {
             referencePixelsPerUnit = scaler.referencePixelsPerUnit;
-            scaleFactor = scaler.scaleFactor;
+            float scale = scaler.scaleFactor;
             if (scaler.uiScaleMode == CanvasScaler.ScaleMode.ConstantPhysicalSize)
             {
                 float dpi = Screen.dpi > 0 ? Screen.dpi : scaler.fallbackScreenDPI;
                 float units = scaler.physicalUnit switch { CanvasScaler.Unit.Centimeters => 2.54f, CanvasScaler.Unit.Millimeters => 25.4f, CanvasScaler.Unit.Points => 72, CanvasScaler.Unit.Picas => 6, _ => 1 };
-                scaleFactor = dpi / units; referencePixelsPerUnit = scaler.referencePixelsPerUnit * units / scaler.defaultSpriteDPI;
+                scale = dpi / units; referencePixelsPerUnit = scaler.referencePixelsPerUnit * units / scaler.defaultSpriteDPI;
             }
             if (scaler.uiScaleMode == CanvasScaler.ScaleMode.ScaleWithScreenSize)
             {
                 float x = Screen.width / scaler.referenceResolution.x;
                 float y = Screen.height / scaler.referenceResolution.y;
-                scaleFactor = scaler.screenMatchMode switch
+                scale = scaler.screenMatchMode switch
                 {
                     CanvasScaler.ScreenMatchMode.Expand => Mathf.Min(x, y),
                     CanvasScaler.ScreenMatchMode.Shrink => Mathf.Max(x, y),
                     _ => Mathf.Pow(2f, Mathf.Lerp(Mathf.Log(x, 2f), Mathf.Log(y, 2f), scaler.matchWidthOrHeight))
                 };
             }
+            //只写最终缩放值，避免每次准备都使整棵画布布局失效。
+            scaleFactor = scale;
         }
         if (scaleFactor <= 0f) throw new System.InvalidOperationException("Canvas 的缩放系数必须大于零。");
         if (renderMode == RenderMode.WorldSpace) return;
         RectTransform rt = (RectTransform)transform;
-        rt.anchorMin = rt.anchorMax = rt.pivot = Vector2.zero;
-        rt.sizeDelta = new Vector2(Screen.width / scaleFactor, Screen.height / scaleFactor);
-        rt.anchoredPosition = Vector2.zero;
-        rt.localScale = Vector3.one;
+        rt.anchorMin = rt.anchorMax = Vector2.zero;
         if (renderMode == RenderMode.ScreenSpaceCamera)
         {
             Camera camera = worldCamera != null ? worldCamera : Camera.main;
@@ -76,6 +75,13 @@ public class Canvas : MonoBehaviour
             rt.pivot = new Vector2(.5f, .5f); rt.sizeDelta = new Vector2(camera.pixelWidth / scaleFactor, camera.pixelHeight / scaleFactor);
             rt.localScale = Vector3.one * (height / rt.sizeDelta.y);
             rt.position = camera.transform.position + camera.transform.forward * distance; rt.rotation = camera.transform.rotation;
+        }
+        else
+        {
+            rt.pivot = Vector2.zero;
+            rt.sizeDelta = new Vector2(Screen.width / scaleFactor, Screen.height / scaleFactor);
+            rt.anchoredPosition = Vector2.zero;
+            rt.localScale = Vector3.one;
         }
     }
 }

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+  <!--独立测试地图没有世界地块，空白生态避免植物生长率初始化访问世界温度。-->
+  <BiomeDef>
+    <defName>RimUnity_PerformanceLabBiome</defName>
+    <label>特效测试环境</label>
+    <description>用于特效性能测试的空白环境，保持晴天和21摄氏度，不自然生成动植物。</description>
+    <generatesNaturally>false</generatesNaturally>
+    <canBuildBase>false</canBuildBase>
+    <canAutoChoose>false</canAutoChoose>
+    <canExitMap>false</canExitMap>
+    <hasVirtualPlants>false</hasVirtualPlants>
+    <plantDensity>0</plantDensity>
+    <animalDensity>0</animalDensity>
+    <wildPlants />
+    <wildAnimals />
+    <wildAnimalsCanWanderInto>false</wildAnimalsCanWanderInto>
+    <constantOutdoorTemperature>21</constantOutdoorTemperature>
+    <baseWeatherCommonalities><Clear>1</Clear></baseWeatherCommonalities>
+  </BiomeDef>
+  <GenStepDef>
+    <defName>RimUnity_PerformanceLabFloor</defName>
+    <order>100</order>
+    <genStep Class="RimUnity.Diagnostics.GenStep_PerformanceLab" />
+  </GenStepDef>
+  <MapGeneratorDef>
+    <defName>RimUnity_PerformanceLab</defName>
+    <genSteps><li>RimUnity_PerformanceLabFloor</li></genSteps>
+    <ignoreAreaRevealedLetter>true</ignoreAreaRevealedLetter>
+    <disableCallAid>true</disableCallAid>
+    <validScenarioMap>false</validScenarioMap>
+    <pocketMapProperties>
+      <biome>RimUnity_PerformanceLabBiome</biome>
+      <temperature>21</temperature>
+    </pocketMapProperties>
+  </MapGeneratorDef>
+</Defs>

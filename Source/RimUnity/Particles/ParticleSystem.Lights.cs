@@ -80,5 +80,6 @@ public sealed partial class ParticleSystem
     {
         if (lightMap != null) foreach (var item in mapLights.Values) lightMap.glowGrid.DeregisterCustomGlower(item.Handle);
         mapLights.Clear(); liveLights.Clear(); expiredLights.Clear();
+        lightMap = null;
     }
 }

@@ -7,9 +7,10 @@ namespace RimUnity.UI;
 //布局缓存只在文字和尺寸参数变化时重建，变换与画布透明度在提交时应用。
 public sealed partial class TextMeshProUGUI
 {
-    internal struct GlyphQuad { internal Rect rect, uv; internal Texture2D atlas; internal Color color; internal int line; }
+    internal struct GlyphQuad { internal Rect rect, uv; internal Texture2D atlas; internal Color color; internal int line; internal float topShear, bottomShear; }
     internal readonly List<GlyphQuad> quads = new();
     private readonly List<float> lineWidths = new();
+    private readonly List<float> lineBottoms = new();
     private Vector2 measured;
     private string cached;
     private TMP_FontAsset cachedFont;
@@ -18,7 +19,7 @@ public sealed partial class TextMeshProUGUI
     internal void Build(float width, float height)
     {
         if (font == null) throw new InvalidOperationException("TMP 字体未指定：" + name);
-        int options = HashCode.Combine(HashCode.Combine(alignment, enableWordWrapping, richText, enableAutoSizing, characterSpacing, lineSpacing, fontSizeMin, fontSizeMax), enableKerning, fontSpacing);
+        int options = HashCode.Combine(HashCode.Combine(alignment, enableWordWrapping, richText, enableAutoSizing, characterSpacing, lineSpacing, fontSizeMin, fontSizeMax), enableKerning, fontSpacing, italicSlant, overflowMode);
         Vector4 bounds = new(width, height, fontSize, 0);
         if (cached == text && cachedFont == font && cachedBounds == bounds && cachedOptions == options) return;
         cached = text; cachedFont = font; cachedBounds = bounds; cachedOptions = options;
@@ -28,21 +29,24 @@ public sealed partial class TextMeshProUGUI
         {
             float low = fontSizeMin, high = fontSizeMax;
             for (int i = 0; i < 10; i++) { float mid = (low + high) * .5f; Layout(mid, width); if (measured.x <= width && measured.y <= height) low = mid; else high = mid; }
-            Layout(low, width);
+            size = low;
+            Layout(size, width);
         }
+        ApplyOverflow(width, height, size);
     }
     private void Layout(float defaultSize, float width)
     {
-        quads.Clear(); lineWidths.Clear();
+        quads.Clear(); lineWidths.Clear(); lineBottoms.Clear();
         var letters = ParseLetters(defaultSize);
         float x = 0, y = 0, rowHeight = font.lineHeight * defaultSize / font.pointSize, maxWidth = 0;
         int line = 0;
         bool wordStart = true;
-        void Newline() { lineWidths.Add(x); maxWidth = Math.Max(maxWidth, x); x = 0; y += rowHeight + lineSpacing; rowHeight = font.lineHeight * defaultSize / font.pointSize; line++; }
+        void Newline() { lineWidths.Add(x); lineBottoms.Add(y + rowHeight); maxWidth = Math.Max(maxWidth, x); x = 0; y += rowHeight + lineSpacing; rowHeight = font.lineHeight * defaultSize / font.pointSize; line++; }
         for (int i = 0; i < letters.Count; i++)
         {
             var letter = letters[i];
             if (letter.code == '\n') { Newline(); wordStart = true; continue; }
+            if (letter.code == 0x200B) { wordStart = true; continue; }
             var glyph = letter.glyph; var owner = letter.owner;
             float scale = letter.size / owner.pointSize * owner.scale * glyph.scale;
             Vector4 adjustment = Adjustment(letters, i);
@@ -66,12 +70,16 @@ public sealed partial class TextMeshProUGUI
                 Texture2D atlas = owner.atlasTextures[glyph.atlasIndex]; float pad = owner.atlasPadding;
                 Rect r = new(x + (glyph.bearingX + adjustment.x - pad) * scale, y + (owner.ascentLine - glyph.bearingY - adjustment.y - pad) * scale, (glyph.width + 2 * pad) * scale, (glyph.height + 2 * pad) * scale);
                 Rect uv = new((glyph.rect.x - pad) / atlas.width, (glyph.rect.y - pad) / atlas.height, (glyph.rect.width + 2 * pad) / atlas.width, (glyph.rect.height + 2 * pad) / atlas.height);
-                quads.Add(new GlyphQuad { rect = r, uv = uv, atlas = atlas, color = letter.color, line = line });
+                float topShear = italicSlant * (glyph.bearingY + pad) * scale;
+                float bottomShear = italicSlant * (glyph.bearingY - glyph.height - pad) * scale;
+                float adjustmentShear = (topShear - bottomShear) * .5f;
+                quads.Add(new GlyphQuad { rect = r, uv = uv, atlas = atlas, color = letter.color, line = line,
+                    topShear = topShear - adjustmentShear, bottomShear = bottomShear - adjustmentShear });
             }
             x += advance;
             wordStart = letter.Breakable;
         }
-        lineWidths.Add(x); measured = new Vector2(Math.Max(maxWidth, x), y + rowHeight);
+        lineWidths.Add(x); lineBottoms.Add(y + rowHeight); measured = new Vector2(Math.Max(maxWidth, x), y + rowHeight);
     }
     internal Vector2 Offset(int line, Rect content)
     {

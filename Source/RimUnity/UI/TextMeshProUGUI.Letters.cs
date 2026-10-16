@@ -14,7 +14,7 @@ public sealed partial class TextMeshProUGUI
         internal TMP_FontAsset owner;
         internal float size;
         internal Color color;
-        internal bool Breakable => code == '\n' || code == ' ' || code == '-' || code >= 0x2E80 && code <= 0xA4CF || code >= 0xAC00 && code <= 0xD7AF || code >= 0xF900 && code <= 0xFAFF;
+        internal bool Breakable => code == '\n' || code == 0x200B || code == ' ' || code == '-' || code >= 0x2E80 && code <= 0xA4CF || code >= 0xAC00 && code <= 0xD7AF || code >= 0xF900 && code <= 0xFAFF;
     }
     private readonly List<Letter> letters = new();
     //基础标签只影响后续字形，未知标签直接指出不受支持的语义。
@@ -46,7 +46,8 @@ public sealed partial class TextMeshProUGUI
             uint code = source[i];
             if (char.IsHighSurrogate(source[i]) && i + 1 < source.Length && char.IsLowSurrogate(source[i + 1])) { code = (uint)char.ConvertToUtf32(source[i], source[i + 1]); i++; }
             if (code == '\r') continue;
-            if (code == '\n') { letters.Add(new Letter { code = code }); continue; }
+            //零宽空格允许断行，但没有可绘制字形或字距。
+            if (code == '\n' || code == 0x200B) { letters.Add(new Letter { code = code }); continue; }
             if (!font.TryGlyph(code, out var glyph, out var owner)) throw new InvalidOperationException($"TMP 图集缺字 U+{code:X}，请在 Unity 字体资产中加入该字形后重新导出。");
             letters.Add(new Letter { code = code, glyph = glyph, owner = owner, size = size, color = color });
         }

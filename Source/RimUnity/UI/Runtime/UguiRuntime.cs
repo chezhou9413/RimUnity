@@ -53,15 +53,15 @@ internal static partial class UguiRuntime
         for (int i = 0; i < Entries.Count; i++)
         {
             var entry = Entries[i]; entry.Order = i;
-            var masks = new List<Mask>();
-            var rectMasks = new List<RectMask2D>();
+            List<Mask> masks = null;
+            List<RectMask2D> rectMasks = null;
             for (Transform t = entry.Particles != null ? entry.Particles.transform.parent : entry.Rect.parent; t != null; t = t.parent)
             {
-                var mask = t.GetComponent<Mask>(); if (mask != null && mask.MaskEnabled()) masks.Add(mask);
-                var rectangle = t.GetComponent<RectMask2D>(); if (rectangle != null && rectangle.isActiveAndEnabled) rectMasks.Add(rectangle);
+                var mask = t.GetComponent<Mask>(); if (mask != null && mask.MaskEnabled()) (masks ??= new()).Add(mask);
+                var rectangle = t.GetComponent<RectMask2D>(); if (rectangle != null && rectangle.isActiveAndEnabled) (rectMasks ??= new()).Add(rectangle);
             }
-            entry.Masks = masks.ToArray();
-            entry.RectMasks = rectMasks.ToArray();
+            entry.Masks = masks?.ToArray() ?? System.Array.Empty<Mask>();
+            entry.RectMasks = rectMasks?.ToArray() ?? System.Array.Empty<RectMask2D>();
         }
         Entries.Sort((a, b) => a.Canvas.EffectiveOrder != b.Canvas.EffectiveOrder ? a.Canvas.EffectiveOrder.CompareTo(b.Canvas.EffectiveOrder) : a.Order.CompareTo(b.Order));
     }

@@ -28,6 +28,7 @@ internal static partial class ShaderGlobals
             Shader.SetGlobalVector("unity_OrthoParams", new Vector4(camera.orthographicSize * camera.aspect, camera.orthographicSize, 0, camera.orthographic ? 1 : 0));
             Shader.SetGlobalMatrix("_RimUnity_View", camera.worldToCameraMatrix);
             Shader.SetGlobalMatrix("_RimUnity_Projection", camera.projectionMatrix);
+            Shader.SetGlobalMatrix("_RimUnity_InvProjection", camera.projectionMatrix.inverse);
             SetDepthCamera(camera);
             Shader.SetGlobalVector("_ScreenParams", new Vector4(camera.pixelWidth, camera.pixelHeight, 1 + 1f / camera.pixelWidth, 1 + 1f / camera.pixelHeight));
     }

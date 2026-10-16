@@ -35,9 +35,10 @@ public sealed partial class Animator : MonoBehaviour
         for (int i = 0; i < playback.Length; i++) Advance(playback[i], dt);
         Sample();
     }
+    //控制器或对象层级改变后，清空有效与缺失目标的绑定结果。
     public void Rebind()
     {
-        values.Clear(); trackBindings.Clear(); poses.Clear(); rotationBindings.Clear(); clipRotations.Clear(); tracksBound = false;
+        values.Clear(); trackBindings.Clear(); poses.Clear(); rotationBindings.Clear(); clipRotations.Clear(); boundClips.Clear(); tracksBound = false;
         if (controller == null) { playback = Array.Empty<LayerPlayback>(); return; }
         foreach (var p in controller.parameters) values.Add(p.name, p.type == AnimatorControllerParameterType.Float ? p.defaultFloat : p.type == AnimatorControllerParameterType.Int ? p.defaultInt : p.defaultBool ? 1 : 0);
         playback = new LayerPlayback[controller.layers.Length];

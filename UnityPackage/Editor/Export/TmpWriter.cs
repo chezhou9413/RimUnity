@@ -13,13 +13,16 @@ namespace RimUnity.Editor
         internal static void Component(TextMeshProUGUI text, ComponentData data, ValueWriter writer, string path)
         {
             if (text.font == null) throw new InvalidOperationException(path + "：TMP 字体未指定。");
-            if ((text.fontStyle & ~FontStyles.Bold) != 0 || text.enableVertexGradient || text.isRightToLeftText) throw new NotSupportedException(path + "：TMP 支持普通与粗体，其他字体样式／顶点渐变／RTL 尚未接通。");
-            if (text.overflowMode != TextOverflowModes.Overflow && text.overflowMode != TextOverflowModes.Masking) throw new NotSupportedException(path + "：TMP 省略号／分页等溢出模式尚未接通。");
+            if ((text.fontStyle & ~(FontStyles.Bold | FontStyles.Italic)) != 0 || text.enableVertexGradient || text.isRightToLeftText) throw new NotSupportedException(path + "：TMP 支持普通、粗体与斜体，其他字体样式／顶点渐变／RTL 尚未接通。");
+            if (text.overflowMode != TextOverflowModes.Overflow && text.overflowMode != TextOverflowModes.Masking
+                && text.overflowMode != TextOverflowModes.Truncate && text.overflowMode != TextOverflowModes.Ellipsis)
+                throw new NotSupportedException(path + "：TMP 分页和链接溢出尚未接通。");
             foreach (string name in new[] { "text", "font", "fontSize", "fontSizeMin", "fontSizeMax", "enableAutoSizing", "enableWordWrapping", "richText", "enableKerning", "overflowMode", "alignment", "characterSpacing", "lineSpacing", "margin", "color", "raycastTarget", "faceColor", "outlineColor", "outlineWidth" }) data.members.Add(writer.Property(text, name, path));
             Material material = text.fontSharedMaterial;
             if (material == null || !material.HasProperty("_GradientScale")) throw new NotSupportedException(path + "：仅支持 TMP SDF 字体材质。");
             foreach (string keyword in new[] { "UNDERLAY_ON", "UNDERLAY_INNER", "GLOW_ON", "BEVEL_ON" }) if (material.IsKeywordEnabled(keyword)) throw new NotSupportedException(path + "：TMP 材质特性尚未接通：" + keyword);
             bool bold = (text.fontStyle & FontStyles.Bold) != 0;
+            data.members.Add(new MemberData { name = "italicSlant", property = true, value = writer.Write((text.fontStyle & FontStyles.Italic) != 0 ? text.font.italicStyle * .01f : 0f, path) });
             float weight = material.GetFloat(bold ? "_WeightBold" : "_WeightNormal") / 4f;
             float dilation = (weight + material.GetFloat("_FaceDilate")) * material.GetFloat("_ScaleRatioA");
             data.members.Add(new MemberData { name = "faceDilate", property = true, value = writer.Write(dilation, path) });
@@ -34,9 +37,15 @@ namespace RimUnity.Editor
             Put("pointSize", font.faceInfo.pointSize); Put("scale", font.faceInfo.scale); Put("ascentLine", font.faceInfo.ascentLine);
             Put("descentLine", font.faceInfo.descentLine); Put("lineHeight", font.faceInfo.lineHeight); Put("atlasPadding", (float)font.atlasPadding);
             var glyphs = new ValueData { kind = "array", items = new List<ValueData>() };
-            foreach (var character in font.characterTable)
+            foreach (var group in font.characterTable.GroupBy(c => c.unicode))
             {
-                var glyph = character.glyph; var fields = new List<MemberData>();
+                var character = group.First();
+                if (group.Any(c => c.glyphIndex != character.glyphIndex || c.scale != character.scale))
+                    throw new InvalidOperationException(path + "：字体 " + font.name + " 的字符 U+" + character.unicode.ToString("X") + " 存在冲突记录。");
+                //旧字体重复字符的缓存可能为空，按序列化字形索引读取实际记录。
+                if (!font.glyphLookupTable.TryGetValue(character.glyphIndex, out var glyph))
+                    throw new InvalidOperationException(path + "：字体 " + font.name + " 的字符 U+" + character.unicode.ToString("X") + " 缺少字形 " + character.glyphIndex);
+                var fields = new List<MemberData>();
                 void Field(string name, object value) => fields.Add(new MemberData { name = name, value = writer.Write(value, path + ".glyph." + name) });
                 Field("unicode", character.unicode); Field("index", glyph.index); Field("atlasIndex", glyph.atlasIndex); Field("scale", glyph.scale * character.scale);
                 Field("width", glyph.metrics.width); Field("height", glyph.metrics.height); Field("bearingX", glyph.metrics.horizontalBearingX); Field("bearingY", glyph.metrics.horizontalBearingY); Field("advance", glyph.metrics.horizontalAdvance);

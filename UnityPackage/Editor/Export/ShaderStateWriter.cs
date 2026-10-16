@@ -63,20 +63,16 @@ namespace RimUnity.Editor
             var data = new ShaderData { sourceName = material.shader.name, profile = ui ? "ui" : "world", keywords = manifest["keywords"].ToObject<string[]>(), renderQueue = material.renderQueue };
             data.approximations = manifest["approximations"]?.ToObject<string[]>() ?? Array.Empty<string>();
             data.grabTexture = (string)manifest["grabTexture"];
+            data.geometry = (string)manifest["geometry"];
             data.colorSpace = (string)manifest["colorSpace"] ?? "Gamma";
             if (!string.IsNullOrEmpty(data.grabTexture)) data.renderQueue++;
             string cull = EnumValue(Value("Cull", "Back"), typeof(UnityEngine.Rendering.CullMode));
             data.cull = cull.Equals("Off", StringComparison.OrdinalIgnoreCase) ? "None" : Check(cull, "Front", "Back");
             string depth = Compare(Value("ZTest", "LEqual"));
-            //宿主固定使用包含等深度的比较；透明拖尾保留遮挡，仅等深度边界存在差异。
-            if (depth == "Less")
-            {
-                data.approximations = data.approximations.Concat(new[] { "ZTest Less 使用宿主 LEqual；恰好等深度的片元也会通过。" }).ToArray();
-                depth = "LessOrEqual";
-            }
-            data.depthTest = depth != "Always" && depth != "Disabled";
-            if (depth != "Always" && depth != "Disabled" && depth != "LessOrEqual") throw new NotSupportedException(path + "：Waylith 深度状态只能表达 LEqual／Always／Disabled。");
+            data.depthCompare = depth;
             data.depthWrite = depth != "Disabled" && On(Value("ZWrite", "On"));
+            //Vulkan 关闭深度测试时也不会写深度，Always 写入需要启用测试并指定 Always 比较。
+            data.depthTest = depth != "Disabled" && (depth != "Always" || data.depthWrite);
             if (ui && data.depthWrite) throw new NotSupportedException(path + "：Overlay 自定义 Shader 必须使用 ZWrite Off。");
             if (ui && data.depthTest)
             {

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using HarmonyLib;
 
 namespace RimUnity.Assets;
@@ -9,10 +10,17 @@ public static class HostAssets
 {
     private static readonly AccessTools.FieldRef<List<Waylith.Rendering.MeshDrawCommand>> Immediate =
         AccessTools.StaticFieldRefAccess<List<Waylith.Rendering.MeshDrawCommand>>(AccessTools.Field(typeof(UnityEngine.Graphics), "ImmediateCapture"));
-    private static readonly Dictionary<Shader, UnityEngine.Shader> Shaders = new();
-    private static readonly Dictionary<UnityEngine.Shader, Material> Defaults = new();
-    private static readonly Dictionary<Texture2D, UnityEngine.Texture2D> Textures = new();
-    private static readonly Dictionary<Material, UnityEngine.Shader> MaterialShaders = new();
+    private static readonly ConditionalWeakTable<Shader, UnityEngine.Shader> Shaders = new();
+    private static readonly ConditionalWeakTable<UnityEngine.Shader, Material> Defaults = new();
+    private static readonly ConditionalWeakTable<Texture2D, UnityEngine.Texture2D> Textures = new();
+    private static readonly ConditionalWeakTable<Material, UnityEngine.Shader> MaterialShaders = new();
+
+    //离屏附件由 RimUnity 持有，宿主采集接口借用同一目标而不复制资源。
+    public static UnityEngine.RenderTexture ToHost(RenderTexture source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        return source.Target;
+    }
 
     //复制宿主贴图的像素，调用方拥有新贴图；不接管原版资源的释放责任。
     public static Texture2D CopyTexture(UnityEngine.Texture2D source)

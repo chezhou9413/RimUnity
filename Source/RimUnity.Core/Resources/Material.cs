@@ -62,6 +62,8 @@ public sealed class Material : Object
     }
     public int renderQueue { get => engineMaterial.RenderQueue; set => engineMaterial.RenderQueue = value; }
     public int passCount => EffectivePasses.Length;
+    //每个 Pass 单独选择几何展开，不影响同一材质的普通绘制通道。
+    internal bool UsesTriangleEdges(int pass) => EffectivePasses[pass].triangleEdges;
     public bool enableInstancing { get; set; }
     public Color color { get => GetColor("_Color"); set => SetColor("_Color", value); }
     public Texture mainTexture { get => GetTexture("_MainTex"); set => SetTexture("_MainTex", value); }

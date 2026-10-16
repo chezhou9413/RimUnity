@@ -14,6 +14,7 @@ public static class PrefabInspector
     public static int ValidateDirectory(string directory, string[] paths = null)
     {
         var catalog = new AssetCatalog(directory);
+        Rendering.ShaderDepthComparisons.ValidateHost();
         int count = 0;
         var selected = paths == null ? null : new HashSet<string>(paths, StringComparer.Ordinal);
         foreach (AssetRecord record in catalog.Manifest.assets.Where(a => a.type == "Prefab" && (selected == null || selected.Contains(a.path))))
@@ -32,7 +33,7 @@ public static class PrefabInspector
             {
                 if (node.parent != null && !types.ContainsKey(node.parent)) throw new InvalidDataException(node.name + "：父节点缺失。");
                 foreach (ComponentData component in node.components)
-                    InspectMembers(types[component.id], component.members, types, catalog.Manifest, record.path + "/" + node.name);
+                    InspectMembers(types[component.id], component.members, types, catalog, record.path + "/" + node.name);
             }
             Console.WriteLine(record.path + "：" + prefab.nodes.Count + " 个节点，类型／字段／引用静态核对通过");
             count++;
@@ -42,7 +43,7 @@ public static class PrefabInspector
     }
 
     //复用运行时的字段选择规则，但不实例化 MonoBehaviour。
-    private static void InspectMembers(Type owner, IEnumerable<MemberData> members, Dictionary<string, Type> objects, Manifest manifest, string path)
+    private static void InspectMembers(Type owner, IEnumerable<MemberData> members, Dictionary<string, Type> objects, AssetCatalog catalog, string path)
     {
         foreach (var member in members)
         {
@@ -56,12 +57,12 @@ public static class PrefabInspector
                     field = current.GetField(member.name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
             Type type = property?.PropertyType ?? field?.FieldType ?? throw new MissingMemberException(owner.FullName, member.name);
             if (property != null && property.SetMethod == null && member.value.kind != "event") throw new InvalidDataException(path + "." + member.name + "：属性不可写。");
-            InspectValue(type, member.value, objects, manifest, path + "." + member.name);
+            InspectValue(type, member.value, objects, catalog, path + "." + member.name);
         }
     }
 
     //递归检查跨节点引用与事件签名，包括私有 SerializeField。
-    private static void InspectValue(Type type, ValueData value, Dictionary<string, Type> objects, Manifest manifest, string path)
+    private static void InspectValue(Type type, ValueData value, Dictionary<string, Type> objects, AssetCatalog catalog, string path)
     {
         switch (value.kind)
         {
@@ -69,10 +70,12 @@ public static class PrefabInspector
                 if (!objects.TryGetValue(value.text, out Type target) || !type.IsAssignableFrom(target)) throw new InvalidDataException(path + "：对象引用类型不匹配：" + value.text);
                 break;
             case "asset":
-                AssetRecord asset = manifest.assets.Single(a => a.id == value.text);
+                AssetRecord asset = catalog.Manifest.assets.Single(a => a.id == value.text);
                 Type assetType = asset.type switch
                 {
                     "Prefab" => typeof(GameObject),
+                    "PrefabComponent" => TypeResolver.Component(catalog.Read<ResourceData>(asset.file).members.Single(m => m.name == "componentType").value.text),
+                    "ScriptableObject" => TypeResolver.Resolve(catalog.Read<ResourceData>(asset.file).members.Single(m => m.name == "scriptType").value.text),
                     "SpriteAtlas" => typeof(U2D.SpriteAtlas),
                     "VideoClip" => typeof(Video.VideoClip),
                     "TMP_FontAsset" => typeof(UI.TMP_FontAsset),
@@ -80,10 +83,10 @@ public static class PrefabInspector
                 };
                 if (!type.IsAssignableFrom(assetType)) throw new InvalidDataException(path + "：资源引用类型不匹配。");
                 break;
-            case "data": InspectMembers(type, value.fields, objects, manifest, path); break;
+            case "data": InspectMembers(type, value.fields, objects, catalog, path); break;
             case "array":
                 Type element = type.IsArray ? type.GetElementType() : type.GetGenericArguments()[0];
-                foreach (ValueData item in value.items) InspectValue(element, item, objects, manifest, path + "[]");
+                foreach (ValueData item in value.items) InspectValue(element, item, objects, catalog, path + "[]");
                 break;
             case "event":
                 foreach (EventCallData call in value.calls)

@@ -7,6 +7,9 @@ namespace RimUnity;
 //在画布中转换 Unity 屏幕坐标和 UI 局部坐标。
 public static class RectTransformUtility
 {
+    //相机画布使用实际投影，无相机的叠加画布保持屏幕坐标。
+    public static Vector2 WorldToScreenPoint(Camera camera, Vector3 position)
+        => camera != null ? (Vector2)camera.WorldToScreenPoint(position) : (Vector2)position;
     //在指定根节点坐标系内合并所有活动矩形的四角。
     public static Bounds CalculateRelativeRectTransformBounds(Transform root, Transform child)
     {

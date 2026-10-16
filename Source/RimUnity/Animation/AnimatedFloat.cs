@@ -1,11 +1,8 @@
 using System;
-using System.Collections.Generic;
-using System.Linq.Expressions;
-using System.Reflection;
 
 namespace RimUnity;
 
-//首次绑定时生成访问器，逐帧写曲线不调用字段反射。
+//实例只保留目标和初值，属性访问器按类型与路径共享。
 internal sealed class AnimatedFloat
 {
     internal readonly Func<float> read;
@@ -42,37 +39,11 @@ internal sealed class AnimatedFloat
             read = () => material.GetFloat(id); write = value => material.SetFloat(id, value);
             initial = read(); return;
         }
-        string[] parts = propertyPath.Split('.');
-        Expression root = Expression.Constant(target, target.GetType());
-        var members = new List<MemberInfo>();
-        Type type = target.GetType();
-        foreach (string raw in parts)
-        {
-            string name = Alias(raw);
-            MemberInfo member = type.GetProperty(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance) as MemberInfo ?? type.GetField(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            if (member == null) throw new MissingMemberException(type.FullName, name);
-            members.Add(member); type = MemberType(member);
-        }
-        Expression get = root;
-        foreach (var member in members) get = Expression.MakeMemberAccess(get, member);
-        if (type != typeof(float) && type != typeof(double) && type != typeof(int) && type != typeof(bool)) throw new NotSupportedException("曲线目标不是数值：" + propertyPath);
-        read = Expression.Lambda<Func<float>>(type == typeof(bool) ? Expression.Condition(get, Expression.Constant(1f), Expression.Constant(0f)) : Expression.Convert(get, typeof(float))).Compile();
-        var input = Expression.Parameter(typeof(float), "value");
-        var variables = new List<ParameterExpression>(); var body = new List<Expression>();
-        Expression owner = root;
-        for (int i = 0; i < members.Count - 1; i++)
-        {
-            var temp = Expression.Variable(MemberType(members[i]), "part" + i); variables.Add(temp);
-            body.Add(Expression.Assign(temp, Expression.MakeMemberAccess(owner, members[i]))); owner = temp;
-        }
-        body.Add(Expression.Assign(Expression.MakeMemberAccess(owner, members[^1]), type == typeof(bool) ? Expression.GreaterThan(input, Expression.Constant(.5f)) : Expression.Convert(input, type)));
-        for (int i = variables.Count - 1; i >= 0; i--)
-            if (variables[i].Type.IsValueType) body.Add(Expression.Assign(Expression.MakeMemberAccess(i == 0 ? root : variables[i - 1], members[i]), variables[i]));
-        body.Add(Expression.Empty());
-        write = Expression.Lambda<Action<float>>(Expression.Block(variables, body), input).Compile();
+        var accessor = AnimatedFloatAccessor.For(target.GetType(), propertyPath);
+        read = () => accessor.Read(target);
+        write = value => accessor.Write(target, value);
         initial = read();
     }
-    private static Type MemberType(MemberInfo member) => member is PropertyInfo p ? p.PropertyType : ((FieldInfo)member).FieldType;
     //Unity 的序列化字段名转换为桥接的公开属性。
     internal static string Alias(string name) => name switch
     {

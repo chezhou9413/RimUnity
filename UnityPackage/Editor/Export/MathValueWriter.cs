@@ -8,6 +8,8 @@ namespace RimUnity.Editor
     {
         internal static ValueData Write(object value, ValueWriter writer, string path)
         {
+            if (value is RectOffset) return Properties(value, writer, path, "left", "right", "top", "bottom");
+            if (value is TMPro.TMP_Dropdown.OptionData) return Properties(value, writer, path, "text", "image");
             if (value is UnityEngine.EventSystems.EventTrigger.Entry) return Properties(value, writer, path, "eventID", "callback");
             if (value is UnityEngine.UI.AnimationTriggers) return Properties(value, writer, path, "normalTrigger", "highlightedTrigger", "pressedTrigger", "selectedTrigger", "disabledTrigger");
             if (value is AnimationCurve) return Properties(value, writer, path, "keys", "preWrapMode", "postWrapMode");

@@ -7,6 +7,8 @@ namespace RimUnity;
 public sealed class RimUnityMod : Mod
 {
     public static ModContentPack OwnContent { get; private set; }
+    //早期加载界面可据此等待主线程运行时完成安装。
+    public static bool IsRuntimeReady => HostFrame.IsInstalled;
     public static Rendering.BloomSettings Bloom { get; private set; }
     internal static string ShaderDirectory { get; private set; }
 

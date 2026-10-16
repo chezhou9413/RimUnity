@@ -21,6 +21,17 @@ internal static class ResourceLoader
         RimUnity.Object result;
         switch (data.type)
         {
+            case "PrefabComponent":
+                var node = Get<GameObject>("prefab").transform;
+                foreach (int index in Get<int[]>("children")) node = node.GetChild(index);
+                var componentType = TypeResolver.Component(Get<string>("componentType"));
+                result = node.gameObject.GetComponents(componentType)[Get<int>("componentIndex")];
+                break;
+            case "ScriptableObject":
+                var script = ScriptableObject.CreateInstance(TypeResolver.Resolve(Get<string>("scriptType")));
+                reader.Apply(script, fields["fields"].fields);
+                result = script;
+                break;
             case "VideoClip":
                 result = new Video.VideoClip(catalog.Resolve(Get<string>("file")));
                 break;
@@ -112,16 +123,7 @@ internal static class ResourceLoader
                 result = mesh;
                 break;
             case "Material":
-                Shader unityShader;
-                if (fields["shader"].kind == "asset") unityShader = Get<Shader>("shader");
-                else
-                {
-                    string shaderName = Get<string>("shader");
-                    if (!Waylith.Rendering.ShaderRegistry.TryResolve(shaderName, out var shader))
-                        throw new InvalidDataException($"Shader 未注册：{shaderName}；请检查随包导出的 ShaderDef。");
-                    unityShader = Rendering.StandardParticleShader.Resolve(shader, data.colorSpace == "Linear");
-                }
-                Material material = new(unityShader);
+                Material material = new(ResolveMaterialShader(catalog, data));
                 if (fields.ContainsKey("shadowCaster")) material.shadowCaster = Get<Shader>("shadowCaster");
                 if (fields.ContainsKey("shaderPasses")) material.SetPasses(Get<Shader[]>("shaderPasses"));
                 foreach (var entry in fields.Where(p => p.Key != "shader" && p.Key != "shaderPasses" && p.Key != "shadowCaster"))
@@ -149,6 +151,17 @@ internal static class ResourceLoader
         }
         result.name = data.name;
         return result;
+    }
+
+    //加载阶段与实际材质创建共用同一变体选择，不提前载入材质贴图。
+    internal static Shader ResolveMaterialShader(AssetCatalog catalog, ResourceData data)
+    {
+        ValueData value = data.members.First(m => m.name == "shader").value;
+        if (value.kind == "asset") return (Shader)catalog.Get(value.text);
+        if (value.kind != "string") throw new InvalidDataException("材质 Shader 引用格式不合法：" + data.name);
+        if (!Waylith.Rendering.ShaderRegistry.TryResolve(value.text, out var shader))
+            throw new InvalidDataException($"Shader 未注册：{value.text}；请检查随包导出的 ShaderDef。");
+        return Rendering.StandardParticleShader.Resolve(shader, data.colorSpace == "Linear");
     }
 
     //材质统一处理向量和纹理变换的设备布局。

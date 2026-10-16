@@ -55,7 +55,13 @@ internal static class NativeGuiHost
         => Expression.Lambda<Func<T>>(Expression.Convert(Expression.Field(Expression.Constant(instance), AccessTools.Field(instance.GetType(), name)), typeof(T))).Compile();
     internal static float2 Position(Vector2 value) { Bind(); return toScreen(value.x, value.y); }
     internal static ImFontBakedPtr Font(int index, FontStyle style, float size) { Bind(); return styledFont(index, style).GetFontBaked(size); }
-    internal static int RegisterFont(string name, byte[] bytes, float size) { Bind(); return registerFont(name, bytes, size, 0); }
+    //按实际文件头识别字体集合，避免扩展名为 .ttf 的 TTC 被宿主拒绝。
+    internal static int RegisterFont(string name, byte[] bytes, float size)
+    {
+        byte[] font = FontCollection.FirstFace(bytes);
+        Bind();
+        return registerFont(name, font, size, 0);
+    }
 
     //直接上传 Waylith 贴图并向宿主原生 ImGui 渲染器登记纹理引用。
     internal static ImTextureRef TextureReference(Texture texture)

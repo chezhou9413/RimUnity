@@ -20,17 +20,24 @@ public sealed partial class ParticleSystem
         simulatedFrame = Time.frameCount;
         frameSystems.Clear(); frameSystems.AddRange(Active);
         orderedSystems.Clear(); visitState.Clear();
-        foreach (ParticleSystem system in frameSystems) Visit(system, Active, orderedSystems, visitState);
-        orderedSystems.Reverse();
-        //Start 只登记预热，统一完成整组预热后再读取本帧时间和位置。
-        foreach (ParticleSystem system in orderedSystems) system.Start();
-        PrewarmSystems(orderedSystems);
-        foreach (ParticleSystem system in orderedSystems)
+        try
         {
-            float dt = system.clock.Step(system.main.useUnscaledTime);
-            system.PrepareSimulationTime(system.paused ? 0 : dt * system.main.simulationSpeed);
+            foreach (ParticleSystem system in frameSystems) Visit(system, Active, orderedSystems, visitState);
+            orderedSystems.Reverse();
+            //Start 只登记预热，统一完成整组预热后再读取本帧时间和位置。
+            foreach (ParticleSystem system in orderedSystems) system.Start();
+            PrewarmSystems(orderedSystems);
+            foreach (ParticleSystem system in orderedSystems)
+            {
+                float dt = system.clock.Step(system.main.useUnscaledTime);
+                system.PrepareSimulationTime(system.paused ? 0 : dt * system.main.simulationSpeed);
+            }
+            AdvanceSystems(orderedSystems, true, true);
         }
-        AdvanceSystems(orderedSystems, true, true);
+        finally
+        {
+            frameSystems.Clear(); orderedSystems.Clear(); visitState.Clear();
+        }
     }
 
     //帧更新、显式模拟和预热共用出生偏移与子系统时钟换算。
@@ -61,7 +68,12 @@ public sealed partial class ParticleSystem
         finally
         {
             coordinatedStep = false;
-            foreach (ParticleSystem system in systems) system.currentStepDelta = 0;
+            ParticlePhysicsWorld.colliders = Array.Empty<Collider>();
+            foreach (ParticleSystem system in systems)
+            {
+                system.currentStepDelta = 0;
+                system.collisionCandidates.Clear();
+            }
         }
     }
 

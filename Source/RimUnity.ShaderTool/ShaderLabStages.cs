@@ -24,8 +24,7 @@ internal static class ShaderLabStages
         if (Regex.IsMatch(vertex + fragment, @"uniform\s+sampler2D\s+_CameraDepthTexture\b"))
             throw new NotSupportedException("此变体实际采样相机深度，Waylith 深度纹理绑定尚未接通；不会导出成白色默认纹理。");
         if (!Regex.IsMatch(vertex, @"\bgl_Position(?:\.[xyzw]+)?\s*=")) throw new InvalidDataException("顶点程序没有写出 SV_POSITION。");
-        if (manifest.profile == "world" && Regex.IsMatch(fragment, @"uniform\s+block_RU_(CameraData|ObjectData)_"))
-            throw new NotSupportedException("世界配置的对象模型和相机顶点块不能在片元阶段访问；请由顶点函数通过 varying 传递计算结果。");
+        if (manifest.profile == "world") (vertex, fragment) = FragmentMatrices.Adapt(vertex, fragment);
         Match vertexBlock = Block(vertex), fragmentBlock = Block(fragment);
         if (manifest.uiMasks && vertexBlock != null)
             vertex = vertex.Replace(vertexBlock.Value, vertexBlock.Value.Insert(vertexBlock.Value.IndexOf('}'),
