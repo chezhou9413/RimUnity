@@ -13,6 +13,12 @@ public sealed class AudioSource : MonoBehaviour
     private readonly List<(IAudioVoice voice, AudioClip clip, float scale)> oneShots = new();
     private float[] outputScratch = Array.Empty<float>();
     public AudioClip clip { get; set; }
+    //播放进度直接读写实际音频声部，拖动进度条不重新创建声部。
+    public float time
+    {
+        get => playingClip && voice != null ? (float)voice.PositionFrames / playingClip.frequency : 0;
+        set { if (playingClip && voice != null) voice.PositionFrames = (long)(Math.Clamp(value, 0, playingClip.length) * playingClip.frequency); }
+    }
     public bool playOnAwake { get; set; } = true;
     public bool loop { get; set; }
     public bool mute { get; set; }

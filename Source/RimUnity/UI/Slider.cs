@@ -4,8 +4,10 @@ using RimUnity.Events;
 namespace RimUnity.UI;
 
 //值与填充、手柄锚点共用归一化进度。
-public class Slider : Selectable, IPointerDownHandler, IDragHandler
+public class Slider : Selectable, IPointerDownHandler, IPointerUpHandler, IDragHandler
 {
+    //组合滑块可以显式转发释放事件，清除按下状态。
+    public void OnPointerUp(PointerEventData data) { Held = false; }
     public enum Direction { LeftToRight, RightToLeft, BottomToTop, TopToBottom }
     private Direction currentDirection;
     public Direction direction { get => currentDirection; set { currentDirection = value; Refresh(); } }

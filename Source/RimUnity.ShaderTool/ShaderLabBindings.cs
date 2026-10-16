@@ -58,7 +58,7 @@ internal static class ShaderLabBindings
         //反向移除声明后按名字排序，使属性布局不依赖字典或变体优化的遍历顺序。
         foreach (string builtIn in new[] { "_Time", "_SinTime", "_CosTime", "unity_DeltaTime", "_ScreenParams", "_ProjectionParams", "_ZBufferParams" })
             if (Regex.IsMatch(source, @"\b" + builtIn + @"\b")) uniforms.TryAdd(builtIn, "float4");
-        foreach (var builtIn in new[] { ("_WorldSpaceCameraPos", "float3"), ("unity_OrthoParams", "float4"), ("_RimUnity_View", "float4x4"), ("_RimUnity_Projection", "float4x4") })
+        foreach (var builtIn in new[] { ("_WorldSpaceCameraPos", "float3"), ("unity_OrthoParams", "float4"), ("_RimUnity_View", "float4x4"), ("_RimUnity_Projection", "float4x4"), ("_RimUnity_InvProjection", "float4x4") })
             if (Regex.IsMatch(source, @"\b" + builtIn.Item1 + @"\b")) uniforms.TryAdd(builtIn.Item1, builtIn.Item2);
         foreach (string texture in textures.Keys)
         {
@@ -114,6 +114,7 @@ internal static class ShaderLabBindings
         //直接对象采样缺少统一 UV 适配，要求调用标准采样宏，避免悄悄漏翻转。
         if (Regex.IsMatch(source, @"\.\s*(Sample\w*|Load|Gather\w*)\s*\("))
             throw new NotSupportedException("Texture2D 直接采样请改用 SAMPLE_TEXTURE2D/LOD/BIAS 宏后转换。");
+        source = MutableShaderUniforms.Adapt(source, uniforms, shader.Manifest, header);
         return UnityHlslCompat.Semantics(header + "\n" + source);
     }
 

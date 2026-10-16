@@ -11,6 +11,8 @@ public class PointerEventData : BaseEventData
     public Vector2 scrollDelta;
     public InputButton button;
     public bool dragging;
+    public int clickCount;
+    public readonly System.Collections.Generic.List<GameObject> hovered = new();
     public bool useDragThreshold = true;
     public GameObject pointerDrag, pointerPress, rawPointerPress;
     public Camera pressEventCamera => null;

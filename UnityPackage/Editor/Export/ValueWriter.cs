@@ -76,11 +76,11 @@ namespace RimUnity.Editor
         }
 
         //继承字段按声明层级枚举，不导出 MonoBehaviour 和引擎私有状态。
-        internal List<MemberData> Fields(object value, string path)
+        internal List<MemberData> Fields(object value, string path, Type stopAt = null)
         {
             var members = new List<MemberData>();
             var names = new HashSet<string>();
-            for (Type type = value.GetType(); type != null && type != typeof(MonoBehaviour) && type != typeof(object); type = type.BaseType)
+            for (Type type = value.GetType(); type != null && type != stopAt && type != typeof(MonoBehaviour) && type != typeof(object); type = type.BaseType)
                 foreach (FieldInfo field in type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
                 {
                     if (field.IsStatic || field.IsInitOnly || field.IsNotSerialized) continue;

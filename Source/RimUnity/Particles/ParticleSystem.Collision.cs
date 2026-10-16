@@ -19,6 +19,7 @@ public sealed partial class ParticleSystem
 {
     public CollisionModule collision = new();
     private readonly List<ParticleCollisionEvent> collisionEvents = new();
+    private readonly List<(Collider collider, ParticlePhysicsShape shape)> collisionCandidates = new();
 
     //曲线由粒子的当前寿命取值；平面列表保留 Transform 引用。
     public sealed class CollisionModule
@@ -47,6 +48,22 @@ public sealed partial class ParticleSystem
     {
         collisionEvents.Clear(); ClearTriggerEvents();
         //Medium/Low 使用相同高精度查询，未启用 Unity 的体素缓存性能优化。
+    }
+
+    //每个子步在粒子积分前准备几何，上一系统的停止回调仍能影响下一系统。
+    private void PrepareCollisionCandidates()
+    {
+        collisionCandidates.Clear();
+        if (count == 0 || !collision.enabled || collision.type == ParticleSystemCollisionType.Planes) return;
+        foreach (Collider collider in ParticlePhysicsWorld.colliders)
+        {
+            if (collider == null || !collider.enabled || !collider.gameObject.activeInHierarchy || collider.isTrigger
+                || (collision.collidesWith & (1 << collider.gameObject.layer)) == 0
+                || collider.Is2D != (collision.mode == ParticleSystemCollisionMode.Collision2D)) continue;
+            Rigidbody body = collider.attachedRigidbody;
+            if (body != null && (!body.detectCollisions || !collision.enableDynamicColliders && !body.isKinematic)) continue;
+            collisionCandidates.Add((collider, collider.Shape));
+        }
     }
 
     //碰撞在移动后、拖尾记录与死亡事件前处理；触发模块随后读取最终位置。
@@ -124,17 +141,14 @@ public sealed partial class ParticleSystem
         else
         {
             int considered = 0;
-            foreach (Collider collider in ParticlePhysicsWorld.colliders)
+            float reach = delta.magnitude + radius;
+            foreach (var entry in collisionCandidates)
             {
-                if (!ParticlePhysicsWorld.Queryable(collider) || collider.isTrigger || (collision.collidesWith & (1 << collider.gameObject.layer)) == 0) continue;
-                if (collider.Is2D != (collision.mode == ParticleSystemCollisionMode.Collision2D)) continue;
-                Rigidbody body = collider.attachedRigidbody;
-                if (!collision.enableDynamicColliders && body != null && !body.isKinematic) continue;
-                ParticlePhysicsShape candidate = collider.Shape;
-                if (candidate.Distance(from, out _) > delta.magnitude + radius) continue;
+                ParticlePhysicsShape candidate = entry.shape;
+                if (candidate.Distance(from, out _) > reach) continue;
                 if (considered++ >= collision.maxCollisionShapes) break;
                 if (candidate.Sweep(from, delta, radius, out float at, out Vector3 n) && at < fraction)
-                { fraction = at; normal = n; hit = collider; shape = candidate; }
+                { fraction = at; normal = n; hit = entry.collider; shape = candidate; }
             }
         }
         return hit != null;

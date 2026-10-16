@@ -19,7 +19,7 @@ internal static class ScreenCameraMaterials
     private static readonly ConditionalWeakTable<NativeMaterial, Entry> materials = new();
     private static readonly Dictionary<NativeShader, NativeShader> shaders = new();
 
-    //只调整临时屏幕附件的混合，显式 RenderTexture 和地图继续使用原管线。
+    //屏幕附件和显式 UI 附件共用覆盖率混合，普通相机纹理保持自身管线。
     internal static void Prepare(List<MeshDrawCommand> commands)
     {
         for (int i = 0; i < commands.Count; i++)

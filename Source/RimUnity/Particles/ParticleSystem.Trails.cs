@@ -17,10 +17,39 @@ public sealed partial class ParticleSystem
     internal struct TrailPoint { internal Vector3 position; internal float remaining, lifetime, distance, width; internal Color color; }
     internal readonly Dictionary<ulong, TrailState> trailStates = new();
     private readonly List<ulong> expiredTrails = new();
+    private readonly Stack<TrailState> idleTrails = new();
+    private int retainedTrailPoints;
+
+    //每系统最多保留 32 条、合计 1024 个采样点的容量，长轨迹结束后交给 GC。
+    private TrailState RentTrail()
+    {
+        if (!idleTrails.TryPop(out var trail)) return new TrailState();
+        retainedTrailPoints -= trail.points.Capacity;
+        return trail;
+    }
+
+    //清掉事件空间引用，缓存只能保留空容器。
+    private void ReturnTrail(TrailState trail)
+    {
+        trail.points.Clear(); trail.space = null; trail.dead = false;
+        trail.color = default; trail.width = trail.distance = 0;
+        if (idleTrails.Count >= 32 || retainedTrailPoints + trail.points.Capacity > 1024) return;
+        retainedTrailPoints += trail.points.Capacity; idleTrails.Push(trail);
+    }
+
+    //清空粒子时同时清除普通拖尾与 Ribbon。
+    private void ClearTrails()
+    {
+        foreach (var trail in trailStates.Values) ReturnTrail(trail);
+        foreach (var trail in ribbons.Values) ReturnTrail(trail);
+        trailStates.Clear(); ribbons.Clear(); expiredTrails.Clear(); expiredRibbons.Clear(); ribbonOrder.Clear();
+    }
+
+    //采样容器在粒子死亡后复用，避免循环发射不断创建 List。
     private void RecordTrail(Particle p)
     {
         if (!trails.enabled || trails.mode == ParticleSystemTrailMode.Ribbon || Random(p.randomSeed, 61) >= trails.ratio) return;
-        if (!trailStates.TryGetValue(p.identity, out TrailState state)) trailStates.Add(p.identity, state = new());
+        if (!trailStates.TryGetValue(p.identity, out TrailState state)) trailStates.Add(p.identity, state = RentTrail());
         state.space = p.eventSpace;
         state.color = trails.inheritParticleColor ? ColorAt(p) : Color.white;
         state.width = trails.sizeAffectsWidth ? SizeAt(p).x : 1;
@@ -34,7 +63,8 @@ public sealed partial class ParticleSystem
     private void FinishTrail(ulong identity)
     {
         if (!trailStates.TryGetValue(identity, out var trail)) return;
-        if (trails.dieWithParticles) trailStates.Remove(identity); else trail.dead = true;
+        if (trails.dieWithParticles) { trailStates.Remove(identity); ReturnTrail(trail); }
+        else trail.dead = true;
     }
     private void AgeTrails(float dt)
     {
@@ -42,9 +72,15 @@ public sealed partial class ParticleSystem
         foreach (var entry in trailStates)
         {
             var points = entry.Value.points;
-            for (int i = points.Count - 1; i >= 0; i--) { var p = points[i]; p.remaining -= dt; if (p.remaining <= 0) points.RemoveAt(i); else points[i] = p; }
+            int alive = 0;
+            for (int i = 0; i < points.Count; i++)
+            {
+                var p = points[i]; p.remaining -= dt;
+                if (p.remaining > 0) points[alive++] = p;
+            }
+            if (alive < points.Count) points.RemoveRange(alive, points.Count - alive);
             if (points.Count == 0 && entry.Value.dead) expiredTrails.Add(entry.Key);
         }
-        foreach (ulong key in expiredTrails) trailStates.Remove(key);
+        foreach (ulong key in expiredTrails) { ReturnTrail(trailStates[key]); trailStates.Remove(key); }
     }
 }

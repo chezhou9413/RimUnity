@@ -8,7 +8,11 @@ internal static class MappedColorSpaceShader
 {
     internal static RimUnity.Shader Wrap(Waylith.Rendering.Shader source, bool linear)
     {
-        if (!linear) return RimUnity.Shader.FromEngineShader(source.Key, source);
+        if (!linear)
+        {
+            ParticleBatchShaders.RegisterMapped(source);
+            return RimUnity.Shader.FromEngineShader(source.Key, source);
+        }
         string key = source.Key + "_Linear";
         if (ShaderRegistry.TryResolve(key, out var cached)) return RimUnity.Shader.FromEngineShader(key, cached);
         var (vertex, fragment) = ShaderColorSpace.Convert(ShaderSourceLoader.ReadShaderSource(source.VertexShaderFileName),
@@ -23,6 +27,7 @@ internal static class MappedColorSpaceShader
             vertexInputLayout: source.VertexInputLayout, precompiledStages: stages);
         if (shader.HasErrors) throw new InvalidOperationException("Linear 材质注册失败：" + key);
         ShaderRegistry.Register(shader);
+        ParticleBatchShaders.Register(shader, vertex, fragment);
         LinearShaderVariants.Register(shader, fragment);
         return RimUnity.Shader.FromEngineShader(key, shader);
     }

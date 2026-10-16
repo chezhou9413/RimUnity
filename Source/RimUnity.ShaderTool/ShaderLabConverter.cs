@@ -18,9 +18,12 @@ internal static class ShaderLabConverter
         string generatedGraph = BuiltInGraphLowering.Lower(File.ReadAllText(path));
         if (generatedGraph != null && profile != "world") throw new NotSupportedException("BuiltIn Lit Graph 需要世界绘制配置。");
         string source = generatedGraph ?? ExpandIncludes(path, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        source = TriangleEdgeLowering.Lower(source, out bool triangleEdges);
         source = AseSurfaceLowering.Lower(source) ?? UnlitSurfaceLowering.Lower(source);
         bool cameraUi = Array.IndexOf(keywords, "RIMUNITY_UI_MASKS") >= 0;
         ShaderLabSource shader = ShaderLabParser.Parse(source, profile, Array.FindAll(keywords, k => k != "RIMUNITY_UI_MASKS"), pass == -2 ? 0 : pass);
+        if (triangleEdges && profile != "world") throw new NotSupportedException("三角形描边展开需要世界网格绘制。");
+        if (triangleEdges) shader.Manifest.geometry = "triangle-edges";
         if (cameraUi) shader.Manifest.keywords.Add("RIMUNITY_UI_MASKS");
         //相机画布仍使用世界顶点入口，UI 裁剪保持屏幕像素覆盖率。
         shader.Manifest.uiMasks = profile == "ui" || cameraUi || Regex.IsMatch(shader.Program, @"\b_ClipRect\b");

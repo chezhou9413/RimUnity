@@ -54,13 +54,21 @@ public class Object
             using var transaction = Runtime.NativeRuntime.DeferLifecycle();
             return (T)(Object)go.CloneFactory();
         }
+        if (original is Component component && component.gameObject.CloneFactory != null)
+        {
+            using var transaction = Runtime.NativeRuntime.DeferLifecycle();
+            int index = Array.IndexOf(component.gameObject.GetComponents(component.GetType()), component);
+            var copy = component.gameObject.CloneFactory();
+            return (T)(Object)copy.GetComponents(component.GetType())[index];
+        }
         throw new NotSupportedException("请从 PrefabLoader.Load 返回的根模板实例化；此对象未注册克隆工厂。");
     }
     public static T Instantiate<T>(T original, Transform parent, bool worldPositionStays = false) where T : Object
     {
         using var transaction = Runtime.NativeRuntime.DeferLifecycle();
         T result = Instantiate(original);
-        if (result is not GameObject go) throw new NotSupportedException("挂接父节点需要 GameObject 模板。");
+        GameObject go = result is Component component ? component.gameObject : result as GameObject;
+        if (go == null) throw new NotSupportedException("挂接父节点需要 GameObject 或组件模板。");
         go.transform.SetParent(parent, worldPositionStays);
         return result;
     }
@@ -68,7 +76,8 @@ public class Object
     {
         using var transaction = Runtime.NativeRuntime.DeferLifecycle();
         T result = Instantiate(original);
-        if (result is not GameObject go) throw new NotSupportedException("设置空间位置需要 GameObject 模板。");
+        GameObject go = result is Component component ? component.gameObject : result as GameObject;
+        if (go == null) throw new NotSupportedException("设置空间位置需要 GameObject 或组件模板。");
         go.transform.SetPositionAndRotation(position, rotation);
         return result;
     }
@@ -78,7 +87,7 @@ public class Object
     {
         using var transaction = Runtime.NativeRuntime.DeferLifecycle();
         T result = Instantiate(original, parent, false);
-        ((GameObject)(Object)result).transform.SetPositionAndRotation(position, rotation);
+        (result is Component component ? component.gameObject : (GameObject)(Object)result).transform.SetPositionAndRotation(position, rotation);
         return result;
     }
     public static T[] FindObjectsByType<T>(FindObjectsInactive inactive, FindObjectsSortMode sortMode) where T : Object => Runtime.NativeRuntime.FindObjects<T>(inactive == FindObjectsInactive.Include, sortMode);

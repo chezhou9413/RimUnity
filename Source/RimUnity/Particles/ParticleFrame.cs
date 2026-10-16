@@ -24,8 +24,14 @@ internal static class ParticleFrame
         bool Visible(Component component) => (camera.cullingMask & (1 << component.gameObject.layer)) != 0;
         foreach (var renderer in MeshRenderer.Active)
             if (Visible(renderer)) renderer.Draw(camera);
-        foreach (var system in ParticleSystem.Active)
-            if (Visible(system) && system.GetComponentInParent<Canvas>() == null) system.GetComponent<ParticleSystemRenderer>()?.Draw(system, camera);
+        ParticleDrawBatch.Begin();
+        try
+        {
+            foreach (var system in ParticleSystem.Active)
+                if (Visible(system) && system.GetComponentInParent<Canvas>() == null) system.GetComponent<ParticleSystemRenderer>()?.Draw(system, camera);
+            ParticleDrawBatch.Flush();
+        }
+        finally { ParticleDrawBatch.End(); }
         foreach (var renderer in SkinnedMeshRenderer.Active)
             if (Visible(renderer)) renderer.Draw(camera);
         foreach (var renderer in TrailRenderer.Active)

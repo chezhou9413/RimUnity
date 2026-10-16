@@ -4,7 +4,7 @@ using RimUnity.Events;
 namespace RimUnity.UI;
 
 //处理拖动、滚轮、惯性和弹性边界，并与滚动条双向同步。
-public partial class ScrollRect : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IScrollHandler, RimUnity.UI.ILayoutGroup
+public partial class ScrollRect : MonoBehaviour, IInitializePotentialDragHandler, IBeginDragHandler, IDragHandler, IEndDragHandler, IScrollHandler, RimUnity.UI.ILayoutGroup
 {
     public enum MovementType { Unrestricted, Elastic, Clamped }
     public RectTransform content, viewport;
@@ -72,7 +72,8 @@ public partial class ScrollRect : MonoBehaviour, IBeginDragHandler, IDragHandler
     public void StopMovement() => velocity = Vector2.zero;
 
     //记录按下时的内容位置，避免弹性阻力在连续事件中重复累积。
-    public void OnBeginDrag(PointerEventData e)
+    public virtual void OnInitializePotentialDrag(PointerEventData e) => StopMovement();
+    public virtual void OnBeginDrag(PointerEventData e)
     {
         if (content == null || e.button != PointerEventData.InputButton.Left) return;
         RectTransformUtility.ScreenPointToLocalPointInRectangle((RectTransform)content.parent, e.pressPosition, null, out startPointer);
@@ -81,7 +82,7 @@ public partial class ScrollRect : MonoBehaviour, IBeginDragHandler, IDragHandler
         StopMovement();
     }
     //拖动超出边界时逐渐增加阻力。
-    public void OnDrag(PointerEventData e)
+    public virtual void OnDrag(PointerEventData e)
     {
         if (!dragging || content == null || e.button != PointerEventData.InputButton.Left) return;
         RectTransformUtility.ScreenPointToLocalPointInRectangle((RectTransform)content.parent, e.position, null, out Vector2 pointer);
@@ -97,7 +98,7 @@ public partial class ScrollRect : MonoBehaviour, IBeginDragHandler, IDragHandler
         SetPosition(target);
     }
     //释放拖动后由帧更新继续惯性与回弹。
-    public void OnEndDrag(PointerEventData e)
+    public virtual void OnEndDrag(PointerEventData e)
     {
         if (e.button == PointerEventData.InputButton.Left) dragging = false;
     }

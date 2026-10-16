@@ -16,6 +16,7 @@ internal static class UnityHlslCompat
         #define UNITY_VPOS_TYPE float4
         #define VPOS SV_Position
         #define UNITY_PI 3.14159265359
+        #define UNITY_HALF_PI 1.570796326795
         #define UNITY_NEAR_CLIP_VALUE 0.0
         #define UNITY_REVERSED_Z 1
         #ifdef UNITY_COLORSPACE_GAMMA
@@ -104,6 +105,10 @@ internal static class UnityHlslCompat
             source = Regex.Replace(source, @"\btex2D\s*\(\s*_GUIClipTexture\s*,", "RU_GuiClip(");
             source = "float4 RU_GuiClip(float2 uv) { return float4(1,1,1,1); }\n" + source;
         }
+        if (Regex.IsMatch(source, @"\bUnityViewToClipPos\s*\("))
+            source = "float4 UnityViewToClipPos(float3 p) { return mul(_RimUnity_Projection, float4(p,1)); }\n"
+                + "float4 UnityViewToClipPos(float4 p) { return UnityViewToClipPos(p.xyz); }\n" + source;
+        source = Regex.Replace(source, @"\bunity_CameraInvProjection\b", "_RimUnity_InvProjection");
         if (Regex.IsMatch(source, @"\bUnityObjectToViewPos\s*\("))
             source = (profile == "ui" ? "float3 UnityObjectToViewPos(float3 p) { return p; }\n"
                 : "float3 UnityObjectToViewPos(float3 p) { return mul(_RimUnity_View, mul(unity_ObjectToWorld, float4(p,1))).xyz; }\n")

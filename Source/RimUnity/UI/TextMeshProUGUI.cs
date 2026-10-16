@@ -26,6 +26,7 @@ public sealed partial class TextMeshProUGUI : MaskableGraphic, ILayoutElement
     public Color32 outlineColor { get; set; } = Color.black;
     public float outlineWidth { get; set; }
     public float faceDilate { get; set; }
+    public float italicSlant { get; set => SetProperty(ref field, value); }
     //字体自带字距与粗体增量使用 TMP 的百分之一 em 单位。
     public float fontSpacing { get; set => SetProperty(ref field, value); }
     public new RectTransform rectTransform => (RectTransform)transform;

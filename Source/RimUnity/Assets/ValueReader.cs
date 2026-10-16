@@ -10,6 +10,7 @@ namespace RimUnity.Assets;
 //仅在载入时反射；帧更新不经过序列化绑定。
 internal sealed class ValueReader
 {
+    private static readonly Dictionary<(Type, string, bool), MemberInfo> bindings = new();
     private readonly AssetCatalog catalog;
     private readonly IReadOnlyDictionary<string, RimUnity.Object> objects;
     internal ValueReader(AssetCatalog catalog, IReadOnlyDictionary<string, RimUnity.Object> objects)
@@ -76,23 +77,15 @@ internal sealed class ValueReader
         {
             try
             {
-                Type type = target.GetType();
-                PropertyInfo property = null;
-                //派生类可以用不同类型隐藏基类属性，按最具体声明绑定。
-                if (member.property)
-                    for (Type current = type; current != null && property == null; current = current.BaseType)
-                        property = current.GetProperty(member.name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
-                if (property != null)
+                MemberInfo binding = ResolveMember(target.GetType(), member);
+                if (binding is PropertyInfo property)
                 {
                     if (member.value.kind == "event") EventBinder.Bind(property.GetValue(target), member.value.calls, this, objects);
                     else property.SetValue(target, Read(member.value, property.PropertyType));
                 }
                 else
                 {
-                    FieldInfo field = null;
-                    for (Type current = type; current != null && field == null; current = current.BaseType)
-                        field = current.GetField(member.name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
-                    if (field == null) throw new MissingFieldException(type.FullName, member.name);
+                    var field = (FieldInfo)binding;
                     if (member.value.kind == "event")
                     {
                         object ev = Activator.CreateInstance(field.FieldType);
@@ -104,5 +97,22 @@ internal sealed class ValueReader
             }
             catch (Exception ex) { throw new InvalidOperationException($"还原 {target.GetType().FullName}.{member.name} 失败", ex); }
         }
+    }
+
+    //实例化只缓存类型元数据，不持有模板、组件或存档实例。
+    private static MemberInfo ResolveMember(Type type, MemberData member)
+    {
+        var key = (type, member.name, member.property);
+        if (bindings.TryGetValue(key, out MemberInfo binding)) return binding;
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+        //派生类可以隐藏基类成员，仍按最具体声明优先查找。
+        if (member.property)
+            for (Type current = type; current != null && binding == null; current = current.BaseType)
+                binding = current.GetProperty(member.name, flags);
+        for (Type current = type; current != null && binding == null; current = current.BaseType)
+            binding = current.GetField(member.name, flags);
+        if (binding == null) throw new MissingFieldException(type.FullName, member.name);
+        bindings.Add(key, binding);
+        return binding;
     }
 }

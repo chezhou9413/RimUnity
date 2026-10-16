@@ -43,15 +43,16 @@ public static partial class NativeRuntime
     }
     internal static void Register(GameObject go)
     {
-        go.SceneOwner = SceneOwnerProvider?.Invoke();
+        go.SceneOwner = go.IsAssetToken ? null : SceneOwnerProvider?.Invoke();
         Objects.Add(go);
     }
     internal static void Register(MonoBehaviour mono)
     {
         mono.Messages = MessageMethods.For(mono.GetType());
+        if (mono.gameObject.IsAssetToken) return;
         Behaviours.Add(mono); Refresh(mono);
     }
-    internal static void Unregister(GameObject go) => Objects.Remove(go);
+    internal static void Unregister(GameObject go) { Objects.Remove(go); go.SceneOwner = null; }
     internal static void Unregister(MonoBehaviour mono)
     {
         Refresh(mono);

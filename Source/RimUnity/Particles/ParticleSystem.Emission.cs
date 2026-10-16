@@ -54,6 +54,7 @@ public sealed partial class ParticleSystem
         //duration 与 emission 开关无关，禁用发射模块也必须结束非循环系统。
         if (emitting && !main.loop && now >= main.duration) emitting = false;
         previousPosition = emitterTo;
+        PrepareCollisionCandidates();
         for (int i = count - 1; i >= 0; i--)
         {
             ref Particle p = ref particles[i];
@@ -72,9 +73,11 @@ public sealed partial class ParticleSystem
             CaptureParentMotion(p, fromPosition, aliveDt);
             if (p.physicsKilled || p.remainingLifetime < 0 || p.remainingLifetime == 0 && !ring)
             {
-                SubEmit(p, 2, birthOffset + aliveDt); ReleaseParticle(p.identity); particles[i] = particles[--count]; continue;
+                SubEmit(p, 2, birthOffset + aliveDt); ReleaseParticle(p.identity);
+                particles[i] = particles[--count]; particles[count] = default; continue;
             }
         }
+        collisionCandidates.Clear();
         AdvanceSubEmissions(dt);
         AgeTrails(dt);
         if (!emitting && count == 0 && trailStates.Count == 0 && subEmissionEvents.Count == 0 && !completed)

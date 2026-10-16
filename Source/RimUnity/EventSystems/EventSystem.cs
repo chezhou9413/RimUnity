@@ -37,6 +37,16 @@ public class EventSystem : MonoBehaviour
     }
     //查询桥接画布的实际命中结果。
     public bool IsPointerOverGameObject() => UI.Runtime.UguiPointer.IsOverUi;
+    //按前后顺序返回实际可交互图形，不使用组件包围盒代替遮罩命中。
+    public void RaycastAll(PointerEventData data, System.Collections.Generic.List<RaycastResult> results)
+    {
+        results.Clear();
+        UI.Runtime.UguiRuntime.Prepare();
+        Vector2 gui = new(data.position.x / Verse.Prefs.UIScale, (Screen.height - data.position.y) / Verse.Prefs.UIScale);
+        var entries = UI.Runtime.UguiRuntime.Entries;
+        for (int i = entries.Count - 1; i >= 0; i--)
+            if (entries[i].Raycast && UI.Runtime.UguiRuntime.Contains(entries[i], gui)) results.Add(new RaycastResult { gameObject = entries[i].Rect.gameObject });
+    }
     //同一焦点对象上的活动组件依次接收事件。
     internal static bool Send<T>(GameObject target, System.Action<T> call)
     {

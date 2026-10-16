@@ -72,7 +72,8 @@ public sealed partial class ParticleSystem : MonoBehaviour
     private void ClearParticles()
     {
         ClearPhysicsState(); ReleaseParticleLights();
-        count = 0; trailStates.Clear(); customOverrides[0].Clear(); customOverrides[1].Clear();
+        Array.Clear(particles, 0, count);
+        count = 0; ClearTrails(); customOverrides[0].Clear(); customOverrides[1].Clear();
         subEmissionEvents.Clear(); subParentMotions.Clear();
     }
 

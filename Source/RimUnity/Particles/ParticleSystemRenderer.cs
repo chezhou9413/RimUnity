@@ -22,6 +22,9 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
     private readonly List<Vector4> custom1 = new(), custom2 = new();
     private readonly List<int> indices = new();
     private readonly List<int> order = new();
+    private Comparison<int> particleComparison;
+    private ParticleSystem sortingSystem;
+    private Vector3 sortingPosition, sortingForward;
     private readonly List<ParticleSystemVertexStream> streams = new();
     private float particleRandom;
     private Mesh sourceMesh;
@@ -70,25 +73,35 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
     internal void Draw(ParticleSystem system, Camera camera)
     {
         if (!enabled || !gameObject.activeInHierarchy) return;
+        preparedSpriteTextures.Clear();
         if (sharedMaterial != null && renderMode != ParticleSystemRenderMode.None && system.count != 0)
         {
             ClearMesh(); order.Clear();
             for (int i = 0; i < system.count; i++) order.Add(i);
             if (sortMode != ParticleSystemSortMode.None)
-                order.Sort((a, b) => Sort(system, camera, a, b));
+            {
+                sortingSystem = system;
+                sortingPosition = camera != null ? camera.transform.position : Vector3.zero;
+                sortingForward = camera != null ? camera.transform.forward : Vector3.forward;
+                try { order.Sort(particleComparison ??= CompareParticles); }
+                finally { sortingSystem = null; }
+            }
             DrawParticleBatches(system, camera);
         }
         if (system.trails.enabled && trailMaterial != null) DrawTrails(system, camera);
+        TrimSpriteBatches();
     }
-    private int Sort(ParticleSystem s, Camera c, int a, int b)
+    //排序期间相机姿态不变，比较器不重复读层级变换或创建闭包。
+    private int CompareParticles(int a, int b)
     {
+        var s = sortingSystem;
         var x = s.particles[a]; var y = s.particles[b];
         return sortMode switch
         {
             ParticleSystemSortMode.OldestInFront => x.elapsedAge.CompareTo(y.elapsedAge),
             ParticleSystemSortMode.YoungestInFront => y.elapsedAge.CompareTo(x.elapsedAge),
-            ParticleSystemSortMode.Depth => Vector3.Dot(s.WorldPosition(y) - s.WorldPosition(x), c != null ? c.transform.forward : Vector3.forward).CompareTo(0),
-            _ => (s.WorldPosition(y) - (c != null ? c.transform.position : Vector3.zero)).sqrMagnitude.CompareTo((s.WorldPosition(x) - (c != null ? c.transform.position : Vector3.zero)).sqrMagnitude)
+            ParticleSystemSortMode.Depth => Vector3.Dot(s.WorldPosition(y) - s.WorldPosition(x), sortingForward).CompareTo(0),
+            _ => (s.WorldPosition(y) - sortingPosition).sqrMagnitude.CompareTo((s.WorldPosition(x) - sortingPosition).sqrMagnitude)
         };
     }
     private void AppendParticle(ParticleSystem s, ParticleSystem.Particle p, Camera camera)
@@ -177,8 +190,14 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
             for (int i = 0; i < colors.Count; i++) { Color color = colors[i]; color.a *= cameraUiEntry.Alpha; colors[i] = color; }
             UI.Runtime.UiMaskData.Apply(mat);
         }
-        target ??= new Mesh { name = "RimUnity Particle Batch", indexFormat = IndexFormat.UInt32 };
-        target.Clear(); target.SetVertices(vertices); target.SetColors(colors); target.SetUVs(0, packedUV); target.SetUVs(1, custom1); target.SetUVs(2, custom2); target.SetTriangles(indices, 0); target.RecalculateBounds();
+        if (cameraUiEntry == null && ParticleDrawBatch.TryAppend(mat, gameObject.layer, propertyBlock,
+            vertices, normals, tangents, colors, packedUV, custom1, custom2, indices)) return;
+        if (target == null)
+        {
+            target = new Mesh { name = "RimUnity Particle Batch", indexFormat = IndexFormat.UInt32 };
+            target.MarkDynamic();
+        }
+        target.SetVertices(vertices); target.SetColors(colors); target.SetUVs(0, packedUV); target.SetUVs(1, custom1); target.SetUVs(2, custom2); target.SetTriangles(indices, 0);
         target.SetNormals(normals); target.SetTangents(tangents);
         CaptureDiagnostics(mat, target);
         RimUnity.Graphics.DrawMesh(target, Matrix4x4.identity, mat, cameraUiEntry?.RenderLayer ?? gameObject.layer, 0, propertyBlock);

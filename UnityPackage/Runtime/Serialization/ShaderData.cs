@@ -9,6 +9,8 @@ namespace RimUnity.Serialization
         public int formatVersion = 1;
         public string key, sourceName, profile, vertexFile, fragmentFile, descriptorFile;
         public string grabTexture;
+        public string geometry;
+        public string depthCompare = "LessOrEqual";
         public string colorSpace = "Gamma";
         public string[] keywords = Array.Empty<string>();
         public string[] approximations = Array.Empty<string>();

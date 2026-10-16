@@ -12,6 +12,10 @@ internal static class HostFrame
     private static Game lastGame;
     private static bool framePending;
     private static float effectsTime;
+    //帧调度安装后，内容模组才可以创建运行时对象。
+    internal static bool IsInstalled => application != null;
+    //调试场景仅在启用期间订阅，生成测试实例发生在本帧模拟之前。
+    internal static event Action BeforeSimulation;
 
     //加载完成后在游戏主线程安装一次帧回调。
     internal static void Install()
@@ -42,9 +46,11 @@ internal static class HostFrame
             ScreenEfx.EfxPlayer.SynchronizeSession();
             effectsTime = 0;
             NativeRuntime.ClearScene(lastGame);
+            ParticleDrawBatch.Clear();
             Assets.AssetLoader.EvictTextures();
             lastGame = Current.Game;
         }
+        BeforeSimulation?.Invoke();
         HostCamera.Synchronize();
         NativeRuntime.BeginFrame(Waylith.Time.DeltaTime);
         framePending = true;
@@ -83,13 +89,13 @@ internal static class HostFrame
     private static void Shutdown(EngineApplication app)
     {
         FinishFrame(app);
-        //FrameRenderer has already drained the render thread/GPU and disposed its pipelines.
-        //Drop cancelled loading snapshots before draining final clip release callbacks.
+        //宿主已等待渲染线程和 GPU 并释放管线，先丢弃取消的加载快照，再处理片段释放回调。
         Rendering.LoadingWarmup.Shutdown(app);
         ScreenEfx.EfxPlayer.Clear();
         ScreenEfx.EfxPlayer.Drain();
         ScreenEfx.EfxFrameBuilder.Shutdown();
         NativeRuntime.ClearScene();
+        ParticleDrawBatch.Clear();
         Tweening.DOTween.Clear();
         app.OnUpdate -= Update;
         app.FrameEnqueued -= FinishFrame;

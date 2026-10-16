@@ -23,6 +23,8 @@ public sealed class Camera : MonoBehaviour
     }
     //独立相机绘制显式目标或屏幕附件，地图主相机仍由宿主负责。
     public void Render() => Rendering.CameraRenderer.Render(this);
+    //将画布绘入预乘透明附件，供 IMGUI 合成；不扫描地图模型和阴影。
+    public void RenderUI() => Rendering.CameraRenderer.Render(this, true);
     public static Camera main { get; set; }
     public static Camera current => main;
     private Matrix4x4? projectionOverride, viewOverride;

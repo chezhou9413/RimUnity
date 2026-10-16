@@ -12,6 +12,8 @@ namespace RimUnity.Editor
     {
         private static readonly Dictionary<string, string[]> Members = new Dictionary<string, string[]>
         {
+            ["TMPro.TMP_Dropdown"] = new[] { "interactable", "targetGraphic", "transition", "captionText", "captionImage", "options", "value", "onValueChanged" },
+            ["TMPro.TMP_InputField"] = new[] { "interactable", "targetGraphic", "transition", "textViewport", "textComponent", "placeholder", "text", "characterLimit", "readOnly", "richText", "onFocusSelectAll", "resetOnDeActivation", "restoreOriginalTextOnEscape", "caretColor", "customCaretColor", "selectionColor", "caretBlinkRate", "caretWidth", "onValueChanged", "onEndEdit", "onSubmit", "onSelect", "onDeselect", "onTextSelection", "onEndTextSelection" },
             ["UnityEngine.AudioSource"] = new[] { "clip", "playOnAwake", "loop", "mute", "volume", "pitch", "panStereo", "spatialBlend" },
             ["UnityEngine.AudioListener"] = Array.Empty<string>(),
             ["UnityEngine.Video.VideoPlayer"] = new[] { "clip", "url", "source", "renderMode", "targetTexture", "aspectRatio", "audioOutputMode", "playOnAwake", "waitForFirstFrame", "skipOnDrop", "isLooping", "playbackSpeed" },
@@ -80,6 +82,8 @@ namespace RimUnity.Editor
             if (component is UnityEngine.TrailRenderer trail) { LegacyEffectWriter.Trail(trail, data, writer, path); return data; }
             if (component is UnityEngine.LineRenderer line) { LegacyEffectWriter.Line(line, data, writer, path); return data; }
             Validate(component, path, root, writer.CameraUi);
+            if (component is TMPro.TMP_InputField numericInput)
+                data.members.Add(writer.Property(numericInput, "characterValidation", path));
             if (component is UnityEngine.Video.VideoPlayer video) VideoWriter.Write(video, data, writer, path);
             if (component is TerrainCollider terrain) ParticlePhysicsWriter.Terrain(terrain, data, writer, path);
             if (component is Collider physicsCollider && physicsCollider.sharedMaterial != null)
@@ -115,7 +119,13 @@ namespace RimUnity.Editor
                 bool overlay = !writer.CameraUi && (canvas == null || canvas.rootCanvas.renderMode == RenderMode.ScreenSpaceOverlay);
                 data.members.Add(new MemberData { name = "material", property = true, value = writer.Material(customGraphic.material, path + ".material", overlay, !overlay) });
             }
-            if (Members.TryGetValue(original, out string[] names))
+            string memberType = original;
+            if (component is ScrollRect && original != "UnityEngine.UI.ScrollRect")
+            {
+                memberType = "UnityEngine.UI.ScrollRect";
+                data.members.AddRange(writer.Fields(component, path, typeof(ScrollRect)));
+            }
+            if (Members.TryGetValue(memberType, out string[] names))
             {
                 foreach (string name in names)
                 {
@@ -157,6 +167,8 @@ namespace RimUnity.Editor
         {
             if (type == "TMPro.TextMeshProUGUI") return "RimUnity.UI.TextMeshProUGUI";
             if (type == "TMPro.TMP_FontAsset") return "RimUnity.UI.TMP_FontAsset";
+            if (type == "TMPro.TMP_InputField") return "RimUnity.UI.TMP_InputField";
+            if (type == "TMPro.TMP_Dropdown") return "RimUnity.UI.TMP_Dropdown";
             if (type.StartsWith("UnityEngine.", StringComparison.Ordinal)) return "RimUnity." + type.Substring("UnityEngine.".Length);
             return type;
         }
@@ -164,6 +176,7 @@ namespace RimUnity.Editor
         //当前还未接通的非默认设置必须阻止导出，不能降级后假报成功。
         private static void Validate(Component component, string path, bool root, bool cameraUi)
         {
+            if (component is TMPro.TMP_InputField input) TmpInputWriter.Validate(input, path);
             if (component is Shadow shadow && shadow.GetComponent<Text>() == null && shadow.GetComponent<Image>() == null && shadow.GetComponent<RawImage>() == null)
                 throw new NotSupportedException(path + "：Shadow 和 Outline 需要 Text、Image 或 RawImage。");
             if (component is Camera camera && camera.clearFlags != CameraClearFlags.SolidColor)

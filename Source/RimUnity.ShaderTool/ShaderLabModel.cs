@@ -11,6 +11,7 @@ public sealed class ShaderLabManifest
     public bool uiMasks { get; set; }
     public string colorSpace { get; set; } = "Gamma";
     public string grabTexture { get; set; }
+    public string geometry { get; set; }
     public string vertexEntry { get; set; }
     public string fragmentEntry { get; set; }
     public string vertexFile { get; set; } = "shader.vert.glsl";

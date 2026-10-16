@@ -33,6 +33,8 @@ internal static class UguiPointer
             button = (PointerEventData.InputButton)ev.button, dragging = dragging, scrollDelta = new Vector2(ev.delta.x, ev.delta.y),
             pointerDrag = dragTarget, pointerPress = downTarget, rawPointerPress = pressHit, useDragThreshold = useDragThreshold,
             pointerPressRaycast = new RaycastResult { gameObject = pressHit } };
+        data.clickCount = ev.clickCount;
+        for (Transform t = hit != null ? hit.transform : null; t != null; t = t.parent) data.hovered.Add(t.gameObject);
         if (hit != hovered)
         {
             Send<IPointerExitHandler>(Find<IPointerExitHandler>(hovered), c => c.OnPointerExit(data));
@@ -57,6 +59,8 @@ internal static class UguiPointer
             useDragThreshold = data.useDragThreshold;
             SetButton(hit, true, true); ev.Use();
         }
+        else if (ev.type == EventType.MouseDown && hit == null)
+            EventSystem.current?.SetSelectedGameObject(null);
         else if (ev.type == EventType.MouseDrag && dragTarget != null)
         {
             data.button = (PointerEventData.InputButton)pressButton;

@@ -6,7 +6,7 @@ if ((Test-Path -LiteralPath $Destination) -and (Get-ChildItem -LiteralPath $Dest
 
 #部署与压缩包使用同一份运行文件清单。
 $files = @('About\About.xml', 'About\PublishedFileId.txt', 'About\Preview.png', 'About\ModIcon.png', 'LoadFolders.xml', 'LICENSE', 'README.md', 'README.en.md',
-    '1.6\README.txt', '1.7\Defs\RimUnityShaders.xml', '1.7\Defs\RimUnityStandardParticles.xml')
+    '1.6\README.txt', '1.7\Defs\RimUnityShaders.xml', '1.7\Defs\RimUnityStandardParticles.xml', '1.7\Defs\RimUnity_PerformanceLab.xml')
 foreach ($directory in @('1.6\Languages', 'Docs\zh-CN', 'Docs\en', 'Docs\Images', 'ThirdParty')) {
     $files += Get-ChildItem -LiteralPath (Join-Path $repo $directory) -File -Recurse | ForEach-Object { [IO.Path]::GetRelativePath($repo, $_.FullName) }
 }

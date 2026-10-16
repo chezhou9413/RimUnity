@@ -7,14 +7,22 @@ internal static partial class UguiRuntime
     internal static void DrawWorld(Camera targetCamera = null)
     {
         bool any = false;
-        foreach (var canvas in Canvases) if (canvas != null && canvas.isActiveAndEnabled && canvas.EffectiveMode != RenderMode.ScreenSpaceOverlay) { any = true; break; }
+        Camera drawing = targetCamera ?? Camera.main;
+        //其他相机的屏幕画布不触发当前视图的整树布局与图形收集。
+        foreach (var canvas in Canvases)
+        {
+            if (canvas == null || !canvas.isActiveAndEnabled || canvas.EffectiveMode == RenderMode.ScreenSpaceOverlay) continue;
+            if (canvas.EffectiveMode == RenderMode.ScreenSpaceCamera &&
+                ((canvas.rootCanvas.worldCamera ?? Camera.main) != drawing ||
+                drawing != null && (drawing.cullingMask & (1 << canvas.rootCanvas.gameObject.layer)) == 0)) continue;
+            any = true; break;
+        }
         if (!any) return;
         Prepare(); WorldUiSubmission.BeginFrame();
         foreach (var entry in Entries)
         {
             if (entry.Canvas.EffectiveMode == RenderMode.ScreenSpaceOverlay || entry.Clip.width <= 0 || entry.Clip.height <= 0) continue;
             Camera owner = entry.Canvas.rootCanvas.worldCamera ?? Camera.main;
-            Camera drawing = targetCamera ?? Camera.main;
             if (entry.Canvas.EffectiveMode == RenderMode.ScreenSpaceCamera && owner != drawing) continue;
             if (drawing != null && (drawing.cullingMask & (1 << entry.RenderLayer)) == 0) continue;
             WorldUiSubmission.Current = entry;

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using RimUnity.Assets;
 
 namespace RimUnity;
@@ -11,34 +12,60 @@ public sealed partial class Animator
     private readonly Dictionary<AnimationTrack, AnimatedFloat> trackBindings = new();
     private readonly Dictionary<string, AnimatedFloat> poses = new(StringComparer.Ordinal);
     private readonly Dictionary<AnimatedFloat, float> sampled = new(), accumulated = new();
+    private readonly HashSet<AnimationClip> boundClips = new();
+    private static readonly ConditionalWeakTable<AnimationClip, HashSet<string>> warnedTargets = new();
     private bool tracksBound;
+
+    //每次 Rebind 只绑定一遍控制器，缺失目标不会触发逐帧重试。
     private void BindTracks()
     {
         if (controller == null || tracksBound) return;
         foreach (var layer in controller.layers) foreach (var state in layer.states) BindMotion(state.motion);
         tracksBound = true;
     }
+
+    //剪辑可以复用于不同层级，只跳过当前实例确实不存在的节点或组件。
     private void BindMotion(AnimationMotion motion)
     {
         if (motion == null) return;
         if (motion.clip != null)
         {
+            if (boundClips.Contains(motion.clip)) return;
             foreach (var track in motion.clip.tracks)
             {
                 if (trackBindings.ContainsKey(track)) continue;
                 Transform target = string.IsNullOrEmpty(track.path) ? transform : transform.Find(track.path);
-                if (target == null) throw new InvalidOperationException("动画节点不存在：" + track.path);
+                if (target == null)
+                {
+                    SkipMissingTarget(motion.clip, track, "节点不存在：" + track.path);
+                    continue;
+                }
                 if (track.property.StartsWith("m_LocalRotation.", StringComparison.Ordinal))
                 { BindRotation(motion.clip, track, target); continue; }
                 object component = track.type == "RimUnity.GameObject" ? target.gameObject : target.GetComponent(TypeResolver.Component(track.type));
-                if (component == null) throw new InvalidOperationException("动画目标组件不存在：" + track.path + "/" + track.type);
+                if (component == null)
+                {
+                    SkipMissingTarget(motion.clip, track, "组件不存在：" + track.path + "/" + track.type);
+                    continue;
+                }
                 string key = track.path + "|" + track.type + "|" + track.property;
                 if (!poses.TryGetValue(key, out var binding)) poses.Add(key, binding = new AnimatedFloat(component, track.property, track.path));
                 trackBindings.Add(track, binding);
             }
+            boundClips.Add(motion.clip);
         }
         else foreach (var child in motion.children) BindMotion(child.motion);
     }
+
+    //空绑定只表示已确认的缺失目标；按剪辑去重警告，弱引用缓存不保留实例或资源。
+    private void SkipMissingTarget(AnimationClip clip, AnimationTrack track, string reason)
+    {
+        trackBindings.Add(track, null);
+        if (warnedTargets.GetOrCreateValue(clip).Add(reason))
+            Verse.Log.Warning($"[RimUnity] 动画轨道未绑定：{gameObject.name} / {clip.name}；{reason}。" +
+                "已跳过此目标的曲线，其他轨道继续播放；同一剪辑的同类缺失只提示一次。补齐目标后可调用 Animator.Rebind() 重新绑定。");
+    }
+
     private void Sample()
     {
         accumulated.Clear();
@@ -79,6 +106,7 @@ public sealed partial class Animator
             {
                 if (track.property.StartsWith("m_LocalRotation.", StringComparison.Ordinal)) continue;
                 var binding = trackBindings[track];
+                if (binding == null) continue;
                 if (!sampled.TryGetValue(binding, out float previous)) previous = binding.initial;
                 sampled[binding] = previous + (track.curve.Evaluate(t) - binding.initial) * weight;
             }

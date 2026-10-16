@@ -14,6 +14,10 @@ internal static class CustomShaderLoader
     {
         var shader = RimUnity.Shader.FromEngineShader(data.key, engine);
         shader.name = data.sourceName;
+        if (!string.IsNullOrEmpty(data.geometry) && data.geometry != "triangle-edges")
+            throw new NotSupportedException("未知网格展开方式：" + data.geometry);
+        shader.triangleEdges = data.geometry == "triangle-edges";
+        ShaderDepthComparisons.Register(engine.Program, data.depthCompare);
         return shader;
     }
 
@@ -56,6 +60,7 @@ internal static class CustomShaderLoader
         var shader = new Waylith.Rendering.Shader(data.key, string.Empty, program, data.keywords, layout, pipeline, vertexInputLayout: inputs, precompiledStages: stages);
         if (shader.HasErrors) throw new InvalidDataException("Shader 注册前校验失败：" + data.sourceName);
         ShaderRegistry.Register(shader);
+        if (data.profile == "world") ParticleBatchShaders.Register(shader, vertex, fragment);
         if (data.profile == "world") LinearShaderVariants.Register(shader, fragment);
         foreach (string approximation in data.approximations)
             if (!LinearShaderVariants.TryGet(shader, out _) || !approximation.StartsWith("程序按 Linear 计算后编码到宿主 UNorm 场景", StringComparison.Ordinal))

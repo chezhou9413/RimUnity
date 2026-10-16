@@ -9,7 +9,7 @@ internal static class CameraRenderer
 {
     private static readonly List<MeshDrawCommand> Commands = new();
     private static bool rendering;
-    internal static void Render(Camera camera)
+    internal static void Render(Camera camera, bool uiOnly = false)
     {
         RenderTexture target = camera.targetTexture;
         if (!target)
@@ -27,15 +27,20 @@ internal static class CameraRenderer
         try
         {
             Commands.Clear();
-            DirectionalShadow.Prepare(camera);
+            if (!uiOnly) DirectionalShadow.Prepare(camera);
             ShaderGlobals.SetCamera(camera);
-            Graphics.Capture(Commands, () => { ParticleFrame.DrawScene(camera); UI.Runtime.UguiRuntime.DrawWorld(camera); });
-            if (camera.targetTexture == null) ScreenCameraMaterials.Prepare(Commands);
+            Graphics.Capture(Commands, () =>
+            {
+                if (!uiOnly) ParticleFrame.DrawScene(camera);
+                UI.Runtime.UguiRuntime.DrawWorld(camera);
+            });
+            bool composite = uiOnly || camera.targetTexture == null;
+            if (composite) ScreenCameraMaterials.Prepare(Commands);
             var view = Matrix4x4.ToNumerics(camera.worldToCameraMatrix);
             var projection = Matrix4x4.ToNumerics(camera.projectionMatrix);
             var viewport = camera.rect;
             var color = camera.backgroundColor;
-            if (camera.targetTexture == null) { color.r *= color.a; color.g *= color.a; color.b *= color.a; }
+            if (composite) { color.r *= color.a; color.g *= color.a; color.b *= color.a; }
             renderer.Render(target.CaptureTarget, Commands, new CameraView(view, projection, projection * view, camera.cullingMask),
                 new UnityEngine.Rect(viewport.x, viewport.y, viewport.width, viewport.height),
                 camera.clearFlags == CameraClearFlags.SolidColor ? new UnityEngine.Color(color.r, color.g, color.b, color.a) : null);

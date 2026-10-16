@@ -8,21 +8,23 @@ public sealed partial class ParticleSystem
 {
     private readonly Dictionary<(int, EventSpace), TrailState> ribbons = new();
     private readonly List<int> ribbonOrder = new();
+    private readonly List<(int, EventSpace)> expiredRibbons = new();
+    private Comparison<int> ribbonComparison;
 
     //每条带复用采样存储，不为每次绘制复制完整粒子数组。
-    internal IEnumerable<TrailState> RibbonTrails()
+    internal Dictionary<(int, EventSpace), TrailState>.ValueCollection RibbonTrails()
     {
         foreach (var ribbon in ribbons.Values) ribbon.points.Clear();
         ribbonOrder.Clear();
         for (int i = 0; i < count; i++) ribbonOrder.Add(i);
-        ribbonOrder.Sort((a, b) => particles[a].identity.CompareTo(particles[b].identity));
+        ribbonOrder.Sort(ribbonComparison ??= CompareRibbonParticles);
         int number = Math.Max(1, trails.ribbonCount);
         foreach (int index in ribbonOrder)
         {
             Particle p = particles[index];
             if (Random(p.randomSeed, 61) >= trails.ratio) continue;
             var key = ((int)(p.identity % (ulong)number), trails.splitSubEmitterRibbons ? p.eventSpace : null);
-            if (!ribbons.TryGetValue(key, out var ribbon)) ribbons.Add(key, ribbon = new TrailState());
+            if (!ribbons.TryGetValue(key, out var ribbon)) ribbons.Add(key, ribbon = RentTrail());
             Vector3 position = WorldPosition(p);
             float distance = ribbon.points.Count == 0 ? 0 : ribbon.points[^1].distance + Vector3.Distance(ribbon.points[^1].position, position);
             ribbon.points.Add(new TrailPoint { position = position, distance = distance, remaining = p.remainingLifetime, lifetime = p.startLifetime,
@@ -30,9 +32,13 @@ public sealed partial class ParticleSystem
                 color = trails.inheritParticleColor ? ColorAt(p) : Color.white });
         }
         //结束的事件带不永久保留，避免长时间循环发射累积空容器。
-        var expired = new List<(int, EventSpace)>();
-        foreach (var pair in ribbons) if (pair.Value.points.Count == 0) expired.Add(pair.Key);
-        foreach (var key in expired) ribbons.Remove(key);
+        expiredRibbons.Clear();
+        foreach (var pair in ribbons) if (pair.Value.points.Count == 0) expiredRibbons.Add(pair.Key);
+        foreach (var key in expiredRibbons) { ReturnTrail(ribbons[key]); ribbons.Remove(key); }
+        expiredRibbons.Clear();
         return ribbons.Values;
     }
+
+    //比较器只创建一次，仍读取本次绘制的粒子数组。
+    private int CompareRibbonParticles(int a, int b) => particles[a].identity.CompareTo(particles[b].identity);
 }

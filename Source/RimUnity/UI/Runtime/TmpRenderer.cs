@@ -11,6 +11,22 @@ internal static class TmpRenderer
     {
         Rect content = entry.Rect.rect;
         content.xMin += text.margin.x; content.xMax -= text.margin.z; content.yMax -= text.margin.y; content.yMin += text.margin.w;
+        TMP_InputField input = text.GetComponentInParent<TMP_InputField>();
+        if (input != null && input.textComponent == text && input.isFocused)
+        {
+            Rect decoration = input.Decoration(out bool selection, out bool visible);
+            if (visible)
+            {
+                Color color = selection ? input.selectionColor : input.customCaretColor ? input.caretColor : text.color;
+                color.a *= entry.Alpha;
+                vertices.Clear();
+                Add(entry, decoration, new Rect(0, 0, 1, 1), Vector2.zero, color); Add(entry, decoration, new Rect(0, 0, 1, 1), Vector2.up, color);
+                Add(entry, decoration, new Rect(0, 0, 1, 1), Vector2.one, color); Add(entry, decoration, new Rect(0, 0, 1, 1), Vector2.zero, color);
+                Add(entry, decoration, new Rect(0, 0, 1, 1), Vector2.one, color); Add(entry, decoration, new Rect(0, 0, 1, 1), Vector2.right, color);
+                UiMeshSubmission.Draw(CollectionsMarshal.AsSpan(vertices), Texture2D.whiteTexture, UiMaskData.DefaultMaterial());
+            }
+            content.xMin -= input.ScrollOffset; content.xMax -= input.ScrollOffset;
+        }
         text.Build(content.width, content.height);
         Texture2D atlas = null; vertices.Clear();
         foreach (var glyph in text.quads)
@@ -29,11 +45,11 @@ internal static class TmpRenderer
                 rect = visible;
             }
             Color color = tint * glyph.color;
-            Add(entry, rect, uv, Vector2.zero, color); Add(entry, rect, uv, Vector2.up, color); Add(entry, rect, uv, Vector2.one, color);
-            Add(entry, rect, uv, Vector2.zero, color); Add(entry, rect, uv, Vector2.one, color); Add(entry, rect, uv, Vector2.right, color);
+            Add(entry, rect, uv, Vector2.zero, color, glyph.bottomShear); Add(entry, rect, uv, Vector2.up, color, glyph.topShear); Add(entry, rect, uv, Vector2.one, color, glyph.topShear);
+            Add(entry, rect, uv, Vector2.zero, color, glyph.bottomShear); Add(entry, rect, uv, Vector2.one, color, glyph.topShear); Add(entry, rect, uv, Vector2.right, color, glyph.bottomShear);
         }
         if (vertices.Count > 0) UiMeshSubmission.Draw(CollectionsMarshal.AsSpan(vertices), atlas, text.SdfMaterial(atlas));
     }
-    private static void Add(UguiRuntime.Entry entry, Rect rect, Rect uv, Vector2 corner, Color color)
-        => vertices.Add(new GuiVertex { position = RectTransformUtility.ToGui(entry.Canvas, entry.Rect.TransformPoint(rect.min + Vector2.Scale(rect.size, corner))), uv = uv.min + Vector2.Scale(uv.size, corner), color = color });
+    private static void Add(UguiRuntime.Entry entry, Rect rect, Rect uv, Vector2 corner, Color color, float shear = 0)
+        => vertices.Add(new GuiVertex { position = RectTransformUtility.ToGui(entry.Canvas, entry.Rect.TransformPoint(rect.min + Vector2.Scale(rect.size, corner) + new Vector2(shear, 0))), uv = uv.min + Vector2.Scale(uv.size, corner), color = color });
 }

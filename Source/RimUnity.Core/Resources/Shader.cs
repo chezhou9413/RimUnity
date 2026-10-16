@@ -14,6 +14,7 @@ public sealed partial class Shader : Object
     public Shader[] Passes { get; private set; }
     internal int PassVersion { get; private set; }
     public int passCount => Passes.Length;
+    public bool triangleEdges { get; set; }
     private Shader(string key, Waylith.Rendering.Shader shader) { name = key; EngineShader = shader; Passes = new[] { this }; }
     public static Shader FromEngineShader(string name, Waylith.Rendering.Shader shader)
     {
