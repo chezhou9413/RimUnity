@@ -1,0 +1,11 @@
+<Project>
+  <!--
+    Tools/ 下的工程不会导入 Source/Directory.Build.props，因此环境变量映射在这里补一份。
+    只为需要 Unity Editor 资源（Newtonsoft.Json 等）的工程提供 $(UnityEditorDir)：
+    未设置 UNITY_EDITOR_DIR 时属性保持为空，MSBuild 在解析该引用时才失败。
+    覆盖方式：设置环境变量 UNITY_EDITOR_DIR，或在命令行传 -p:UnityEditorDir=<Editor/Data 目录>。
+  -->
+  <PropertyGroup>
+    <UnityEditorDir Condition="'$(UnityEditorDir)' == ''">$(UNITY_EDITOR_DIR)</UnityEditorDir>
+  </PropertyGroup>
+</Project>
