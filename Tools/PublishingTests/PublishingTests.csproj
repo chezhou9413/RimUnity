@@ -7,6 +7,8 @@
   <ItemGroup>
     <Compile Include="../../UnityPackage/Runtime/IO/GpuTexturePayload.cs" Link="GpuTexturePayload.cs" />
     <Compile Include="../../UnityPackage/Editor/Publishing/ExportHistory.cs" Link="ExportHistory.cs" />
+    <Compile Include="../../UnityPackage/Editor/Publishing/ScanStepper.cs" Link="ScanStepper.cs" />
+    <Compile Include="../../UnityPackage/Editor/Publishing/ExportChangeTracker.cs" Link="ExportChangeTracker.cs" />
     <Compile Include="../../UnityPackage/Editor/Publishing/ResourceInventory.cs" Link="ResourceInventory.cs" />
     <Compile Include="../../UnityPackage/Editor/Publishing/InventoryGeometry.cs" Link="InventoryGeometry.cs" />
     <Compile Include="../../UnityPackage/Editor/Publishing/ResourceOwnership.cs" Link="ResourceOwnership.cs" />

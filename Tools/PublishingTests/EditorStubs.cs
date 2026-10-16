@@ -12,19 +12,28 @@ public static class RimUnityWorkflow
 }
 namespace UnityEngine
 {
+    public static class Application { public static string unityVersion = "test"; }
     public class Object { public string Path; }
     public sealed class Shader : Object { }
     public sealed class Material : Object { public Shader shader; }
 }
 namespace UnityEditor
 {
-    public static class AssetDatabase { public static string GetAssetPath(UnityEngine.Object asset) => asset?.Path ?? ""; public static UnityEngine.Object LoadMainAssetAtPath(string path) => new() { Path = path }; public static string AssetPathToGUID(string path) => ""; public static bool IsValidFolder(string path) => false; public static string[] GetDependencies(string[] paths, bool recursive) => paths.Concat(new[] { "Assets/shared.png", "Assets/code.cs" }).ToArray(); }
+    public static class AssetDatabase {
+        public static readonly Dictionary<string, string[]> Graph = new(StringComparer.OrdinalIgnoreCase);
+        public static readonly Dictionary<string, string> Hashes = new(StringComparer.OrdinalIgnoreCase);
+        public static string GetAssetDependencyHash(string path) => Hashes.GetValueOrDefault(path, path);
+ public static string GetAssetPath(UnityEngine.Object asset) => asset?.Path ?? ""; public static UnityEngine.Object LoadMainAssetAtPath(string path) => path.EndsWith(".shader", StringComparison.OrdinalIgnoreCase) ? new UnityEngine.Shader { Path = path } : new UnityEngine.Object { Path = path }; public static string AssetPathToGUID(string path) => ""; public static bool IsValidFolder(string path) => false; public static string[] GetDependencies(string[] paths, bool recursive) => paths.SelectMany(p => Graph.GetValueOrDefault(p, new[] { p, "Assets/shared.png", "Assets/code.cs" })).ToArray(); }
     public static class EditorUtility
     {
+        public static readonly HashSet<string> Dirty = new(StringComparer.OrdinalIgnoreCase);
+        public static bool IsDirty(UnityEngine.Object asset) => asset != null && Dirty.Contains(asset.Path);
         public static bool Cancel;
         public static bool DisplayCancelableProgressBar(string title, string text, float progress) => Cancel;
         public static void ClearProgressBar() { }
     }
+    public static class EditorUserBuildSettings { public static string activeBuildTarget = "test"; }
+    public static class TypeCache { public static Type[] Types = Array.Empty<Type>(); public static IEnumerable<Type> GetTypesWithAttribute<T>() => Types; }
     public static class EditorPrefs
     {
         private static readonly Dictionary<string, string> Values = new();
@@ -34,6 +43,8 @@ namespace UnityEditor
 }
 namespace RimUnity.Editor
 {
+    public interface IExportChangeFingerprint { string GetChangeFingerprint(); }
+    public sealed class RimUnityExportProcessorAttribute : Attribute { }
     public sealed class ExportOptions { public string[] uiResourcePaths; public bool disableCastShadows, disableReceiveShadows, disableLightProbes, disableReflectionProbes; public Action<string> log; }
     public sealed class ExportRequest { public UnityEngine.Object asset; public bool ui; public string path, description; }
     public static class PrefabExporter

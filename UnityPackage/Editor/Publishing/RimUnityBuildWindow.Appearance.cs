@@ -32,6 +32,7 @@ namespace RimUnity.Editor
             if (GUI.Button(new Rect(position.width - 214, 8, 96, 30), "百科全书", inventoryButton)) RimUnityEncyclopediaWindow.Open();
             if (GUI.Button(new Rect(position.width - 108, 8, 96, 30), "刷新清点", inventoryButton)) RefreshEntries(true);
             tab = GUI.Toolbar(new Rect(12, 43, Mathf.Min(450, position.width - 24), 30), tab, new[] { "资源清点", "构建设置", "导出日志" }, inventoryTabs);
+            DrawScanProgress();
             EditorGUI.DrawRect(new Rect(0, 77, position.width, 1), DividerColor());
         }
 

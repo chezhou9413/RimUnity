@@ -16,12 +16,11 @@ namespace RimUnity.Editor { public sealed partial class RimUnityBuildWindow : Ed
     private Vector2 resourcesScroll, settingsScroll, logScroll;
     private string search = "", error = "";
     private int tab;
-    private bool rebuild = true, onlyIssues, initialized;
+    private bool onlyIssues, initialized;
     private GUIStyle titleStyle, subtitleStyle, pathStyle;
     private const string PresetPath = RimUnityWorkflow.WindowPresetPath;
     [Serializable] private sealed class Preset
     {
-        public bool rebuild;
         public string[] uiPaths;
         public RimUnityWorkflow.Entry[] manual;
     }
@@ -36,21 +35,32 @@ namespace RimUnity.Editor { public sealed partial class RimUnityBuildWindow : Ed
     private void OnEnable()
     {
         minSize = new Vector2(760, 600);
+        AssemblyReloadEvents.beforeAssemblyReload += StopScanning;
         LoadExportHistory();
-        RefreshEntries();
         try
         {
-            if (!File.Exists(PresetPath)) return;
-            var preset = JsonConvert.DeserializeObject<Preset>(File.ReadAllText(PresetPath));
-            rebuild = preset.rebuild;
-            uiResourcePaths.UnionWith(preset.uiPaths ?? Array.Empty<string>());
-            foreach (var entry in preset.manual ?? Array.Empty<RimUnityWorkflow.Entry>()) manual.Add(entry);
-            RefreshEntries();
+            if (File.Exists(PresetPath))
+            {
+                var preset = JsonConvert.DeserializeObject<Preset>(File.ReadAllText(PresetPath));
+                uiResourcePaths.UnionWith(preset?.uiPaths ?? Array.Empty<string>());
+                manual.Clear();
+                manual.AddRange(preset?.manual ?? Array.Empty<RimUnityWorkflow.Entry>());
+            }
         }
         catch (Exception exception) { error = "窗口预设读取失败：" + exception.Message; Log(error); Debug.LogException(exception); }
+        RefreshEntries();
+    }
+    private void OnProjectChange() { RequestScan(); }
+    private void OnFocus()
+    {
+        //Reuse the last result. Imports request their own refresh; unsaved selected assets still invalidate it.
+        if (initialized && Selection.activeObject != null && ExportChangeTracker.HasUnsavedChanges(AssetDatabase.GetAssetPath(Selection.activeObject))) RequestScan();
+        Repaint();
     }
     private void OnDisable()
     {
+        StopScanning();
+        AssemblyReloadEvents.beforeAssemblyReload -= StopScanning;
         SavePreset();
         inventoryAssets.Clear();
     }
@@ -60,35 +70,12 @@ namespace RimUnity.Editor { public sealed partial class RimUnityBuildWindow : Ed
         try
         {
             File.WriteAllText(PresetPath, JsonConvert.SerializeObject(new Preset {
-                rebuild = rebuild, uiPaths = uiResourcePaths.OrderBy(p => p, StringComparer.Ordinal).ToArray(),
+                uiPaths = uiResourcePaths.OrderBy(p => p, StringComparer.Ordinal).ToArray(),
                 manual = manual.ToArray() }, Formatting.Indented));
         }
         catch (Exception exception) { Debug.LogWarning("窗口预设保存失败：" + exception.Message); }
     }
-    private void RefreshEntries(bool reloadProfile = false)
-    {
-        try
-        {
-            profile = reloadProfile || profile == null ? RimUnityWorkflow.Load() : profile;
-            var previousUi = entries.ToDictionary(e => e.path, e => e.ui, StringComparer.OrdinalIgnoreCase);
-            entries = RimUnityWorkflow.Discover(profile);
-            foreach (var item in entries) if (previousUi.TryGetValue(item.path, out bool ui)) item.ui = ui;
-            foreach (var item in manual)
-            {
-                var current = entries.FirstOrDefault(e => e.path == item.path);
-                if (current == null) entries.Add(item);
-                else { current.bundle = item.bundle; current.mod = item.mod; current.ui = item.ui; }
-            }
-            if (!initialized) uiResourcePaths.UnionWith(entries.Where(e => e.ui).Select(e => e.path));
-            foreach (var item in entries) item.ui = uiResourcePaths.Contains(item.path);
-            RefreshDuplicates();
-            RebuildInventory();
-            initialized = true;
-            error = "";
-        }
-        catch (Exception exception) { error = exception.Message; Log(exception.ToString()); Debug.LogException(exception); }
-        Repaint();
-    }
+    private void RefreshEntries(bool reloadProfile = false) => RequestScan(reloadProfile);
     private void Styles()
     {
         if (titleStyle != null) return;
@@ -113,7 +100,7 @@ namespace RimUnity.Editor { public sealed partial class RimUnityBuildWindow : Ed
             return;
         }
         if (tab == 0) Resources(layout);
-        else if (tab == 1) Settings(body);
+        else if (tab == 1) { using (new EditorGUI.DisabledScope(ScanBusy)) Settings(body); }
         else Logs(body);
         Footer(InventoryRect(layout.Footer));
     }
@@ -177,19 +164,22 @@ namespace RimUnity.Editor { public sealed partial class RimUnityBuildWindow : Ed
     {
         EditorGUI.DrawRect(area, PanelColor());
         EditorGUI.DrawRect(new Rect(area.x, area.y, area.width, 1), DividerColor());
-        GUI.Label(new Rect(12, area.y + 12, Mathf.Max(100, area.width - 395), 34),
-            inventory.Length + " 个资源 · " + bundleNames.Length + " 个 AB 包 · " + inventory.Count(r => r.Unassigned) + " 个未归属", inventoryCaption);
-        float x = area.xMax - 374;
-        rebuild = EditorGUI.Popup(new Rect(x, area.y + 13, 104, 32), rebuild ? 0 : 1, new[] { "完整重建", "增量更新" }, inventoryPopup) == 0;
-        using (new EditorGUI.DisabledScope(resourceSelection.Count == 0))
-            if (GUI.Button(new Rect(x + 114, area.y + 13, 110, 32), new GUIContent("导出选中", "增量导出选中资源，保留其他已发布入口"), inventoryButton)) Publish(SelectedEntries(), false);
-        using (new EditorGUI.DisabledScope(entries.Count == 0))
-            if (PrimaryButton(new Rect(x + 234, area.y + 13, 128, 32), rebuild ? "构建并导出" : "增量导出")) Publish(entries.ToArray(), rebuild);
+        var selectedPlan = CanExport && resourceSelection.Count > 0 ? ChangedSelection() : Array.Empty<RimUnityWorkflow.Entry>();
+        string summary = resourceSelection.Count > 0
+            ? "已选 " + resourceSelection.Count + " 项 · " + (CanExport ? "实际导出 " + selectedPlan.Length + " 个入口" : "等待清点完成")
+            : inventory.Length + " 个资源 · " + bundleNames.Length + " 个 AB 包 · " + inventory.Count(r => r.Unassigned) + " 个未归属";
+        GUI.Label(new Rect(12, area.y + 12, Mathf.Max(100, area.width - 285), 34), summary, inventoryCaption);
+        float x = area.xMax - 260;
+        using (new EditorGUI.DisabledScope(!CanExport || selectedPlan.Length == 0))
+            if (GUI.Button(new Rect(x, area.y + 13, 110, 32), new GUIContent("导出选中", "导出选中的入口；自动依赖只补充有更改的引用入口，具体数量见左侧"), inventoryButton)) Publish(selectedPlan, false, resourceSelection.Count);
+        using (new EditorGUI.DisabledScope(!CanExport || entries.Count == 0))
+            if (PrimaryButton(new Rect(x + 120, area.y + 13, 128, 32), "完整重建")) Publish(entries.ToArray(), true);
     }
-    private void Publish(RimUnityWorkflow.Entry[] choice, bool full)
+    private void Publish(RimUnityWorkflow.Entry[] choice, bool full, int selectedCount = 0)
     {
-        if (choice.Length == 0) return;
+        if (!CanExport || choice.Length == 0) return;
         BeginExportHistory(choice, full);
+        if (!full) Log("手动选中 " + selectedCount + " 项；实际提交 " + choice.Length + " 个入口（含必要的依赖引用入口）。");
         try
         {
             foreach (var entry in choice)
