@@ -10,7 +10,13 @@ public sealed partial class ParticleSystem
     private void ResetPlayback()
     {
         elapsed = carry = distanceCarry = 0;
-        rng = useAutoRandomSeed ? (uint)Environment.TickCount ^ (uint)GetInstanceID() : randomSeed;
+        //系统级随机曲线和逐粒子随机序列必须使用同一次播放的有效种子。
+        if (useAutoRandomSeed)
+        {
+            randomSeed = (uint)Environment.TickCount ^ (uint)GetInstanceID();
+            if (randomSeed == 0) randomSeed = 1;
+        }
+        rng = randomSeed;
         if (rng == 0) rng = 1;
         delay = main.startDelay.Evaluate(0, Random01()); completed = false;
         previousPosition = transform.position; clock.Reset();
