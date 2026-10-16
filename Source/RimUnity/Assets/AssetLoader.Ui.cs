@@ -15,7 +15,7 @@ public static partial class AssetLoader
     public static void PreloadUi(ModContentPack mod, params string[] paths)
     {
         NativeRuntime.AssertThread();
-        AssetCatalog catalog = GetCatalog(Path.Combine(mod.RootDir, "1.7", "Data", "RimUnity"));
+        AssetCatalog catalog = GetCatalog(CatalogLoadPolicy.RequireRoot(mod));
         var records = catalog.Manifest.assets.ToDictionary(a => a.id, StringComparer.Ordinal);
         var visited = new HashSet<string>(StringComparer.Ordinal);
         bool sdf = false;

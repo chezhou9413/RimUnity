@@ -6,12 +6,6 @@
     "category": "其他原文"
   },
   {
-    "title": "显存归责窗口 · Docs/显存归责.md",
-    "source": "Docs/显存归责.md",
-    "file": "Sources/Docs/显存归责.md",
-    "category": "其他原文"
-  },
-  {
     "title": "API quick start · Docs/en/ApiQuickStart.md",
     "source": "Docs/en/ApiQuickStart.md",
     "file": "Sources/Docs/en/ApiQuickStart.md",
@@ -238,6 +232,12 @@
     "source": "Docs/zh-CN/Workflow.md",
     "file": "Sources/Docs/zh-CN/Workflow.md",
     "category": "原文·中文"
+  },
+  {
+    "title": "显存归责窗口 · Docs/显存归责.md",
+    "source": "Docs/显存归责.md",
+    "file": "Sources/Docs/显存归责.md",
+    "category": "其他原文"
   },
   {
     "title": "RimUnity · README.en.md",
