@@ -11,6 +11,7 @@ internal static class HostFrame
     private static EngineApplication application;
     private static Game lastGame;
     private static bool framePending;
+    private static float effectsTime;
 
     //加载完成后在游戏主线程安装一次帧回调。
     internal static void Install()
@@ -38,6 +39,8 @@ internal static class HostFrame
         FinishFrame(application);
         if (!ReferenceEquals(lastGame, Current.Game))
         {
+            ScreenEfx.EfxPlayer.SynchronizeSession();
+            effectsTime = 0;
             NativeRuntime.ClearScene(lastGame);
             Assets.AssetLoader.EvictTextures();
             lastGame = Current.Game;
@@ -50,6 +53,10 @@ internal static class HostFrame
             NativeRuntime.Update();
             Tweening.DOTween.Update();
             NativeRuntime.LateUpdate();
+            float realDelta = Time.unscaledDeltaTime;
+            float gameDelta = Current.Game == null || Find.TickManager.Paused ? 0 : realDelta * Find.TickManager.TickRateMultiplier;
+            effectsTime += gameDelta;
+            ScreenEfx.EfxPlayer.Update(new(gameDelta, realDelta, effectsTime, Time.unscaledTime));
             ParticleFrame.Draw();
         }
         catch
@@ -76,7 +83,12 @@ internal static class HostFrame
     private static void Shutdown(EngineApplication app)
     {
         FinishFrame(app);
+        //FrameRenderer has already drained the render thread/GPU and disposed its pipelines.
+        //Drop cancelled loading snapshots before draining final clip release callbacks.
         Rendering.LoadingWarmup.Shutdown(app);
+        ScreenEfx.EfxPlayer.Clear();
+        ScreenEfx.EfxPlayer.Drain();
+        ScreenEfx.EfxFrameBuilder.Shutdown();
         NativeRuntime.ClearScene();
         Tweening.DOTween.Clear();
         app.OnUpdate -= Update;

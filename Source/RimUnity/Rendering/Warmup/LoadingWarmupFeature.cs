@@ -22,6 +22,7 @@ internal sealed class LoadingWarmupFeature : IRenderFeature
     private VertexLayout[] layouts = Array.Empty<VertexLayout>();
     private bool bloom;
     private string keywords;
+    private ScreenEfx.EfxFrame effects;
     internal LoadingWarmupWork Work => Volatile.Read(ref work);
     internal int CompletedCount { get; private set; }
     public bool IsActive => Work is { Finished: false };
@@ -32,15 +33,17 @@ internal sealed class LoadingWarmupFeature : IRenderFeature
     private static readonly AccessTools.FieldRef<MeshBatchRenderer, VkDescriptorSetLayout> GlobalLayout = AccessTools.FieldRefAccess<MeshBatchRenderer, VkDescriptorSetLayout>("globalTextureDescriptorSetLayout");
 
     internal LoadingWarmupFeature(EngineApplication app) { this.app = app; passes = new IRenderPass[] { new Pass(this) }; }
-    internal void Request(NativeShader[] programs, VertexLayout[] vertexLayouts, bool warmBloom, string globalKeywords)
+    internal void Request(NativeShader[] programs, VertexLayout[] vertexLayouts, bool warmBloom, string globalKeywords, ScreenEfx.EfxFrame screenEffects)
     {
-        shaders = programs; layouts = vertexLayouts; bloom = warmBloom; keywords = globalKeywords; CompletedCount = 0;
+        screenEffects?.Retain();
+        shaders = programs; layouts = vertexLayouts; bloom = warmBloom; keywords = globalKeywords; effects = screenEffects; CompletedCount = 0;
         Volatile.Write(ref work, new LoadingWarmupWork());
     }
     internal void Release(LoadingWarmupWork request)
     {
         if (!ReferenceEquals(Work, request)) return;
         Volatile.Write(ref work, null); shaders = Array.Empty<NativeShader>(); layouts = Array.Empty<VertexLayout>();
+        effects?.Drop(); effects = null;
     }
     public object CaptureFrame(in FrameTiming timing)
     {
@@ -76,6 +79,16 @@ internal sealed class LoadingWarmupFeature : IRenderFeature
             ?? throw new InvalidOperationException("地图颜色附件尚未准备。");
         var sceneContext = attachment.MakeFrameContext(in ctx);
         var scene = HdrMapHooks.WarmupScene(sceneTargets, ctx.SubmissionFrameIndex);
+        if (effects != null)
+        {
+            var post = app.FrameRenderer.Features.FirstOrDefault(f => f.GetType().FullName == "RimWorldWaylith.Rendering.PostFxFeature");
+            if (post != null)
+            {
+                var composite = (Waylith.Rendering.PostFx.CompositePass)RequiredField(post, "composite");
+                CompletedCount += BloomHooks.Get(composite).PrepareEfxWarmup(in ctx, scene, effects);
+            }
+        }
+        if (shaders.Length == 0) return;
         var regular = (MeshBatchRenderer)RequiredField(main, "renderer");
         var hdr = HdrMapHooks.WarmupTarget(main).PrepareWarmup(in ctx, scene);
         var targets = new List<(MeshBatchRenderer renderer, VkRenderPass pass, VkSampleCountFlags samples, bool linear, bool readOnly)> {

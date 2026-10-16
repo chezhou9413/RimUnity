@@ -93,22 +93,26 @@ internal static class LoadingWarmup
 
     private static void QueueMapWarmup()
     {
-        if (mapRequested || feature == null) return;
+        if (feature == null) return;
+        using var effects = ScreenEfx.EfxPlayer.CaptureWarmup();
+        if (mapRequested && effects == null) return;
+        bool firstMap = !mapRequested;
         mapRequested = true;
         CompileBeforeMenu();
-        if (shaders.Count == 0) return;
+        if (shaders.Count == 0 && effects == null) return;
         var watch = Stopwatch.StartNew();
         var layouts = new Dictionary<int, VertexLayout>();
         //These are the actual layouts emitted by our particle/ribbon geometry builders.
         AddLayout(CommonLayout(true, true, 3));
         AddLayout(CommonLayout(false, false, 1));
         AddLayout(CommonLayout(true, true, 1));
-        foreach (var catalog in catalogs)
+        foreach (var catalog in firstMap ? catalogs : Enumerable.Empty<AssetCatalog>())
             foreach (var record in catalog.Manifest.assets.Where(a => a.type == "Mesh"))
                 try { AddLayout(((Mesh)catalog.Get(record.id)).EngineMesh.CpuStorage.Layout); }
                 catch (Exception error) { Log.Error("[RimUnity] 网格布局预热失败：" + record.path + "\n" + error); }
         var owner = feature;
-        owner.Request(shaders.Values.ToArray(), layouts.Values.ToArray(), RimUnityMod.Bloom.Snapshot().Enabled, UnityEngine.Shader.GlobalKeywordKey);
+        owner.Request(firstMap ? shaders.Values.ToArray() : Array.Empty<NativeShader>(), layouts.Values.ToArray(),
+            RimUnityMod.Bloom.Snapshot().Enabled, UnityEngine.Shader.GlobalKeywordKey, effects);
         var request = owner.Work;
         //The loading worker waits; the main thread remains free to submit loading frames.
         //Only the render thread touches the real renderer's pipeline/module caches.
@@ -142,6 +146,7 @@ internal static class LoadingWarmup
     internal static void Shutdown(EngineApplication app)
     {
         feature?.Work?.CancelPending();
+        if (feature?.Work is { } request) feature.Release(request);
         if (feature != null) app.FrameRenderer.RemoveFeature(feature);
         feature = null; catalogs.Clear(); shaders.Clear(); compiled = mapRequested = false;
     }

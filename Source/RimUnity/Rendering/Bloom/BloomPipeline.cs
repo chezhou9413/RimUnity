@@ -17,12 +17,15 @@ internal sealed class BloomPipeline : IDisposable
     private readonly PostEffectPass[] down = new PostEffectPass[Levels], up = new PostEffectPass[Levels - 1];
     private readonly PostEffectPass combine, hdrCombine;
     private readonly HdrDrawTarget layers = new("RimUnity.BloomLayers");
+    private readonly ScreenEfx.EfxGpuPipeline effects = new();
     private NativeRenderTexture[][] targets;
     private bool prepared;
     private int width, height;
     internal readonly IRenderPass[] Passes;
     internal (MeshBatchRenderer renderer, VkRenderPass pass) PrepareWarmup(in FrameContext ctx, NativeRenderTexture source)
         => layers.PrepareWarmup(in ctx, source);
+    internal int PrepareEfxWarmup(in FrameContext ctx, NativeRenderTexture source, ScreenEfx.EfxFrame frame)
+        => effects.PrepareWarmup(in ctx, source, frame);
 
     //资源路径在主线程模组初始化时确定；渲染线程仅使用已发布的路径。
     internal BloomPipeline(CompositePass scene)
@@ -116,6 +119,7 @@ internal sealed class BloomPipeline : IDisposable
     //浮点场景在最后一次合成才编码；普通场景继续沿用宿主的显示颜色路径。
     private void Composite(in FrameContext ctx, BloomFrame settings)
     {
+        if (effects.Result != null) { effects.Composite(in ctx); return; }
         NativeRenderTexture source = scene.Source?.Invoke(ctx.SubmissionFrameIndex);
         if (source == null) return;
         var hdr = HdrMapHooks.LinearScene(source, settings.FrameNumber);
@@ -156,6 +160,7 @@ internal sealed class BloomPipeline : IDisposable
     //宿主在等待在途帧后调用重建／释放入口，不能由设置窗口直接销毁 GPU 对象。
     internal void ReleaseTargets()
     {
+        effects.ReleaseTargets();
         layers.Dispose();
         if (targets != null) foreach (var frame in targets) foreach (var texture in frame) texture.Dispose();
         targets = null;
@@ -169,7 +174,7 @@ internal sealed class BloomPipeline : IDisposable
     //后处理实例结束时释放缓存及所有管线对象。
     public void Dispose()
     {
-        ReleaseTargets(); foreach (var pass in down) pass.Dispose(); foreach (var pass in up) pass.Dispose(); combine.Dispose(); hdrCombine.Dispose();
+        ReleaseTargets(); effects.Dispose(); foreach (var pass in down) pass.Dispose(); foreach (var pass in up) pass.Dispose(); combine.Dispose(); hdrCombine.Dispose();
     }
 
     //拆分在屏幕渲染之前和之内的两段，避免在一个 Vulkan RenderPass 中嵌套另一个。
@@ -185,15 +190,32 @@ internal sealed class BloomPipeline : IDisposable
         public void Record(in FrameContext ctx, object featurePayload)
         {
             if (Diagnostics.RenderDebugReport.Collecting) Diagnostics.RenderDebugReport.Stage(prepare ? "BloomPrepareStage" : "BloomCompositeStage", "payload=" + (featurePayload?.GetType().FullName ?? "null") + "; slot=" + ctx.SubmissionFrameIndex + "; format=" + ctx.ColorFormat + "; samples=" + ctx.SampleCount);
-            if (prepare) owner.prepared = false;
+            if (prepare) { owner.prepared = false; owner.effects.BeginSlot(ctx.SubmissionFrameIndex); }
             if (featurePayload is not BloomFrame settings)
             {
+                if (prepare) owner.effects.ReleaseIfIdle();
                 if (!prepare) owner.RecordNative(in ctx, featurePayload);
                 return;
             }
             if (prepare)
             {
                 if (settings.Enabled && settings.Intensity > 0) owner.Prepare(in ctx, settings);
+                if (settings.Effects != null)
+                {
+                    var source = owner.scene.Source?.Invoke(ctx.SubmissionFrameIndex);
+                    var hdr = source == null ? null : HdrMapHooks.LinearScene(source, settings.FrameNumber);
+                    try
+                    {
+                        owner.effects.Prepare(in ctx, settings.Effects, settings.FrameNumber, source, hdr,
+                            owner.prepared ? owner.targets[ctx.SubmissionFrameIndex][Levels] : null,
+                            settings.Intensity, owner.scene.Saturation);
+                    }
+                    catch (Exception error)
+                    {
+                        foreach (var lease in settings.Effects.Leases) ScreenEfx.EfxPlayer.Report(lease, error);
+                    }
+                }
+                else owner.effects.ReleaseIfIdle();
             }
             else owner.Composite(in ctx, settings);
         }

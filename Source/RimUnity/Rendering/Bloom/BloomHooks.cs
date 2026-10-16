@@ -43,6 +43,7 @@ internal static class BloomHooks
             var settings = RimUnityMod.Bloom.Snapshot() with { FrameNumber = timing.FrameNumber };
             if (settings.Enabled && settings.Intensity > 0)
                 settings = settings with { Draws = new HdrDrawFrame(map, settings.LayerMask, readOnlyDepth: true) };
+            settings = settings with { Effects = ScreenEfx.EfxPlayer.Capture() };
             __result = settings;
         }
     }

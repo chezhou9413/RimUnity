@@ -63,9 +63,16 @@ public sealed partial class BloomSettings : ModSettings
 //随宿主帧快照传递；替代的原始载荷只用于判断场景是否存在。
 internal sealed record BloomFrame(bool Enabled, float Threshold, float Intensity, float SoftKnee, float Scatter) : System.IDisposable
 {
+    private int disposed;
     internal int LayerMask { get; init; }
     internal int FrameNumber { get; init; }
     internal HdrDrawFrame Draws { get; init; }
+    internal ScreenEfx.EfxFrame Effects { get; init; }
     //快照独占筛选后的绘制项，释放时不触碰地图本身的绘制缓存。
-    public void Dispose() => Draws?.Dispose();
+    public void Dispose()
+    {
+        //The effects container can be pooled after retirement. An old payload must never dispose it twice.
+        if (System.Threading.Interlocked.Exchange(ref disposed, 1) != 0) return;
+        Draws?.Dispose(); Effects?.Dispose();
+    }
 }

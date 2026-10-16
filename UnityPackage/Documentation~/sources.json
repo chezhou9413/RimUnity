@@ -6,6 +6,12 @@
     "category": "其他原文"
   },
   {
+    "title": "显存归责窗口 · Docs/显存归责.md",
+    "source": "Docs/显存归责.md",
+    "file": "Sources/Docs/显存归责.md",
+    "category": "其他原文"
+  },
+  {
     "title": "API quick start · Docs/en/ApiQuickStart.md",
     "source": "Docs/en/ApiQuickStart.md",
     "file": "Sources/Docs/en/ApiQuickStart.md",
@@ -81,6 +87,12 @@
     "title": "Loading assets and directory layout · Docs/en/ResourceLoading.md",
     "source": "Docs/en/ResourceLoading.md",
     "file": "Sources/Docs/en/ResourceLoading.md",
+    "category": "原文·English"
+  },
+  {
+    "title": "Clip screen effects (1.7) · Docs/en/ScreenEfx.md",
+    "source": "Docs/en/ScreenEfx.md",
+    "file": "Sources/Docs/en/ScreenEfx.md",
     "category": "原文·English"
   },
   {
@@ -198,6 +210,12 @@
     "category": "原文·中文"
   },
   {
+    "title": "Clip 屏幕后处理（1.7） · Docs/zh-CN/ScreenEfx.md",
+    "source": "Docs/zh-CN/ScreenEfx.md",
+    "file": "Sources/Docs/zh-CN/ScreenEfx.md",
+    "category": "原文·中文"
+  },
+  {
     "title": "Shaders.md · Docs/zh-CN/Shaders.md",
     "source": "Docs/zh-CN/Shaders.md",
     "file": "Sources/Docs/zh-CN/Shaders.md",
@@ -220,12 +238,6 @@
     "source": "Docs/zh-CN/Workflow.md",
     "file": "Sources/Docs/zh-CN/Workflow.md",
     "category": "原文·中文"
-  },
-  {
-    "title": "显存归责窗口 · Docs/显存归责.md",
-    "source": "Docs/显存归责.md",
-    "file": "Sources/Docs/显存归责.md",
-    "category": "其他原文"
   },
   {
     "title": "RimUnity · README.en.md",

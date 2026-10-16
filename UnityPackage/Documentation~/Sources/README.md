@@ -42,6 +42,7 @@ Unity 内可打开 **RimUnity → 百科全书**：按主题整理的离线说�
 - [粒子导出与使用](Docs/zh-CN/ParticleQuickStart.md) · [粒子模块](Docs/zh-CN/ParticleExpansion.md)
 - [自定义 Shader](Docs/zh-CN/CustomShaderConversion.md) · [IMGUI 材质](Docs/zh-CN/ImmediateUI.md)
 - [颜色与 Bloom](Docs/zh-CN/ColorAndBloom.md)
+- [Clip 屏幕后处理](Docs/zh-CN/ScreenEfx.md)
 - [支持范围与限制](Docs/zh-CN/Status.md)
 - [内置 Defs](Docs/zh-CN/Defs.md) · [Shader 目录](Docs/zh-CN/Shaders.md)
 

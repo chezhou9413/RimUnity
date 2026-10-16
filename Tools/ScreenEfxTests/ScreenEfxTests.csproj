@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RimWorldDir Condition="'$(RimWorldDir)' == ''">D:/SteamLibrary/steamapps/common/RimWorld1.7</RimWorldDir>
+    <HarmonyPath Condition="'$(HarmonyPath)' == ''">D:/SteamLibrary/steamapps/workshop/content/294100/2009463077/1.7/Assemblies/0Harmony.dll</HarmonyPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Source/RimUnity/ScreenEfx/EfxGpuPipeline.cs" Link="Runtime/EfxGpuPipeline.cs" />
+    <Compile Include="../../Source/RimUnity/ScreenEfx/EfxClip.cs;../../Source/RimUnity/ScreenEfx/EfxPlayer.cs;../../Source/RimUnity/ScreenEfx/EfxFrameBuilder.cs" Link="Runtime/%(Filename)%(Extension)" />
+    <Compile Include="../../Source/RimUnity/ScreenEfx/EfxBufferBudget.cs;../../Source/RimUnity/ScreenEfx/EfxRendererFactory.cs;../../Source/RimUnity/ScreenEfx/EfxRenderContext.cs" Link="Runtime/%(Filename)%(Extension)" />
+    <Reference Include="../../1.7/Assemblies/RimUnity.Core.dll" />
+    <Reference Include="$(RimWorldDir)/Waylith.dll;$(RimWorldDir)/Waylith.UnityCompat.dll;$(RimWorldDir)/UnityStubs.dll;$(RimWorldDir)/Brutal.Core.*.dll;$(RimWorldDir)/Brutal.Vulkan*.dll;$(RimWorldDir)/Brutal.ImGui.dll" Private="false" />
+    <Reference Include="$(HarmonyPath)" />
+  </ItemGroup>
+</Project>

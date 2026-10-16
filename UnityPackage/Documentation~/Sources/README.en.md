@@ -42,6 +42,7 @@ Open **RimUnity → 百科全书** in Unity for the offline handbook, full-text 
 - [Exporting and using particles](Docs/en/ParticleQuickStart.md) · [Particle modules](Docs/en/ParticleExpansion.md)
 - [Custom shaders](Docs/en/CustomShaderConversion.md) · [IMGUI materials](Docs/en/ImmediateUI.md)
 - [Color and Bloom](Docs/en/ColorAndBloom.md)
+- [Clip screen effects](Docs/en/ScreenEfx.md)
 - [Supported features and limitations](Docs/en/Status.md)
 - [Built-in defs](Docs/en/Defs.md) · [Shader directory](Docs/en/Shaders.md)
 
