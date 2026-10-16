@@ -19,17 +19,17 @@ public static partial class AssetLoader
 
     //列出本模组指定资源类型的公开路径，供内容侧建立明确且无歧义的索引。
     public static string[] GetPaths(ModContentPack mod, string resourceType)
-        => GetCatalog(Path.Combine(mod.RootDir, "1.7", "Data", "RimUnity")).Manifest.assets
+        => GetCatalog(CatalogLoadPolicy.RequireRoot(mod)).Manifest.assets
             .Where(a => a.type == resourceType && !a.path.StartsWith("__assets/", StringComparison.Ordinal))
             .Select(a => a.path).ToArray();
 
     //按导出逻辑路径加载材质、贴图、动画或预制体模板。
     public static T Load<T>(ModContentPack mod, string path) where T : RimUnity.Object
-        => LoadDirectory<T>(Path.Combine(mod.RootDir, "1.7", "Data", "RimUnity"), path);
+        => LoadDirectory<T>(CatalogLoadPolicy.RequireRoot(mod), path);
     //短期图片缓存独立持有纹理，调用者释放时不会销毁预制体共享的资源。
     public static Texture2D LoadOwnedTexture(ModContentPack mod, string path)
     {
-        var catalog = GetCatalog(Path.Combine(mod.RootDir, "1.7", "Data", "RimUnity"));
+        var catalog = GetCatalog(CatalogLoadPolicy.RequireRoot(mod));
         var record = catalog.Find(path);
         if (record.type != "Texture2D") throw new InvalidDataException("独立贴图入口需要 Texture2D：" + path);
         return (Texture2D)ResourceLoader.Load(catalog, record);
@@ -63,6 +63,6 @@ public static partial class AssetLoader
         var mod = LoadedModManager.RunningModsListForReading.SingleOrDefault(m =>
             string.Equals(m.PackageIdPlayerFacing, owner, StringComparison.OrdinalIgnoreCase));
         if (mod == null) throw new FileNotFoundException("RimUnity 共享资源依赖未启用：" + owner);
-        return Path.Combine(mod.RootDir, "1.7", "Data", "RimUnity");
+        return CatalogLoadPolicy.RequireRoot(mod);
     }
 }

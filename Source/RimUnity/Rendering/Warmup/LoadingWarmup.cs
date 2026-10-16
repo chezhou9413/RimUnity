@@ -36,6 +36,7 @@ internal static class LoadingWarmup
         var watch = Stopwatch.StartNew(); int failures = 0;
         foreach (var mod in LoadedModManager.RunningModsListForReading)
         {
+            if (!CatalogLoadPolicy.HasLoadFolders(mod)) continue;
             string root = Path.Combine(mod.RootDir, "1.7/Data/RimUnity");
             if (!File.Exists(Path.Combine(root, "catalog.json"))) continue;
             try

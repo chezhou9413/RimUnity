@@ -13,6 +13,7 @@ internal static class CatalogContentPatch
     private static void Postfix(ModContentPack __instance, ref bool __result)
     {
         if (__result) return;
+        if (!CatalogLoadPolicy.HasLoadFolders(__instance)) return;
         string root = Path.Combine(__instance.RootDir, "1.7", "Data", "RimUnity");
         if (!File.Exists(Path.Combine(root, "catalog.json"))) return;
         try { __result = new AssetCatalog(root).Manifest.assets.Count > 0; }
