@@ -18,6 +18,8 @@ string root = Path.GetFullPath(args.Length == 1 ? args[0] : Path.Combine(Path.Ge
 Directory.CreateDirectory(root);
 string run = Path.Combine(root, Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(run);
+//Publisher baselines belong to this scratch project, never the source checkout.
+Directory.SetCurrentDirectory(run);
 var profile = new RimUnityWorkflow.Profile { repository = run, shaderTool = Path.Combine(run, "tool.exe"), gameRoot = run };
 File.WriteAllText(profile.shaderTool, "test");
 File.WriteAllText(Path.Combine(run, "Waylith.dll"), "test");
@@ -60,8 +62,10 @@ Check(File.ReadAllText(Path.Combine(incremental, "1.7/Data/RimUnity", priorPaylo
     "incremental preserves prior entries and shared sidecars");
 string first = Mod("first"), second = Mod("second");
 string before = File.ReadAllText(Path.Combine(first, "1.7/Data/RimUnity/catalog.json"));
+string changeBaselineBeforeFailure = File.ReadAllText(ExportChangeTracker.BaselinePath);
 Failure(() => RimUnityPublisher.Export(profile, new[] { E(first), E(second, "failure") }, true, messages.Add), "converter failure aborts entire publication");
 Check(Old(first) && Old(second) && File.ReadAllText(Path.Combine(first, "1.7/Data/RimUnity/catalog.json")) == before, "failure on second target leaves first catalog and both old versions untouched");
+Check(File.ReadAllText(ExportChangeTracker.BaselinePath) == changeBaselineBeforeFailure, "failed export never acknowledges source changes");
 UnityEditor.EditorUtility.Cancel = true;
 Failure(() => RimUnityPublisher.Export(profile, new[] { E(first) }, true, messages.Add), "user cancellation");
 UnityEditor.EditorUtility.Cancel = false;
@@ -160,5 +164,7 @@ Check(duplicates.Length == 1 && duplicates[0].path == "Assets/shared.png" && dup
 Console.WriteLine("All publication tests passed. Scratch data: " + run);
 
 InventoryCases.Run();
+ChangeTrackingCases.Run();
+ScanCases.Run();
 ExportHistoryCases.Run();
 GpuTextureCases.Run();

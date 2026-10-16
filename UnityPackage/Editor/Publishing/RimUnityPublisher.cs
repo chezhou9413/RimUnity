@@ -30,6 +30,7 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
         if (blockers != null) throw new InvalidOperationException(blockers);
         if (!File.Exists(profile.shaderTool) || !File.Exists(Path.Combine(profile.gameRoot, "Waylith.dll")))
             throw new InvalidOperationException("ShaderTool 或 RimWorld 1.7 路径无效。");
+        var changeSnapshot = ExportChangeTracker.Capture(profile, entries, uiPaths);
         var targets = entries.GroupBy(e => Path.GetFullPath(Path.Combine(profile.repository, e.mod)), StringComparer.OrdinalIgnoreCase)
             .Select(group => new Target { Mod = group.Key, Entries = group.ToArray() }).ToArray();
         var inputRoots = ExportSharing.Roots(targets.Select(t => t.Mod).Concat(
@@ -39,6 +40,7 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
             : throw new InvalidDataException("工程配置缺少共享资源所属模组：" + owner);
         string oldTool = EditorPrefs.GetString("RimUnity.ShaderTool", ""), oldGame = EditorPrefs.GetString("RimUnity.GameRoot", "");
         bool committed = false;
+        var timer = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             foreach (var target in targets)
@@ -63,8 +65,9 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
                 target.Prepared = Path.Combine(target.Stage, "1.7/Data/RimUnity");
                 Directory.CreateDirectory(Path.Combine(target.Stage, "About"));
                 File.Copy(about, Path.Combine(target.Stage, "About/About.xml"));
-                if (!rebuild && File.Exists(Path.Combine(target.Live, "catalog.json"))) ExportStorage.CopyForPublish(target.Live, target.Prepared, InputOwner);
+                if (!rebuild && File.Exists(Path.Combine(target.Live, "catalog.json"))) CopyTree(target.Live, target.Prepared);
             }
+            log("阶段：准备旧产物 " + timer.Elapsed.TotalSeconds.ToString("F2") + " 秒（直接复制，不重复解析压缩）。");
             EditorPrefs.SetString("RimUnity.ShaderTool", profile.shaderTool);
             EditorPrefs.SetString("RimUnity.GameRoot", profile.gameRoot);
             int finished = 0;
@@ -93,13 +96,17 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
                 }
                 if (errors.Count != before) continue;
                 //同一目标一次导出，共享 GUID、材质与 Shader 变体缓存。
+                long exportStart = timer.ElapsedMilliseconds;
                 PrefabExporter.Export(target.Stage, new ExportOptions {
                     disableCastShadows = profile.disableCastShadows, disableReceiveShadows = profile.disableReceiveShadows,
                     disableLightProbes = profile.disableLightProbes, disableReflectionProbes = profile.disableReflectionProbes,
                     log = log, uiResourcePaths = uiPaths
                 }, requests.ToArray());
+                log("阶段：序列化 " + requests.Count + " 个入口 " + ((timer.ElapsedMilliseconds - exportStart) / 1000d).ToString("F2") + " 秒。");
+                long compactStart = timer.ElapsedMilliseconds;
                 string compact = Path.Combine(target.Stage, "compact");
-                ExportStorage.CopyForPublish(target.Prepared, compact);
+                ExportStorage.CopyForPublish(target.Prepared, compact, InputOwner);
+                log("阶段：整理最终产物 " + ((timer.ElapsedMilliseconds - compactStart) / 1000d).ToString("F2") + " 秒。");
                 target.Prepared = compact;
                 Validate(target.Prepared);
                 //跨磁盘先复制到目标盘，再通过同盘重命名发布。
@@ -128,6 +135,8 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
                 log("已发布：" + target.Live);
             }
             committed = true;
+            try { ExportChangeTracker.RecordSuccess(profile, changeSnapshot, rebuild); }
+            catch (Exception cacheError) { log("发布已成功，但变更基线未保存；下次将保守显示更改：" + cacheError.Message); }
             bool cleaned = true;
             foreach (var target in targets)
                 if (target.HadOld) cleaned &= TryDeleteOwned(target.Backup, Path.GetDirectoryName(target.Live), ".rimunity-old-", log);

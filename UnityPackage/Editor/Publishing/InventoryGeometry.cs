@@ -25,7 +25,7 @@ namespace RimUnity.Editor
             float sidebar = Math.Max(196, Math.Min(244, width * .22f));
             layout.Sidebar = new Box(8, top, sidebar, layout.Content.height);
             layout.Main = new Box(layout.Sidebar.Right + 8, top, layout.Content.width - sidebar - 8, layout.Content.height);
-            float searchHeight = layout.Main.width < 760 ? 70 : 32;
+            float searchHeight = 70;
             layout.Search = new Box(layout.Main.x + 8, top + 8, layout.Main.width - 16, searchHeight);
             float selection = layout.Main.width < 720 ? 158 : 112;
             layout.Selection = new Box(layout.Main.x, layout.Main.Bottom - selection, layout.Main.width, selection);

@@ -39,6 +39,9 @@ internal static class InventoryCases
         Check(rows.All(r => r.InBundle("")), "all-packages view contains every row");
         Check(shared.Matches("military") && shared.Matches("shared.MAT") && automatic.Matches("texture2d") && !automatic.Matches("no-such-token"), "search matches type, owner, and path");
         Check(rows.Sum(r => r.bytes) == 395, "source size counts shared paths once");
+        shared.changeReason = "dependency changed";
+        Check(shared.Changed && !automatic.Changed, "changed filter uses explicit resource reasons");
+        shared.changeReason = null;
         var marked = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "assets/shared.MAT" };
         var classified = ResourceInventory.Build(assets, new[] { root }, usage, profile, marked);
         Check(classified.Single(r => r.Shared && r.type == "Material").ui, "dependency UI flag is explicit and path-case independent");
@@ -74,8 +77,8 @@ internal static class InventoryCases
                 var layout = InventoryGeometry.Calculate(size.Item1, size.Item2, error);
                 var repaint = InventoryGeometry.Calculate(size.Item1, size.Item2, error);
                 Check(layout.Table.height >= 130 && layout.BundleList.height > 100, "visible list bounds at " + size + ", error=" + error);
-                Check(layout.Search.height == (layout.Main.width < 760 ? 70 : 32) && layout.Main.x > layout.Sidebar.Right, "full-size UI filters wrap in narrow windows at " + size);
-                Check(layout.Search.Bottom + 8 <= layout.Table.y && layout.Search.width >= 440, "filters fit without overlapping table at " + size);
+                Check(layout.Search.height == 70 && layout.Main.x > layout.Sidebar.Right, "full-size UI filters wrap in narrow windows at " + size);
+                Check(layout.Search.Bottom + 8 <= layout.Table.y && layout.Search.width >= 450 && layout.Search.width - 140 >= 300, "filters fit without overlapping table at " + size);
                 Check(layout.Table.Bottom < layout.Selection.y && layout.Selection.Bottom < layout.Footer.y, "table, inspector and footer do not overlap at " + size);
                 Check(layout.Table.height == repaint.Table.height && layout.Table.y == repaint.Table.y, "layout remains identical across GUI passes at " + size);
             }

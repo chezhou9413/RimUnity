@@ -11,6 +11,13 @@ namespace RimUnity.Editor
     [AttributeUsage(AttributeTargets.Class, Inherited = false)]
     public sealed class RimUnityExportProcessorAttribute : Attribute { }
 
+    /// <summary>Optional change-filter contract. Include every external input and setting in the token.
+    /// Return null if the processor cannot establish deterministic inputs; affected roots remain changed.</summary>
+    public interface IExportChangeFingerprint
+    {
+        string GetChangeFingerprint();
+    }
+
     public interface IExportProcessor
     {
         int Order { get; }

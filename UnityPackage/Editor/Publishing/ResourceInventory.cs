@@ -17,6 +17,8 @@ namespace RimUnity.Editor
             public string path, name, type, bundle, mod;
             public long bytes;
             public bool ui;
+            public string changeReason;
+            public bool Changed => !string.IsNullOrEmpty(changeReason);
             public string[] references;
             public RimUnityWorkflow.Entry entry;
             public bool MatchesUi(int filter) => filter == 0 || (filter == 1 ? ui : !ui);

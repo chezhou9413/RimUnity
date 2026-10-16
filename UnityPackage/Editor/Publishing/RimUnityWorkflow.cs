@@ -45,7 +45,8 @@ namespace RimUnity.Editor { public static class RimUnityWorkflow
         return (preset["uiPaths"] as JArray ?? new JArray()).Values<string>()
             .Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     }
-    public static List<Entry> Discover(Profile profile)
+    public static List<Entry> Discover(Profile profile) => DiscoverSteps(profile).ToList();
+    internal static IEnumerable<Entry> DiscoverSteps(Profile profile, Action<int, int, string> progress = null)
     {
         var catalogs = new Dictionary<string, HashSet<string>>();
         foreach (var mapping in profile.mappings)
@@ -66,7 +67,7 @@ namespace RimUnity.Editor { public static class RimUnityWorkflow
         foreach (JObject item in preset["manual"] as JArray ?? new JArray())
             if (!string.IsNullOrWhiteSpace((string)item["path"])) selected[(string)item["path"]] = (string)item["bundle"];
         var uiPaths = new HashSet<string>((preset["uiPaths"] as JArray ?? new JArray()).Values<string>(), StringComparer.OrdinalIgnoreCase);
-        var entries = new List<Entry>();
+        int completed = 0;
         foreach (var pair in selected.OrderBy(p => p.Key, StringComparer.Ordinal))
         {
             var mapping = profile.mappings.FirstOrDefault(m => m.bundle == pair.Value);
@@ -93,9 +94,9 @@ namespace RimUnity.Editor { public static class RimUnityWorkflow
             {
                 entry.catalogued = paths.Contains("Bundles/" + mapping.bundle + "/" + pair.Key);
             }
-            entries.Add(entry);
+            progress?.Invoke(++completed, selected.Count, entry.path);
+            yield return entry;
         }
-        return entries;
     }
     private static string Save(Profile profile, List<Entry> entries, string name)
     {
