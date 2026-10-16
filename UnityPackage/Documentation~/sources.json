@@ -6,6 +6,12 @@
     "category": "其他原文"
   },
   {
+    "title": "显存归责窗口 · Docs/显存归责.md",
+    "source": "Docs/显存归责.md",
+    "file": "Sources/Docs/显存归责.md",
+    "category": "其他原文"
+  },
+  {
     "title": "API quick start · Docs/en/ApiQuickStart.md",
     "source": "Docs/en/ApiQuickStart.md",
     "file": "Sources/Docs/en/ApiQuickStart.md",
@@ -27,6 +33,12 @@
     "title": "Defs.md · Docs/en/Defs.md",
     "source": "Docs/en/Defs.md",
     "file": "Sources/Docs/en/Defs.md",
+    "category": "原文·English"
+  },
+  {
+    "title": "Embedded runtime integration · 0.1.9 Preview · Docs/en/EmbeddedRuntime.md",
+    "source": "Docs/en/EmbeddedRuntime.md",
+    "file": "Sources/Docs/en/EmbeddedRuntime.md",
     "category": "原文·English"
   },
   {
@@ -75,6 +87,12 @@
     "title": "Getting started · Docs/en/QuickStart.md",
     "source": "Docs/en/QuickStart.md",
     "file": "Sources/Docs/en/QuickStart.md",
+    "category": "原文·English"
+  },
+  {
+    "title": "0.1.9 Preview · Validation scope · Docs/en/Release-0.1.9.md",
+    "source": "Docs/en/Release-0.1.9.md",
+    "file": "Sources/Docs/en/Release-0.1.9.md",
     "category": "原文·English"
   },
   {
@@ -138,6 +156,12 @@
     "category": "原文·中文"
   },
   {
+    "title": "内置运行时接入 · 0.1.9 Preview · Docs/zh-CN/EmbeddedRuntime.md",
+    "source": "Docs/zh-CN/EmbeddedRuntime.md",
+    "file": "Sources/Docs/zh-CN/EmbeddedRuntime.md",
+    "category": "原文·中文"
+  },
+  {
     "title": "导出工具安装与第一次导出 · Docs/zh-CN/ExporterSetup.md",
     "source": "Docs/zh-CN/ExporterSetup.md",
     "file": "Sources/Docs/zh-CN/ExporterSetup.md",
@@ -192,6 +216,12 @@
     "category": "原文·中文"
   },
   {
+    "title": "0.1.9 Preview · 验证范围 · Docs/zh-CN/Release-0.1.9.md",
+    "source": "Docs/zh-CN/Release-0.1.9.md",
+    "file": "Sources/Docs/zh-CN/Release-0.1.9.md",
+    "category": "原文·中文"
+  },
+  {
     "title": "一次性场景与显存诊断 · Docs/zh-CN/RenderDiagnostics.md",
     "source": "Docs/zh-CN/RenderDiagnostics.md",
     "file": "Sources/Docs/zh-CN/RenderDiagnostics.md",
@@ -216,6 +246,12 @@
     "category": "原文·中文"
   },
   {
+    "title": "SSR 资源导出兼容 · Docs/zh-CN/SSRExportCompatibility.md",
+    "source": "Docs/zh-CN/SSRExportCompatibility.md",
+    "file": "Sources/Docs/zh-CN/SSRExportCompatibility.md",
+    "category": "原文·中文"
+  },
+  {
     "title": "支持范围与限制 · Docs/zh-CN/Status.md",
     "source": "Docs/zh-CN/Status.md",
     "file": "Sources/Docs/zh-CN/Status.md",
@@ -232,12 +268,6 @@
     "source": "Docs/zh-CN/Workflow.md",
     "file": "Sources/Docs/zh-CN/Workflow.md",
     "category": "原文·中文"
-  },
-  {
-    "title": "显存归责窗口 · Docs/显存归责.md",
-    "source": "Docs/显存归责.md",
-    "file": "Sources/Docs/显存归责.md",
-    "category": "其他原文"
   },
   {
     "title": "RimUnity · README.en.md",

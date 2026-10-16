@@ -1,6 +1,10 @@
 <Project>
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <Version>0.1.9</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>0.1.9.0</FileVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
@@ -11,4 +15,5 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
   <ItemDefinitionGroup><Reference><Private>false</Private></Reference></ItemDefinitionGroup>
+  <ItemGroup><AssemblyMetadata Include="RimUnityProtocol" Value="1" /></ItemGroup>
 </Project>

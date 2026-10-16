@@ -1,0 +1,27 @@
+<Project>
+  <!--内容 DLL 保留在普通编译输出；只有专用后缀进入游戏扫描目录。-->
+  <PropertyGroup>
+    <RimUnityEmbeddedDirectory>$(MSBuildThisFileDirectory)</RimUnityEmbeddedDirectory>
+    <RimUnityMinimumVersion Condition="'$(RimUnityMinimumVersion)' == ''">0.1.9</RimUnityMinimumVersion>
+    <RimUnityAssembliesDirectory>$(RimUnityModDirectory)/1.7/Assemblies</RimUnityAssembliesDirectory>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="RimUnity.Core" HintPath="$(RimUnityEmbeddedDirectory)References/RimUnity.Core.dll" Private="false" />
+    <Reference Include="RimUnity" HintPath="$(RimUnityEmbeddedDirectory)References/RimUnity.dll" Private="false" />
+    <Reference Include="RimUnity.Spine" HintPath="$(RimUnityEmbeddedDirectory)References/RimUnity.Spine.dll" Private="false" />
+  </ItemGroup>
+  <Target Name="ValidateRimUnityEmbedded" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(RimUnityModDirectory)' == ''" Text="请设置 RimUnityModDirectory 为内容模组根目录。" />
+    <Error Condition="!Exists('$(RimUnityModDirectory)/About/About.xml')" Text="RimUnityModDirectory 缺少 About/About.xml。" />
+    <Error Condition="!Exists('$(RimUnityEmbeddedDirectory)RimUnity.Embedded.dll')" Text="请保留下载包中的 Embedded DLL、targets 和 References 目录结构。" />
+    <Error Condition="$([System.IO.Path]::GetFullPath('$(TargetDir)').StartsWith($([System.IO.Path]::GetFullPath('$(RimUnityAssembliesDirectory)')), System.StringComparison.OrdinalIgnoreCase))" Text="普通编译输出不能放入模组 Assemblies，请保留 bin 输出并由 targets 发布。" />
+  </Target>
+  <Target Name="PublishRimUnityEmbedded" AfterTargets="Build">
+    <MakeDir Directories="$(RimUnityAssembliesDirectory)" />
+    <Error Condition="Exists('$(RimUnityAssembliesDirectory)/$(TargetFileName)')" Text="发现旧版内容 DLL，请先从模组 Assemblies 移走，防止提前扫描。" />
+    <Error Condition="Exists('$(RimUnityAssembliesDirectory)/RimUnity.dll') Or Exists('$(RimUnityAssembliesDirectory)/RimUnity.Core.dll') Or Exists('$(RimUnityAssembliesDirectory)/RimUnity.Spine.dll')" Text="内容模组不得携带散装 RimUnity References。" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFiles="$(RimUnityAssembliesDirectory)/$(TargetName).rimunity" />
+    <Copy SourceFiles="$(RimUnityEmbeddedDirectory)RimUnity.Embedded.dll" DestinationFolder="$(RimUnityAssembliesDirectory)" SkipUnchangedFiles="true" />
+    <WriteLinesToFile File="$(RimUnityAssembliesDirectory)/$(TargetName).rimunity.json" Lines="{ &quot;protocol&quot;: 1, &quot;minimumVersion&quot;: &quot;$(RimUnityMinimumVersion)&quot; }" Overwrite="true" Encoding="UTF-8" />
+  </Target>
+</Project>

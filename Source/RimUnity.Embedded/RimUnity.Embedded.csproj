@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputPath>../../artifacts/Embedded/</OutputPath>
+    <AssemblyName>RimUnity.Embedded.$(ContainerId)</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp" HintPath="$(RimWorldDir)/Assembly-CSharp.dll" />
+    <Reference Include="UnityStubs" HintPath="$(RimWorldDir)/UnityStubs.dll" />
+    <Reference Include="0Harmony" HintPath="$(HarmonyPath)" />
+    <EmbeddedResource Include="$(PayloadPath)" LogicalName="RimUnity.Payload.zip" />
+  </ItemGroup>
+  <Target Name="RequirePayload" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('$(PayloadPath)')" Text="请通过 Tools/Build.ps1 构建内置载荷。" />
+    <Error Condition="'$(ContainerId)' == ''" Text="内置容器必须声明构建身份。" />
+  </Target>
+  <Target Name="CopyEmbeddedContainer" AfterTargets="Build">
+    <Copy SourceFiles="$(TargetPath)" DestinationFiles="$(OutputPath)/RimUnity.Embedded.dll" />
+  </Target>
+</Project>

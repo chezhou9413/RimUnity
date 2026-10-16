@@ -16,7 +16,9 @@ public sealed class RimUnityMod : Mod
     public RimUnityMod(ModContentPack content) : base(content)
     {
         OwnContent = content;
-        ShaderDirectory = System.IO.Path.Combine(content.RootDir, "1.7", "Shaders", "RimUnity");
+        if (RuntimeInfo.ResourceRoot == null)
+            RuntimeInfo.Configure(System.IO.Path.Combine(content.RootDir, "1.7"), true, content.Name, 0, "");
+        ShaderDirectory = System.IO.Path.Combine(RuntimeInfo.ResourceRoot, "Shaders", "RimUnity");
         Bloom = GetSettings<Rendering.BloomSettings>();
         Rendering.MaterialColorSpace.Install();
         Rendering.ShaderMaterialDefaults.Install();
@@ -29,5 +31,5 @@ public sealed class RimUnityMod : Mod
 
     //渲染设置属于桥接框架，内容模组无需各自提供后处理窗口。
     public override string SettingsCategory() => "RimUnity";
-    public override void DoSettingsWindowContents(UnityEngine.Rect rect) => Bloom.Draw(rect);
+    public override void DoSettingsWindowContents(UnityEngine.Rect rect) => Settings.SettingsWindow.Draw(rect, Bloom);
 }
