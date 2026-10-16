@@ -8,11 +8,20 @@ RimUnity is a Unity asset exporter and runtime framework for RimWorld 1.7. Creat
 
 ## Quick start
 
-**Download: [Unity exporter 0.1.5 with ShaderTool](https://github.com/chezhou9413/RimUnity/releases/download/v0.1.5/com.chezhou.rimunity-0.1.5.tgz) · [Matching game runtime and all releases](https://github.com/chezhou9413/RimUnity/releases)**
+**0.1.9 Preview: [Standalone ZIP](https://github.com/chezhou9413/RimUnity/releases/download/v0.1.9-preview/RimUnity-0.1.9-preview.zip) · [Embedded runtime ZIP](https://github.com/chezhou9413/RimUnity/releases/download/v0.1.9-preview/RimUnity.Embedded-0.1.9-preview.zip) · [Unity exporter TGZ](https://github.com/chezhou9413/RimUnity/releases/download/v0.1.9-preview/com.chezhou.rimunity-0.1.9.tgz) · [SHA-256](https://github.com/chezhou9413/RimUnity/releases/download/v0.1.9-preview/SHA256SUMS.txt)**
+
+| Integration | Usage |
+| --- | --- |
+| Standalone dependency | Enable Harmony, RimUnity and content mods. All content shares the standalone runtime. |
+| Embedded runtime | Resource-only mods carry `RimUnity.Embedded.dll`. C# content mods must publish deferred scripts through the included `.targets`. See the [integration guide](Docs/en/EmbeddedRuntime.md). |
+
+**Both modes require Harmony.** An enabled `Chezhou.RimUnity` always wins; embedded resources are not mounted. An incompatible standalone version reports an error. Otherwise, the newest compatible embedded version satisfying script requirements is selected, and identical copies run once. `References` is for compilation only; never deploy it as runtime DLLs. There are no online checks or automatic updates; offline play is supported.
+
+RimUnity provides compatibility APIs on Waylith and **does not include or load a separate, real Unity engine**. This preview passed compilation, .NET 10 offline checks and actual game startup with three embedded test mods, with and without standalone. Long-running map rendering and visual UI checks remain unverified. See [validation scope](Docs/en/Release-0.1.9.md).
 
 Players only need Harmony, RimUnity and the relevant content mod; the Unity Editor is not required. Asset authors should start with [installing the exporter and exporting a first prefab](Docs/en/ExporterSetup.md).
 
-The repository includes ready-to-use `RimUnity.Core.dll` and `RimUnity.dll` files under `1.7/Assemblies`. After downloading or cloning it, place the entire repository root containing `About` and `LoadFolders.xml` in the game's `Mods` directory. No runtime compilation is required.
+Players should extract the standalone ZIP into the game's `Mods` directory. It includes Core, the main runtime and Spine. Build a source checkout first; release packages need no compilation.
 
 1. Install and enable Harmony and RimUnity in RimWorld.
 2. In Unity 2022.3, use **Add package from disk** in Package Manager to install `UnityPackage/package.json`, or install a released UPM TGZ. Selected features of Built-in and URP 14 projects are supported.
@@ -32,6 +41,7 @@ instance.transform.position = new RimUnity.Vector3(x, y, z);
 Open **RimUnity → 百科全书** in Unity for the offline handbook, full-text search, and bundled README/documentation originals. Export callbacks are described in [export processors](Docs/en/ExportProcessors.md).
 
 - [Getting started](Docs/en/QuickStart.md)
+- [Embedded runtime integration](Docs/en/EmbeddedRuntime.md)
 - [Installing the exporter and your first export](Docs/en/ExporterSetup.md)
 - [API quick start](Docs/en/ApiQuickStart.md)
 - [MonoBehaviour and common methods](Docs/en/MonoBehaviour.md)
@@ -48,6 +58,6 @@ Open **RimUnity → 百科全书** in Unity for the offline handbook, full-text 
 
 ## License
 
-Authors: chezhou9413 and keeptpa.
+Contributors: chezhou9413, keeptpa and Karl-441. New maintainers, contributors and content mod authors are welcome! [GitHub repository](https://github.com/chezhou9413/RimUnity) · [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3819570122).
 
 RimUnity is available under the [MIT license](LICENSE). See the [third-party notices](ThirdParty/NOTICE.md) for additional copyright information. Artwork, fonts and other assets in content mods retain their own licenses.
