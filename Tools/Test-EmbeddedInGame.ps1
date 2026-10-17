@@ -1,46 +1,40 @@
 ﻿param([Parameter(Mandatory)][string]$GameRoot, [Parameter(Mandatory)][string]$FixtureRoot, [string]$LegacyCarrier = '', [string]$WorkshopRoot = '')
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'ModsSwap.ps1')
 if ($WorkshopRoot -and !(Test-Path -LiteralPath (Join-Path $WorkshopRoot '1.7/Assemblies/RimUnity.dll'))) { throw '工坊运行时目录无效。' }
 if ($LegacyCarrier -and !(Test-Path -LiteralPath $LegacyCarrier -PathType Leaf)) { throw '历史加载器文件不存在。' }
 if (Get-Process RimWorld,RimWorldWin64 -ErrorAction SilentlyContinue) { throw '游戏正在运行；请结束当前会话后再执行测试。' }
+
 $repo = Split-Path $PSScriptRoot -Parent
+# 交换 Mods/RimUnity 的崩溃安全由 ModsSwap 的 journal 保证：即使本进程被强杀，
+# 下一次运行也会在这里按 journal 先把原模组还原，再开始新的一次。
+$stale = Repair-ModsSwap -GameRoot $GameRoot
+if ($stale.JournalFound) {
+    Write-Output ("检测到上次未完成的交换（state={0}），已自动还原：原模组={1} 删测试副本={2} 删测试模组={3}" -f $stale.JournalState, $stale.RestoredOriginal, $stale.RemovedTestCopy, $stale.RemovedCreated)
+}
+
 $run = Join-Path ([IO.Path]::GetTempPath()) ('RimUnity/GameVerification-' + [Guid]::NewGuid().ToString('N'))
 [IO.Directory]::CreateDirectory($run) | Out-Null
-$modsRoot = [IO.Path]::GetFullPath((Join-Path $GameRoot 'Mods'))
-$live = [IO.Path]::GetFullPath((Join-Path $modsRoot 'RimUnity'))
-$backup = [IO.Path]::GetFullPath((Join-Path $run 'Original-RimUnity'))
+$paths = Get-ModsSwapPaths $GameRoot
+$modsRoot = $paths.ModsRoot
+$live = $paths.Live
 $testMods = @('A','B','C','Ordinary') | ForEach-Object { [IO.Path]::GetFullPath((Join-Path $modsRoot "RimUnity.EmbeddedVerification.$_")) }
-#所有移动、删除目标都先核对绝对路径；原模组备份在游戏扫描目录之外。
+#所有移动、删除目标都先核对绝对路径；原模组备份由 ModsSwap 移到游戏根目录下的状态目录。
 foreach ($path in @($live) + $testMods) {
     if ([IO.Path]::GetDirectoryName($path) -ne $modsRoot) { throw "测试路径越界：$path" }
 }
-if (!$backup.StartsWith([IO.Path]::GetFullPath($run) + [IO.Path]::DirectorySeparatorChar)) { throw '备份路径越界。' }
 foreach ($path in $testMods) { if (Test-Path -LiteralPath $path) { throw "已有测试目录，未覆盖：$path" } }
 if ((Test-Path -LiteralPath $live) -and (Get-Item -LiteralPath $live).LinkType) { throw '测试不会替换链接形式的 RimUnity；请指定独立测试安装。' }
+
 $logs = Join-Path $env:USERPROFILE 'AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios/Logs'
 if (Test-Path -LiteralPath $logs) { Copy-Item -LiteralPath $logs -Destination (Join-Path $run 'Logs-before') -Recurse }
-$hadOriginal = Test-Path -LiteralPath $live
-$movedOriginal = $false
-$liveCreated = $false
 $process = $null
-#进程退出后杀毒/文件映射可能短暂占用 DLL；清理失败仍必须恢复原独立版。
-function Remove-TestDirectory([string]$path) {
-    $absolute = [IO.Path]::GetFullPath($path)
-    if ([IO.Path]::GetDirectoryName($absolute) -ne $modsRoot) { throw "清理路径越界：$path" }
-    for ($attempt = 0; $attempt -lt 10; $attempt++) {
-        try {
-            if (Test-Path -LiteralPath $absolute) { Remove-Item -LiteralPath $absolute -Recurse -Force }
-            return
-        } catch [IO.IOException], [UnauthorizedAccessException] {
-            if ($attempt -eq 9) { throw }
-            Start-Sleep -Milliseconds 500
-        }
-    }
-}
 try {
-    if ($hadOriginal) { Move-Item -LiteralPath $live -Destination $backup; $movedOriginal = $true }
-    $liveCreated = $true
+    # 移走原模组（同卷原子 rename，并先落 journal）；测试模组目录一并登记，修复时自动清理。
+    Invoke-ModsSwapMove -GameRoot $GameRoot -CreatedPaths $testMods | Out-Null
     & (Join-Path $PSScriptRoot 'Copy-RuntimePackage.ps1') -Destination $live
+    # 在测试副本里打 marker：崩溃后靠它区分「我们的测试副本」与「用户自己的 RimUnity」。
+    New-ModsSwapTestCopyMarker ([pscustomobject]@{ Paths = $paths })
     for ($i = 0; $i -lt 3; $i++) {
         $letter = @('A','B','C')[$i]
         $target = $testMods[$i]
@@ -91,13 +85,9 @@ try {
         Write-Output "PASS 游戏启动：$mode；3 个内置测试模组；报告=$reportPath"
     }
 } finally {
+    # 先停掉本脚本启动的游戏进程，再按 journal 还原：测试副本、登记的测试模组目录、原模组一起处理。
+    # 即使这里再次被强杀，journal 仍在，下次运行开头会自动修复。
     if ($process -and !$process.HasExited) { Stop-Process -Id $process.Id -Force }
-    #只清理本次预先核对过、由本脚本创建的路径，并恢复原前置。
-    try {
-        foreach ($path in $testMods) { Remove-TestDirectory $path }
-    } finally {
-        if ($liveCreated) { Remove-TestDirectory $live }
-        if ($movedOriginal) { Move-Item -LiteralPath $backup -Destination $live }
-    }
-    Write-Output "原模组已恢复，测试资料保留：$run"
+    $repaired = Repair-ModsSwap -GameRoot $GameRoot
+    Write-Output ("已还原：原模组={0} 删测试副本={1} 删测试模组={2}；测试资料保留：{3}" -f $repaired.RestoredOriginal, $repaired.RemovedTestCopy, $repaired.RemovedCreated, $run)
 }

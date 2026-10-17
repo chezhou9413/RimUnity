@@ -4,7 +4,7 @@
 
 | 文件 | 层 | 跑在哪 | 需要什么 |
 | --- | --- | --- | --- |
-| `repo-checks.yml` | 第一层 | GitHub 托管的 `windows-latest` | 无（不碰游戏、不编译） |
+| `repo-checks.yml` | 第一层 | GitHub 托管的 `windows-latest` | 不碰游戏；`global.json` 钉的 .NET 10 SDK（只给 4 个离线测试工程用） |
 | `manual-verify.yml` | 第二层 | 自托管 runner，标签 `self-hosted, windows, rimworld-1.7` | RimWorld 1.7 + Harmony + .NET 10 SDK |
 
 ---
@@ -13,7 +13,9 @@
 
 **什么时候跑**：`main` / `keep_branch` 的 `push`，以及 `pull_request`。
 
-**跑什么**：`Tools/Verify-Static.ps1` 与 `Tools/Test-BuildWorkflow.ps1`（两个 PowerShell 宿主各运行一次）。静态检查做的是不需要编译、不需要游戏的那一类检查——
+**跑什么**：`Tools/Verify-Static.ps1`、`Tools/Test-BuildWorkflow.ps1`、`Tools/Test-ModsSwap.ps1`
+（三个都在两个 PowerShell 宿主各运行一次）与 `Tools/Test-OfflineProjects.ps1`（4 个离线测试工程）。
+静态检查做的是不需要编译、不需要游戏的那一类检查——
 
 - 离线文档镜像（`UnityPackage/Documentation~/`）与 `sources.json` 是否与源文件一致；
 - 发布号是否单一来源（`About/About.xml`、`Source/Directory.Build.props`、`UnityPackage/package.json`）、
@@ -40,6 +42,42 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools/Verify-Static.ps1 
 ```
 
 5.1 上必须带 `-ExecutionPolicy Bypass`，否则未签名的脚本会被执行策略挡下。
+
+### 离线测试工程
+
+`Tools/Test-OfflineProjects.ps1` 会编译并运行 4 个**不需要游戏、不需要 Unity** 的测试工程：
+`CatalogPolicyTests`、`MemoryAttributionTests`、`SpikeCaptureTests`、`WarmupTests`。
+
+`RenderDiagnosticsTests` 不在里面：它要 `<RimUnity.dll> <游戏目录> <0Harmony.dll>` 三个参数，
+只能在第二层跑。名单要改时同步改脚本顶部的默认参数。
+
+```powershell
+pwsh -File Tools/Test-OfflineProjects.ps1     # 本地等价命令
+```
+
+注意别给 `dotnet run` 追加 `--nologo` 这类开关——它会被当成**程序参数**传进去，
+而 `MemoryAttributionTests` 带参数时会进入需要游戏 DLL 的反射分支。
+
+### `Mods/RimUnity` 交换的崩溃安全
+
+第三层的游戏内测试要把真实的 `Mods/RimUnity` 临时换掉，`Tools/ModsSwap.ps1` 负责这件事。
+它不靠 `finally`（进程被强杀时不会执行），靠三条不变量：
+
+1. 状态目录固定在 `<GameRoot>/.rimunity-ci`，与被替换目录**同卷** → 移动等于原子 rename；
+   跨卷直接拒绝（跨卷 Move 是复制+删除，不是原子的）。
+2. 先落盘再改文件系统。journal 用只增不改的世代文件（`mods-swap-001.json`…），
+   写新世代是纯 rename、从不覆盖旧文件；读取时取序号最大且能解析的那个，
+   因此断电最多丢最新一代，上一代仍可读。
+3. `Repair-ModsSwap` 可重复执行：按 journal 删掉登记的测试模组目录，按 marker 区分
+   「我们的测试副本」与「用户自己的 RimUnity」（后者一律不动），再把备份原子移回原位。
+
+被强杀后有两种恢复路径，都不会留下异常：下一次跑 `Tools/Test-EmbeddedInGame.ps1` 时开头会先自动修复；
+或者手动执行 `pwsh -File Tools/ModsSwap.ps1 -Action Repair -GameRoot <游戏根目录>`
+（`-Action Status` 只查看有没有未完成的交换）。
+
+`Tools/Test-ModsSwap.ps1` 把 9 个窗口都测了：正常往返、只写了 planned 还没移动、移动后 journal
+停在 planned、backed-up、live 是非测试副本（拒绝动别人的）、备份丢失且 live 不存在（明确报错并保留
+journal）、重复修复、只清理登记过的目录、同卷校验。
 
 ---
 
@@ -110,6 +148,7 @@ $env:HARMONY_PATH = '<创意工坊>\content\294100\2009463077\1.7\Assemblies\0Ha
 
 ## 还没接进来的
 
-- `Tools/Test-EmbeddedInGame.ps1`：需要桌面会话、会临时移动真实的 `Mods/RimUnity`，
-  而且 `-FixtureRoot` 目前只能从上一步 `Tools/Verify-Embedded.ps1` 的输出里手工取，没有自动化入口；
-- `Tools/Pack.ps1`：只在手动触发时用 `run-pack=true` 打产物，不进每次检查。
+- 第三层（游戏内）还没有 workflow job：`Tools/Test-EmbeddedInGame.ps1` 需要桌面会话、会临时移动真实的
+  `Mods/RimUnity`，而且 `-FixtureRoot` 目前只能从上一步 `Tools/Verify-Embedded.ps1` 的输出里手工取；
+- `Tools/Pack.ps1`：只在手动触发时用 `run-pack=true` 打产物，不进每次检查；
+- `manual-verify.yml` 没有 tag 触发：runner 未注册时 tag 推送只会把运行挂在队列里。

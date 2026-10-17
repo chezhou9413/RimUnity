@@ -1,6 +1,7 @@
-# 第一层 CI：托管 runner 上就能跑，不需要游戏安装、不需要 .NET SDK。
-# 内容 = Tools/Verify-Static.ps1：离线文档镜像、版本号一致性、脚本 UTF-8 BOM、
-# 盘符绝对路径、XML/JSON 解析、冲突标记、提交范围检查。
+# 第一层 CI：托管 runner 上就能跑，不需要游戏安装。
+#   Tools/Verify-Static.ps1        文本与脚本的一致性检查（不需要 .NET SDK）
+#   Tools/Test-BuildWorkflow.ps1   构建/验证/打包入口的离线回归（不需要 .NET SDK）
+#   Tools/Test-OfflineProjects.ps1 4 个离线测试工程（需要 .NET 10 SDK）
 #
 # 已知缺口允许清单在 Tools/Verify-Static.ps1 的 $KnownDebt 里：那些位置只提示、不判失败；
 # 修完删条目后，对应规则立刻变成硬失败。
@@ -30,6 +31,11 @@ jobs:
         with:
           fetch-depth: 0   # 提交范围检查需要 PR base 这个提交
 
+      # 只有最后的离线测试工程需要 SDK；静态检查本身不需要，装它不影响前面的检查。
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
       - name: 静态检查（PowerShell 7）
         shell: pwsh
         run: |
@@ -56,3 +62,18 @@ jobs:
       - name: 构建入口回归（Windows PowerShell 5.1）
         shell: powershell
         run: ./Tools/Test-BuildWorkflow.ps1
+
+      # Mods/RimUnity 交换的崩溃窗口自测：不启动游戏、不碰真实安装。
+      - name: 交换状态恢复回归（PowerShell 7）
+        shell: pwsh
+        run: ./Tools/Test-ModsSwap.ps1
+
+      - name: 交换状态恢复回归（Windows PowerShell 5.1）
+        shell: powershell
+        run: ./Tools/Test-ModsSwap.ps1
+
+      # 4 个不需要游戏、不需要 Unity 的测试工程。RenderDiagnosticsTests 需要
+      # <RimUnity.dll> <游戏目录> <0Harmony.dll> 三个参数，只能在第二层跑。
+      - name: 离线测试工程
+        shell: pwsh
+        run: ./Tools/Test-OfflineProjects.ps1
