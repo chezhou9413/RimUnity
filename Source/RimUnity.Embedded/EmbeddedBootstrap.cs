@@ -1,7 +1,4 @@
 using System;
-using System.IO;
-using System.Linq;
-using System.Reflection;
 using HarmonyLib;
 using Verse;
 
@@ -14,18 +11,21 @@ public sealed class EmbeddedBootstrap : Mod
     //进程级入口注册状态；与旧包分开，允许在 XML 前接管旧补丁。
     private const string DeferredInstalled = "RimUnity.Embedded.DeferredInstalled";
     private const string CoordinatorInstalled = "RimUnity.Embedded.CoordinatorInstalled";
+    private const string ScopedCoordinatorInstalled = "RimUnity.Embedded.ScopedCoordinatorInstalled";
     private const string Finished = "RimUnity.Embedded.Finished";
 
     //首次构造时原 CreateModClasses 已在执行，故拦截紧接着的 XML 读取入口。
     public EmbeddedBootstrap(ModContentPack content) : base(content)
     {
-        if (AppDomain.CurrentDomain.GetData(CoordinatorInstalled) != null) return;
-        new Harmony("Chezhou.RimUnity.Embedded.Coordinator").Patch(AccessTools.Method(typeof(LoadedModManager), "LoadModXML"),
+        if (AppDomain.CurrentDomain.GetData(ScopedCoordinatorInstalled) != null) return;
+        new Harmony("Chezhou.RimUnity.Embedded.ScopedCoordinator").Patch(AccessTools.Method(typeof(LoadedModManager), "LoadModXML"),
             prefix: new HarmonyMethod(typeof(EmbeddedBootstrap), nameof(Prepare))
             {
                 priority = Priority.First,
-                before = new[] { "Chezhou.RimUnity.Embedded", "Chezhou.RimUnity.Embedded.Deferred" }
+                before = new[] { "Chezhou.RimUnity.Embedded", "Chezhou.RimUnity.Embedded.Deferred", "Chezhou.RimUnity.Embedded.Coordinator" }
             });
+        AppDomain.CurrentDomain.SetData(ScopedCoordinatorInstalled, true);
+        //旧包先构造时由排序接管；本入口先构造时阻止旧包安装全局初始化入口。
         AppDomain.CurrentDomain.SetData(CoordinatorInstalled, true);
         //同时兼容旧式和 0.1.13 入口；旧入口先安装时仍由新版 Prefix 提前接管。
         AppDomain.CurrentDomain.SetData(DeferredInstalled, true);

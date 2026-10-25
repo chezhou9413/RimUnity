@@ -63,17 +63,15 @@ public sealed class Material : Object
         shadowCaster = source.shadowCaster;
         BindSceneGrab(engineMaterial);
     }
-    //Unity names the sampled texture in GrabPass. Waylith names the capture and
-    //prefixes its property with _Grab, so _GrabTexture becomes _Grab_GrabTexture.
-    //Alias the authored sampler to the canonical texture the host updates; do not
-    //allocate/copy images or depend on a matching global property name.
+    //宿主抓取名称包含队列，原始 Shader 仍使用作者的采样器名；两者绑定同一张动态纹理。
     private static void BindSceneGrab(Waylith.Rendering.Material material)
     {
         if (material.Shader.SceneGrab is { } grab)
         {
             material.SetTexture(grab.TexturePropertyId, grab.Texture);
             foreach (var slot in material.Shader.MaterialLayout.TextureSlots)
-                if (slot.Kind != MaterialTextureKind.Sampler && slot.PropertyName == grab.Name)
+                if (slot.Kind != MaterialTextureKind.Sampler &&
+                    (slot.PropertyName == grab.Name || grab.Name == $"RimUnity:{grab.Queue}:{slot.PropertyName}"))
                     material.SetTexture(slot.PropertyId, grab.Texture);
         }
     }
@@ -114,7 +112,13 @@ public sealed class Material : Object
     public void SetColor(string name, Color value) => SetColor(Shader.PropertyToID(name), value);
     public void SetColor(int id, Color value) => engineMaterial.SetColor(id, new System.Numerics.Vector4(value.r, value.g, value.b, value.a));
     public Color GetColor(string name) => GetColor(Shader.PropertyToID(name));
-    public Color GetColor(int id) { var v = engineMaterial.GetColor(id); return new(v.r, v.g, v.b, v.a); }
+    //Unity 的颜色和向量共用四个分量，导出颜色以向量存储时也必须保留透明度。
+    public Color GetColor(int id)
+    {
+        if (TryGetVectorOrColor(id, out var value)) return new(value.X, value.Y, value.Z, value.W);
+        var color = engineMaterial.GetColor(id);
+        return new(color.r, color.g, color.b, color.a);
+    }
     public void SetVector(string name, Vector4 value) => SetVector(Shader.PropertyToID(name), value);
     public void SetVector(int id, Vector4 value)
     {
@@ -130,7 +134,24 @@ public sealed class Material : Object
     public Vector4 GetVector(int id)
     {
         if (ShaderPropertyId.TryGetName(id, out string name) && name.EndsWith("_ST", StringComparison.Ordinal)) { Vector2 o = GetTextureOffset(name[..^3]), s = GetTextureScale(name[..^3]); return new(s.x, s.y, o.x, o.y); }
-        var v = engineMaterial.GetVector(id); return new(v.X, v.Y, v.Z, v.W);
+        var v = TryGetVectorOrColor(id, out var value) ? value : engineMaterial.GetVector(id);
+        return new(v.X, v.Y, v.Z, v.W);
+    }
+    //先检查实际存储类型，避免用宿主的强类型读取接口产生类型不匹配警告。
+    private bool TryGetVectorOrColor(int id, out System.Numerics.Vector4 value)
+    {
+        var properties = engineMaterial.PropertiesForReading;
+        for (int i = properties.Length - 1; i >= 0; i--)
+        {
+            var property = properties[i];
+            if (property.PropertyId == id && property.Type is DrawPropertyType.Vector or DrawPropertyType.Color)
+            {
+                value = property.VectorValue;
+                return true;
+            }
+        }
+        value = default;
+        return false;
     }
     public void SetMatrix(string name, Matrix4x4 value) => SetMatrix(Shader.PropertyToID(name), value);
     public void SetMatrix(int id, Matrix4x4 value) => engineMaterial.SetMatrix(id, Matrix4x4.ToNumerics(value));

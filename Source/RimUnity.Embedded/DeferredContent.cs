@@ -42,18 +42,21 @@ internal sealed class DeferredContent
     }
 
     //先安装解析器再逐个登记，支持跨模组脚本继承及交叉程序集引用。
-    internal void Load()
+    internal List<(Assembly Assembly, ModContentPack Owner)> Load()
     {
         foreach (string name in Files.Keys)
             if (AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetName().Name == name))
                 throw new InvalidOperationException("内容 DLL 被提前加载，请移除 Assemblies 中的普通 DLL / Content loaded too early: " + name);
         AssemblyLoadContext.Default.Resolving += Resolve;
+        var loaded = new List<(Assembly Assembly, ModContentPack Owner)>();
         foreach (var file in Files.Values)
         {
             var assembly = Assembly.LoadFrom(file.Path);
             if (!file.Owner.assemblies.loadedAssemblies.Contains(assembly)) file.Owner.assemblies.loadedAssemblies.Add(assembly);
+            loaded.Add((assembly, file.Owner));
         }
-        foreach (var file in Files.Values) Assembly.LoadFrom(file.Path).GetTypes();
+        foreach (var entry in loaded) entry.Assembly.GetTypes();
+        return loaded;
     }
 
     //解析器保留到进程退出，以支持脚本的延迟 JIT 引用。

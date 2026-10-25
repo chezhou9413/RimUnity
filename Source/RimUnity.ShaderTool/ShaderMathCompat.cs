@@ -38,8 +38,19 @@ internal static class ShaderMathCompat
             }
             if (!smooth) continue;
             helpers.AppendLine($"{type} RU_CompatSmoothstep({type} low, {type} high, {type} x) {{");
-            helpers.AppendLine($"    {type} t = clamp((x - low) / (high - low), {type}(0.0), {type}(1.0));");
-            helpers.AppendLine("    return t * t * (3.0 - 2.0 * t);\n}");
+            //零宽度边界按硬切处理；向量逐分量求值，避免任一分量产生零除。
+            if (type == "float")
+            {
+                helpers.AppendLine("    if (low == high) return step(low, x);");
+                helpers.AppendLine("    float t = clamp((x - low) / (high - low), 0.0, 1.0);");
+                helpers.AppendLine("    return t * t * (3.0 - 2.0 * t);\n}");
+            }
+            else
+            {
+                string components = "xyzw"[..int.Parse(type[^1].ToString())];
+                helpers.AppendLine($"    return {type}(" + string.Join(", ", components.Select(c =>
+                    $"RU_CompatSmoothstep(low.{c}, high.{c}, x.{c})")) + ");\n}");
+            }
             if (type != "float")
                 helpers.AppendLine($"{type} RU_CompatSmoothstep(float low, float high, {type} x) {{ return RU_CompatSmoothstep({type}(low), {type}(high), x); }}");
         }
@@ -49,7 +60,7 @@ internal static class ShaderMathCompat
         if (powers.Count > 0)
             Record(manifest, "常量正整数幂 2～64 使用乘法展开；负底数按整数幂计算，属于旧 Shader 写法的兼容处理，并非 HLSL pow 的负底数语义保证。");
         if (smooth)
-            Record(manifest, "smoothstep 按 HLSL 饱和 Hermite 公式展开，支持反向边界；相等边界仍要求作者避免除零。");
+            Console.WriteLine("[数学兼容] smoothstep 支持反向边界，相等边界逐分量按 step 硬切，不再执行零除。");
         return rewritten.Insert(header.Length, helpers.ToString());
     }
 

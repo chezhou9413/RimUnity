@@ -14,7 +14,7 @@ if ($LASTEXITCODE -ne 0) { throw '离线验证程序编译失败。' }
 & (Join-Path $PSScriptRoot 'Copy-RuntimePackage.ps1') -Destination (Join-Path $fixtures 'Standalone')
 & dotnet build (Join-Path $PSScriptRoot 'EmbeddedTests/Fixtures/Ordinary/Ordinary.csproj') -c Release --nologo "-p:RimWorldDir=$GameRoot" "-p:FixtureRoot=$fixtures" "-p:RuntimeDirectory=$repo/1.7/Assemblies"
 if ($LASTEXITCODE -ne 0) { throw '普通 DLL 兼容夹具编译失败。' }
-foreach ($scenario in @('workshop-first','workshop-last','ordinary-workshop','renamed-runtime-provider','incomplete-runtime-provider','ambiguous-runtime-provider','missing-runtime-resources','ordinary-standalone','ordinary-standalone-only','standalone-only','single','duplicates','reverse','standalone-first','standalone-middle','standalone-last','scale')) {
+foreach ($scenario in @('workshop-first','workshop-last','ordinary-workshop','renamed-runtime-provider','incomplete-runtime-provider','ambiguous-runtime-provider','missing-runtime-resources','ordinary-standalone','ordinary-standalone-only','standalone-only','single','duplicates','reverse','standalone-first','standalone-middle','standalone-last','scale','failed-mod','failed-mod-standalone')) {
     & dotnet (Join-Path $PSScriptRoot 'EmbeddedTests/bin/Release/net10.0/EmbeddedTests.dll') $repo $GameRoot $HarmonyPath $fixtures $scenario
     if ($LASTEXITCODE -ne 0) { throw "离线验证失败：$scenario；夹具目录：$fixtures" }
 }
@@ -30,7 +30,8 @@ if ($WorkshopRoot) {
 #固定历史源码测试真实旧入口，而不是用新入口伪装旧版本。
 foreach ($legacy in @(
     @{Revision='1d10c5570219710a8f93b0edb28b8090fb34c404';Name='LegacyBootstrap';Assembly='RimUnity.Embedded.Legacy011';Version='0.1.11.0';Orders=@('legacy-first','legacy-last')},
-    @{Revision='c06c6cd3a606b94b258026d6cfc5f078e618e918';Name='DeferredBootstrap';Assembly='RimUnity.Embedded.Deferred013';Version='0.1.13.0';Orders=@('workshop-legacy-first','workshop-legacy-last')}
+    @{Revision='c06c6cd3a606b94b258026d6cfc5f078e618e918';Name='DeferredBootstrap';Assembly='RimUnity.Embedded.Deferred013';Version='0.1.13.0';Orders=@('workshop-legacy-first','workshop-legacy-last')},
+    @{Revision='b81f612b7f1f19b185d914d03e8523b011b9dee3';Name='CoordinatorBootstrap';Assembly='RimUnity.Embedded.Coordinator017';Version='0.1.17.0';Orders=@('coordinator-first','coordinator-last')}
 )) {
 $legacyRevision = $legacy.Revision
 $legacyRoot = Join-Path $fixtures $legacy.Name

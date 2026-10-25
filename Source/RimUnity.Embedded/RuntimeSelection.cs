@@ -29,6 +29,7 @@ internal static class RuntimeSelection
                 if (paths.Add(file)) copies.Add((file, mod));
         }
         Assembly runtime;
+        ModContentPack runtimeOwner;
         string root, provider, hash = "";
         bool standalone;
         bool deferred;
@@ -39,6 +40,7 @@ internal static class RuntimeSelection
         var standaloneMod = runtimeOwners.SingleOrDefault();
         if (standaloneMod != null)
         {
+            runtimeOwner = standaloneMod;
             //独立版已由原版加载，必须共用其类型，不能再加载或替换第二套运行时。
             runtime = standaloneMod.assemblies.loadedAssemblies.Single(a => a.GetName().Name == "RimUnity");
             string protocol = runtime.GetCustomAttributes<AssemblyMetadataAttribute>().FirstOrDefault(a => a.Key == "RimUnityProtocol")?.Value;
@@ -69,6 +71,7 @@ internal static class RuntimeSelection
                 .ThenBy(c => c.Owner.PackageId, StringComparer.Ordinal).ToArray();
             if (compatible.Length == 0) throw new InvalidOperationException("没有兼容运行库 / No compatible embedded runtime: " + content.Minimum);
             var selected = compatible[0];
+            runtimeOwner = selected.Owner;
             if (AppDomain.CurrentDomain.GetAssemblies().Any(a => Names.Contains(a.GetName().Name)))
                 throw new InvalidOperationException("检测到提前加载的 RimUnity DLL，请勿将 References 放入模组。/ Runtime DLLs loaded early; do not deploy References.");
             root = selected.Payload.Extract(Path.Combine(GenFilePaths.SaveDataFolderPath, "RimUnity", "Embedded"));
@@ -89,15 +92,16 @@ internal static class RuntimeSelection
         if (deferred)
         {
             GenTypes.ClearCache();
-            LoadedModManager.CreateModClasses();
+            DeferredModInitialization.Initialize(runtime, runtimeOwner);
         }
         if (!LoadedModManager.ModHandles.Any(m => m.GetType().Assembly == runtime && m.GetType().FullName == "RimUnity.RimUnityMod"))
             throw new InvalidOperationException("运行时初始化失败，停止加载内容脚本。/ Runtime initialization failed; content scripts were not loaded.");
         if (content.Files.Count != 0)
         {
-            content.Load();
+            var loaded = content.Load();
             GenTypes.ClearCache();
-            LoadedModManager.CreateModClasses();
+            foreach (var entry in loaded)
+                DeferredModInitialization.Initialize(entry.Assembly, entry.Owner);
         }
         Log.Message($"[RimUnity] {(standalone ? "Standalone" : "Embedded")} provider: {provider}; version: {runtime.GetCustomAttribute<AssemblyFileVersionAttribute>().Version}; candidates: {copies.Count}; payload: {hash}");
     }

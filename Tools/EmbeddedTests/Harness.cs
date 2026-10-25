@@ -39,6 +39,7 @@ internal static class Harness
         bool incomplete = scenario == "incomplete-runtime-provider";
         bool missingResources = scenario == "missing-runtime-resources";
         bool ambiguous = scenario == "ambiguous-runtime-provider";
+        bool failedMod = scenario.StartsWith("failed-mod") || scenario.StartsWith("coordinator-");
         string standaloneId = renamed ? "manager.renamed.provider__custom_suffix" : "Chezhou.RimUnity";
         var independent = Mod(Path.Combine(fixtures, scenario.StartsWith("actual-workshop") ? "Workshop" : "Standalone"),
             standaloneId.ToLowerInvariant() + (workshop ? "_steam" : ""), standaloneId);
@@ -55,6 +56,7 @@ internal static class Harness
             "renamed-runtime-provider" or "incomplete-runtime-provider" or "ambiguous-runtime-provider" or "missing-runtime-resources" => new[] { independent, a, b },
             "standalone-only" => new[] { independent },
             "ordinary-standalone" => new[] { independent, ordinary, a, b },
+            "failed-mod-standalone" => new[] { independent, a, b },
             "ordinary-standalone-only" => new[] { independent, ordinary },
             "standalone-newer-payload" => new[] { independent, a, b },
             "standalone-conflicting-payloads" => new[] { independent, a, b },
@@ -81,6 +83,12 @@ internal static class Harness
             assembly.GetTypes();
             mod.assemblies.loadedAssemblies.Add(assembly);
         }
+        if (failedMod)
+        {
+            var unrelated = Mod(Path.Combine(fixtures, "Failed"), "test.failed");
+            unrelated.assemblies.loadedAssemblies.Add(typeof(FailingMod).Assembly);
+            active.Add(unrelated);
+        }
         if (missingResources) independent.foldersToLoadDescendingOrder.Clear();
         if (incomplete)
             independent.assemblies.loadedAssemblies.RemoveAll(x => x.GetName().Name == "RimUnity.Spine");
@@ -95,18 +103,25 @@ internal static class Harness
             var ordinaryAssembly = ordinary.assemblies.loadedAssemblies.Single(x => x.GetName().Name == "OrdinaryFixture");
             Assert(ordinaryAssembly.GetType("Fixture.OrdinaryScript").BaseType.FullName == "RimUnity.MonoBehaviour", "ordinary DLL inheritance resolves before Mod construction");
         }
-        if (scenario.StartsWith("legacy") || scenario.StartsWith("workshop-legacy"))
+        if (scenario.StartsWith("legacy") || scenario.StartsWith("workshop-legacy") || scenario.StartsWith("coordinator-"))
         {
             var first = scenario.EndsWith("first") ? a : b;
             var bootstrap = first.assemblies.loadedAssemblies.Single(x => x.GetName().Name.StartsWith("RimUnity.Embedded."))
                 .GetType("RimUnity.Embedded.EmbeddedBootstrap", true);
             bootstrap.GetConstructor(new[] { typeof(ModContentPack) }).Invoke(new object[] { first });
             string owner = scenario.EndsWith("first")
-                ? scenario.StartsWith("workshop-legacy") ? "Chezhou.RimUnity.Embedded.Deferred" : "Chezhou.RimUnity.Embedded"
-                : "Chezhou.RimUnity.Embedded.Coordinator";
+                ? scenario.StartsWith("coordinator-") ? "Chezhou.RimUnity.Embedded.Coordinator"
+                    : scenario.StartsWith("workshop-legacy") ? "Chezhou.RimUnity.Embedded.Deferred" : "Chezhou.RimUnity.Embedded"
+                : "Chezhou.RimUnity.Embedded.ScopedCoordinator";
             Assert(Harmony.GetPatchInfo(AccessTools.Method(typeof(LoadedModManager), "LoadModXML")).Prefixes.Any(p => p.owner == owner), "requested bootstrap really constructs first");
         }
         LoadedModManager.CreateModClasses();
+        if (failedMod)
+        {
+            Assert(FailingMod.Attempts == 1 && errors.Count == 1 && errors[0].Contains(FailingMod.Failure),
+                "unrelated Mod fails once during the game's initial construction pass");
+            errors.Clear();
+        }
         if (mods.Contains(ordinary))
         {
             Assert(AppDomain.CurrentDomain.GetData("RimUnity.Test.OrdinaryConstructed") is string, "ordinary Mod accesses runtime before XML bootstrap");
@@ -116,6 +131,11 @@ internal static class Harness
         LoadedModManager.LoadModXML();
         Console.WriteLine($"TIMING {scenario}: {active.Count} active mods; bootstrap {timer.Elapsed.TotalMilliseconds:F2} ms");
         LoadedModManager.LoadModXML();
+        if (failedMod)
+        {
+            Assert(FailingMod.Attempts == 1, "runtime, deferred scripts and repeated XML never retry an unrelated failed Mod");
+            Assert(!LoadedModManager.ModHandles.Any(m => m is FailingMod), "failed Mod is not falsely registered as initialized");
+        }
         if (scenario == "incompatible-standalone" || scenario == "conflict" || incomplete || ambiguous || missingResources)
         {
             string expected = missingResources ? "runtime resources are missing" : incomplete ? "assembly ownership conflict" : ambiguous ? "runtime owner is ambiguous" : scenario == "conflict" ? "Conflicting embedded payloads" : "Update standalone RimUnity";
@@ -176,7 +196,7 @@ internal static class Harness
     private static bool CachePath(ref string __result) { __result = cache; return false; }
     private static bool Mount() { mounted++; return false; }
     private static bool Shaders() { shaderRegistrations++; return false; }
-    private static bool Types(ref List<Type> __result) { __result = LoadedModManager.RunningMods.SelectMany(m => m.assemblies.loadedAssemblies).Distinct().SelectMany(a => a.GetTypes()).ToList(); return false; }
+    private static bool Types(ref List<Type> __result) { __result = LoadedModManager.RunningMods.SelectMany(m => m.assemblies.loadedAssemblies).Distinct().SelectMany(a => a.GetTypes()).Where(t => t != typeof(FailingMod) || LoadedModManager.RunningMods.Any(m => m.PackageId == "test.failed")).ToList(); return false; }
     private static bool LogLine(MethodBase __originalMethod, string __0) { if (__originalMethod.Name == "Error") errors.Add(__0); Console.WriteLine(__0); return false; }
     private static bool Defer() => false;
     private static bool NoXml(ref List<LoadableXmlAsset> __result) { __result = new(); return false; }

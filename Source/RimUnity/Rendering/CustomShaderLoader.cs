@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using RimUnity.Assets;
 using RimUnity.Serialization;
@@ -9,6 +10,8 @@ namespace RimUnity.Rendering;
 //明文 GLSL 由宿主编译器生成设备代码，游戏自带缓存负责避免重复编译。
 internal static class CustomShaderLoader
 {
+    private static readonly HashSet<string> reportedApproximations = new(StringComparer.Ordinal);
+
     //缓存键标识导出变体，对外名称仍对应 Unity Shader，供辉光选择等业务使用。
     private static RimUnity.Shader Wrap(ShaderData data, Waylith.Rendering.Shader engine)
     {
@@ -36,6 +39,7 @@ internal static class CustomShaderLoader
         return shader;
     }
 
+    //读取导出程序并注册材质布局，兼容说明按原始 Shader 去重。
     internal static RimUnity.Shader Load(AssetCatalog catalog, AssetRecord record)
     {
         ShaderData data = catalog.Read<ShaderData>(record.file);
@@ -63,7 +67,8 @@ internal static class CustomShaderLoader
             depthBiasConstantFactor = data.depthBiasConstant, depthBiasSlopeFactor = data.depthBiasSlope
         };
         if (!string.IsNullOrEmpty(data.grabTexture))
-            program.sceneGrab = new SceneGrabDeclaration { name = data.grabTexture, queue = program.renderQueue };
+            //宿主以名称作为全局键，不同队列必须各自保留抓取时机。
+            program.sceneGrab = new SceneGrabDeclaration { name = $"RimUnity:{data.renderQueue}:{data.grabTexture}", queue = program.renderQueue };
         var blend = new BlendState(data.blend, Enum.Parse<BlendFactor>(data.srcColor), Enum.Parse<BlendFactor>(data.dstColor), Enum.Parse<BlendOp>(data.colorOp),
             Enum.Parse<BlendFactor>(data.srcAlpha), Enum.Parse<BlendFactor>(data.dstAlpha), Enum.Parse<BlendOp>(data.alphaOp));
         var pipeline = new PipelineState(blend, new DepthState(data.depthTest, data.depthWrite), program.cullMode, program.ResolveStencil(), data.colorWrite,
@@ -80,7 +85,7 @@ internal static class CustomShaderLoader
         foreach (string approximation in data.approximations)
             if (!LinearShaderVariants.TryGet(shader, out _) || !approximation.StartsWith("程序按 Linear 计算后编码到宿主 UNorm 场景", StringComparison.Ordinal))
             {
-                //旧导出资源也使用新措辞；未知提示保留原文。
+                //仍存在的渲染差异继续警告；已解决的差异应从导出资源中移除。
                 string message = approximation switch
                 {
                     "软粒子深度使用世界 Y=0 地表；不包含建筑、模型或其他粒子的遮挡。" =>
@@ -103,9 +108,10 @@ internal static class CustomShaderLoader
                         "ForwardBase 使用地图主光源，离屏预制体则使用自己的方向光；Unity 烘焙光照和额外的灯光 Pass 不会生效。",
                     "ForwardBase 接收 RimUnity 太阳或离屏方向光阴影，沿用深度偏移、强度和九点 PCF；月光与现有 Surface 路径一样不接收阴影，不使用 Unity 屏幕空间阴影纹理。" =>
                         "ForwardBase 使用 RimUnity 的太阳或离屏方向光阴影，保留深度偏移、阴影强度和九点 PCF 滤波；和 Surface 一样，月光部分不接收阴影，也不读取 Unity 的屏幕空间阴影纹理。",
-                    _ => approximation
+                    _ => null
                 };
-                Verse.Log.Warning("[RimUnity] " + data.sourceName + "：" + message);
+                if (!reportedApproximations.Add(data.sourceName + "\n" + approximation)) continue;
+                Verse.Log.Warning("[RimUnity] " + data.sourceName + "：" + (message ?? approximation));
             }
         return RestorePasses(catalog, data, Wrap(data, shader));
     }
