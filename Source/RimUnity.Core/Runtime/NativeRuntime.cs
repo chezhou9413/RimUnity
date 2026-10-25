@@ -94,6 +94,14 @@ public static partial class NativeRuntime
                     mono.Awakened = true; Invoke(mono, mono.Messages.Awake);
                     alive = mono && !mono.Destroying && mono.gameObject.activeInHierarchy;
                 }
+                bool hierarchyActive = alive;
+                bool hierarchyDeactivated = mono.HierarchyActive && !hierarchyActive;
+                mono.HierarchyActive = hierarchyActive;
+                if (hierarchyDeactivated && mono && !mono.Destroying && mono.Owner != null && !mono.Owner.Destroying)
+                {
+                    Invoke(mono, static value => value.OnHierarchyDeactivated());
+                    alive = mono && !mono.Destroying && mono.gameObject.activeInHierarchy;
+                }
                 bool enabled = alive && mono.enabled;
                 if (enabled != mono.EnableSent)
                 {

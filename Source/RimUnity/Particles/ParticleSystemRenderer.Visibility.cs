@@ -39,20 +39,13 @@ public sealed partial class ParticleSystemRenderer
     private void BillboardAxesPrepared(ParticleSystem s, in ParticleSystem.Particle p, in ParticleCameraState cameraState, Vector3 center, Vector3 size,
         Vector3 worldVelocity, out Vector3 x, out Vector3 y)
     {
-        Quaternion view = BillboardAlignment(s, in cameraState, center, worldVelocity);
-        Vector3 forward = cameraState.Forward;
-        Vector3 right = view * Vector3.right, up = view * Vector3.up;
-        if (renderMode == ParticleSystemRenderMode.HorizontalBillboard) { right = Vector3.right; up = Vector3.forward; }
-        if (renderMode == ParticleSystemRenderMode.VerticalBillboard) { up = Vector3.up; right = Vector3.Cross(up, forward).normalized; }
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Axes);
+#endif
+
+        // Stretch changes size even when emission/3D rotation overrides its axes.
         if (renderMode == ParticleSystemRenderMode.Stretch)
-        {
-            Vector3 velocity = worldVelocity;
-            up = velocity.sqrMagnitude > .000001f ? velocity.normalized : up;
-            right = Vector3.Cross(up, forward).normalized;
-            size.y = Mathf.Abs(size.y) * lengthScale + velocity.magnitude * velocityScale;
-        }
-        float angle = p.rotation * Mathf.Deg2Rad, co = Mathf.Cos(angle), si = Mathf.Sin(angle);
-        x = right * co - up * si; y = up * co + right * si;
+            size.y = Mathf.Abs(size.y) * lengthScale + worldVelocity.magnitude * velocityScale;
         if (p.alignedToDirection)
         {
             Quaternion rotation = s.ParticleRotation(p) * Quaternion.Euler(p.rotation3D);
@@ -60,8 +53,32 @@ public sealed partial class ParticleSystemRenderer
         }
         else if (s.main.startRotation3D && renderMode == ParticleSystemRenderMode.Billboard)
         {
+            Quaternion view = BillboardAlignment(s, in cameraState, center, worldVelocity);
             Quaternion rotation = view * Quaternion.Euler(p.rotation3D.x, p.rotation3D.y, -p.rotation3D.z);
             x = rotation * Vector3.right; y = rotation * Vector3.up;
+        }
+        else
+        {
+            Vector3 right, up;
+            if (renderMode == ParticleSystemRenderMode.HorizontalBillboard)
+            { right = Vector3.right; up = Vector3.forward; }
+            else if (renderMode == ParticleSystemRenderMode.VerticalBillboard)
+            { right = cameraState.VerticalRight; up = Vector3.up; }
+            else if (renderMode == ParticleSystemRenderMode.Stretch)
+            {
+                up = worldVelocity.sqrMagnitude > .000001f ? worldVelocity.normalized
+                    : BillboardAlignment(s, in cameraState, center, worldVelocity) * Vector3.up;
+                right = Vector3.Cross(up, cameraState.Forward).normalized;
+            }
+            else if (alignment == ParticleSystemRenderSpace.View || alignment == ParticleSystemRenderSpace.Facing && !cameraState.HasCamera)
+            { right = cameraState.ViewRight; up = cameraState.ViewUp; }
+            else
+            {
+                Quaternion view = BillboardAlignment(s, in cameraState, center, worldVelocity);
+                right = view * Vector3.right; up = view * Vector3.up;
+            }
+            float angle = p.rotation * Mathf.Deg2Rad, co = Mathf.Cos(angle), si = Mathf.Sin(angle);
+            x = right * co - up * si; y = up * co + right * si;
         }
         x *= size.x * .5f; y *= size.y * .5f;
         ClampBillboardSize(center, in cameraState, ref x, ref y);

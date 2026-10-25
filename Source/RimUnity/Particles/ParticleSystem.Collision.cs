@@ -53,6 +53,10 @@ public sealed partial class ParticleSystem
     //每个子步在粒子积分前准备几何，上一系统的停止回调仍能影响下一系统。
     private void PrepareCollisionCandidates()
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.PhysicsCandidates);
+#endif
+
         collisionCandidates.Clear();
         //This step may spawn its first particles after candidate preparation.
         if (!collision.enabled || collision.type == ParticleSystemCollisionType.Planes) return;
@@ -70,6 +74,10 @@ public sealed partial class ParticleSystem
     //碰撞在移动后、拖尾记录与死亡事件前处理；触发模块随后读取最终位置。
     private void ApplyParticlePhysics(ref Particle particle, Vector3 from, float dt, float birthOffset)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Physics);
+#endif
+
         if (collision.enabled && dt > 0) Collide(ref particle, from, dt, birthOffset);
         if (trigger.enabled) ProcessTriggers(ref particle, birthOffset + dt);
     }

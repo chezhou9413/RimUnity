@@ -21,7 +21,7 @@ public sealed partial class Mesh : Object
     private IndexFormat format = IndexFormat.UInt16;
     public override string name { get => native.DebugName; set => native.DebugName = value; }
     public Waylith.Graphics.Meshes.Mesh EngineMesh { get { Flush(); return native; } }
-    public int vertexCount => positions.Count;
+    public int vertexCount => particleVertices.Count != 0 ? particleVertices.Count : positions.Count;
     public bool isReadable => native.IsReadable;
     public IndexFormat indexFormat { get => format; set { format = value; dirty = true; } }
     public int subMeshCount
@@ -36,13 +36,13 @@ public sealed partial class Mesh : Object
             particleBoundsValid = false;
         }
     }
-    public Vector3[] vertices { get => positions.ToArray(); set => Copy(positions, value); }
-    public Vector3[] normals { get => normalData.ToArray(); set => Copy(normalData, value); }
-    public Vector4[] tangents { get => tangentData.ToArray(); set => Copy(tangentData, value); }
-    public Color32[] colors32 { get => colorData.ToArray(); set => Copy(colorData, value); }
+    public Vector3[] vertices { get => ReadChannel(positions); set => Copy(positions, value); }
+    public Vector3[] normals { get => ReadChannel(normalData); set => Copy(normalData, value); }
+    public Vector4[] tangents { get => ReadChannel(tangentData); set => Copy(tangentData, value); }
+    public Color32[] colors32 { get => ReadChannel(colorData); set => Copy(colorData, value); }
     public Color[] colors
     {
-        get { var result = new Color[colorData.Count]; for (int i = 0; i < result.Length; i++) result[i] = colorData[i]; return result; }
+        get { MaterializeParticleChannels(); var result = new Color[colorData.Count]; for (int i = 0; i < result.Length; i++) result[i] = colorData[i]; return result; }
         set => SetColors(value);
     }
     public Vector2[] uv { get => ReadUV(0); set => SetUVs(0, value); }
@@ -60,7 +60,7 @@ public sealed partial class Mesh : Object
     public int[] GetIndices(int submesh) { CheckSubmesh(submesh); return submeshes[submesh].ToArray(); }
     public int[] GetTriangles(int submesh) => GetIndices(submesh);
     public void GetTriangles(System.Collections.Generic.List<int> result, int submesh) { CheckSubmesh(submesh); result.Clear(); result.AddRange(submeshes[submesh]); }
-    public void GetVertices(List<Vector3> result) { result.Clear(); result.AddRange(positions); }
+    public void GetVertices(List<Vector3> result) { MaterializeParticleChannels(); result.Clear(); result.AddRange(positions); }
     public void SetVertices(List<Vector3> values) => Copy(positions, values);
     public void SetVertices(Vector3[] values) => vertices = values;
     public void SetNormals(List<Vector3> values) => Copy(normalData, values);
@@ -73,6 +73,7 @@ public sealed partial class Mesh : Object
     private void Copy<T>(List<T> target, IEnumerable<T> values)
     {
         ArgumentNullException.ThrowIfNull(values);
+        MaterializeParticleChannels();
         if (ReferenceEquals(target, positions)) particleBoundsValid = false;
         target.Clear(); target.AddRange(values); dirty = true;
     }
@@ -80,6 +81,7 @@ public sealed partial class Mesh : Object
     private void SetColors(IList<Color> values)
     {
         ArgumentNullException.ThrowIfNull(values);
+        MaterializeParticleChannels();
         colorData.Clear(); colorData.EnsureCapacity(values.Count);
         for (int i = 0; i < values.Count; i++) colorData.Add(values[i]);
         dirty = true;
@@ -87,6 +89,7 @@ public sealed partial class Mesh : Object
     //UV 快照只包含有效元素，缓存容量不暴露给调用者。
     private Vector2[] ReadUV(int channel)
     {
+        MaterializeParticleChannels();
         var values = texcoords[channel];
         if (values == null) return Array.Empty<Vector2>();
         var result = new Vector2[values.Count];
@@ -96,6 +99,7 @@ public sealed partial class Mesh : Object
     public void SetUVs(int channel, IList<Vector2> values)
     {
         CheckChannel(channel); ArgumentNullException.ThrowIfNull(values);
+        MaterializeParticleChannels();
         var output = texcoords[channel] ??= new(); output.Clear(); output.EnsureCapacity(values.Count);
         for (int i = 0; i < values.Count; i++) output.Add(new(values[i].x, values[i].y));
         dirty = true;
@@ -104,8 +108,8 @@ public sealed partial class Mesh : Object
     {
         CheckChannel(channel); Copy(texcoords[channel] ??= new(), values);
     }
-    public void GetUVs(int channel, List<Vector4> values) { CheckChannel(channel); values.Clear(); if (texcoords[channel] != null) values.AddRange(texcoords[channel]); }
-    public void GetUVs(int channel, List<Vector2> values) { CheckChannel(channel); values.Clear(); if (texcoords[channel] != null) foreach (Vector4 v in texcoords[channel]) values.Add(new(v.x, v.y)); }
+    public void GetUVs(int channel, List<Vector4> values) { CheckChannel(channel); MaterializeParticleChannels(); values.Clear(); if (texcoords[channel] != null) values.AddRange(texcoords[channel]); }
+    public void GetUVs(int channel, List<Vector2> values) { CheckChannel(channel); MaterializeParticleChannels(); values.Clear(); if (texcoords[channel] != null) foreach (Vector4 v in texcoords[channel]) values.Add(new(v.x, v.y)); }
     public void SetTriangles(IList<int> indices, int submesh, bool calculateBounds = true)
     {
         if (submesh < 0) throw new ArgumentOutOfRangeException(nameof(submesh));
@@ -117,6 +121,7 @@ public sealed partial class Mesh : Object
     }
     public void Clear(bool keepVertexLayout = true)
     {
+        particleVertices.Clear();
         positions.Clear(); normalData.Clear(); tangentData.Clear(); colorData.Clear();
         foreach (var channel in texcoords) channel?.Clear();
         subMeshCount = 0; bindData = Array.Empty<Matrix4x4>(); skin = Array.Empty<BoneWeight>(); meshBounds = default; dirty = true;
@@ -124,6 +129,7 @@ public sealed partial class Mesh : Object
     }
     public void RecalculateBounds()
     {
+        MaterializeParticleChannels();
         particleBoundsValid = false;
         if (positions.Count == 0) { meshBounds = default; dirty = true; return; }
         Vector3 min = positions[0], max = min;
@@ -132,6 +138,7 @@ public sealed partial class Mesh : Object
     }
     public void RecalculateNormals()
     {
+        MaterializeParticleChannels();
         var result = new Vector3[vertexCount];
         for (int submesh = 0; submesh < activeSubmeshes; submesh++)
         {

@@ -210,6 +210,8 @@ RimUnity 的粒子／Animator 有自己的游戏时间适配。粒子的 `main.u
 
 Animator 的状态名和参数名必须在导出的 Controller 中存在；`CrossFade` 的过渡时长使用归一化语义，需要秒数时使用 `CrossFadeInFixedTime`。不支持 Humanoid、IK 等完整 Animator 功能。
 
+Animator 单独设置 `enabled = false` 会暂停并保留状态；对象或祖先 `SetActive(false)` 默认重置 Controller 的参数、触发器、过渡和播放进度，即使 Animator 组件当时已经禁用。需要跨对象失活保留状态时，设置 `keepAnimatorStateOnDisable = true`；兼容别名 `keepAnimatorControllerStateOnDisable` 指向同一配置。Unity 导出器会保存该选项。重新启用时立即采样当前状态，不推进时间或派发动画事件；保留原始轨道绑定基准，避免对象反复复用导致叠加动画漂移。
+
 粒子 `Play()` 默认包含子级及关联子发射器，不要无条件遍历所有子粒子逐个 Play。`SetActive(false)` 是关闭对象，`Pause()` 是粒子暂停，两者生命周期不同。完整能力和限制见 [粒子说明](ParticleQuickStart.md) 与 [支持范围](Status.md)。
 
 ## 8. 接入检查

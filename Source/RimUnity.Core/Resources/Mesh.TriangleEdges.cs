@@ -12,6 +12,7 @@ public sealed partial class Mesh
     internal Mesh TriangleEdges()
     {
         Flush();
+        MaterializeParticleChannels();
         if (edgeMesh != null && expandedVersion == edgeVersion) return edgeMesh;
         edgeMesh ??= new Mesh { name = name + " (triangle edges)", indexFormat = IndexFormat.UInt32 };
         edgeMesh.Clear();

@@ -10,7 +10,7 @@ Changing a texture through `Material.SetTexture` also updates its color encoding
 
 When calling `SetVector` on a color property, continue to provide values in the exported color convention. This call does not bypass color-space conversion.
 
-Map materials exported from Linear projects automatically use linear HDR transparent blending. Brightness above 1 is retained in floating-point buffers for subsequent transparent layers and Bloom; the display range is limited only at final screen output. No extra setting is required, and existing resources with color-space metadata do not need to be re-exported. Disabling Bloom does not disable linear blending.
+Rendering → Enable map HDR rendering is off by default, including when loading settings without this key. While off, maps use native rendering and selected layers can still produce Bloom through a separate floating-point light buffer. When enabled, map materials exported from Linear projects use linear HDR blending, preserving brightness above 1 until final composition. Changes apply at the next map-frame capture; no restart or resource re-export is needed. Map HDR and Bloom are independent, and explicitly enabled offscreen previews are unaffected by this map-only setting.
 
 Map rendering retains material queues, depth tests and stencil tests. When draws are interleaved with native Gamma materials, the runtime converts color spaces between consecutive drawing segments. This adds floating-point buffer memory and full-screen drawing overhead, depending on resolution and draw ordering.
 

@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><OutputPath>../../1.7/Assemblies/</OutputPath><AssemblyName>RimUnity</AssemblyName><AllowUnsafeBlocks>true</AllowUnsafeBlocks></PropertyGroup>
+  <PropertyGroup><OutputPath>../../1.7/Assemblies/</OutputPath><OutputPath Condition="'$(RimUnityParticleAnalysis)' == 'true'">$(ParticleAnalysisRoot)/Assemblies/</OutputPath><AssemblyName>RimUnity</AssemblyName><AllowUnsafeBlocks>true</AllowUnsafeBlocks></PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../RimUnity.Core/RimUnity.Core.csproj" />
     <Reference Include="Assembly-CSharp" HintPath="$(RimWorldDir)/Assembly-CSharp.dll" />

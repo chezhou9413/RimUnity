@@ -16,7 +16,7 @@ internal static partial class Program
     {
         runtime = Path.GetFullPath(args[0]); game = Path.GetFullPath(args[1]); harmony = Path.GetFullPath(args[2]);
         AssemblyLoadContext.Default.Resolving += (_, name) => Resolve(name);
-        try { if (args[3] == "--attribute-evaluation") CheckAttributeEvaluation(Path.GetFullPath(args[4])); else if (args[3] == "--stream-pack") CheckStreamPacking(Path.GetFullPath(args[4])); else if (args[3] == "--mesh-directions") CheckMeshDirections(Path.GetFullPath(args[4])); else if (args[3] == "--geometry-batch") CheckGeometryBatch(Path.GetFullPath(args[4])); else if (args[3] == "--sort-reuse") CheckSortReuse(Path.GetFullPath(args[4])); else if (args[3] == "--noise-reuse") NoiseReuseChecks.Run(Path.GetFullPath(args[4])); else if (args[3] == "--trail-reuse") CheckTrailReuse(Path.GetFullPath(args[4])); else if (args[3] == "--mixed-stress") MixedStressChecks.Run(); else if (args[3] == "--particle-physics-timeline") ParticlePhysicsTimelineChecks.Run(); else if (args[3] == "--particle-turnover") ParticleTurnoverChecks.Run(); else if (args[3] == "--mesh-alignment") CheckMeshAlignment(); else Run(Path.GetFullPath(args[3]), args.Length > 4 && !string.IsNullOrWhiteSpace(args[4]) ? Path.GetFullPath(args[4]) : null); return 0; }
+        try { if (args[3] == "--particle-detail") CheckParticleDetail(); else if (args[3] == "--billboard-math") CheckBillboardMath(Path.GetFullPath(args[4])); else if (args[3] == "--billboard-phases") MeasureBillboardPhases(); else if (args[3] == "--packed-billboards") CheckPackedBillboards(Path.GetFullPath(args[4])); else if (args[3] == "--attribute-evaluation") CheckAttributeEvaluation(Path.GetFullPath(args[4])); else if (args[3] == "--stream-pack") CheckStreamPacking(Path.GetFullPath(args[4])); else if (args[3] == "--mesh-directions") CheckMeshDirections(Path.GetFullPath(args[4])); else if (args[3] == "--geometry-batch") CheckGeometryBatch(Path.GetFullPath(args[4])); else if (args[3] == "--sort-reuse") CheckSortReuse(Path.GetFullPath(args[4])); else if (args[3] == "--noise-reuse") NoiseReuseChecks.Run(Path.GetFullPath(args[4])); else if (args[3] == "--trail-reuse") CheckTrailReuse(Path.GetFullPath(args[4])); else if (args[3] == "--mixed-stress") MixedStressChecks.Run(); else if (args[3] == "--particle-physics-timeline") ParticlePhysicsTimelineChecks.Run(); else if (args[3] == "--particle-turnover") ParticleTurnoverChecks.Run(); else if (args[3] == "--mesh-alignment") CheckMeshAlignment(); else Run(Path.GetFullPath(args[3]), args.Length > 4 && !string.IsNullOrWhiteSpace(args[4]) ? Path.GetFullPath(args[4]) : null); return 0; }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
     }
     private static void CheckTrailReuse(string baseline)
@@ -498,7 +498,7 @@ internal static partial class Program
                 new Vector3(i, 2, 3), new Vector2(.2f * i, .3f), new Color32(10, 20, 30, 40), new Vector4(i, 2, 3, 4), new Vector4(5, 6, 7, i) });
             return Channels();
         }
-        internal Action BuildGeometryBatch(int particleCount = 4000, int chunks = 300)
+        internal Action BuildGeometryBatch(int particleCount = 4000, int chunks = 300, bool packed = false, Mesh page = null)
         {
             var i = Expression.Variable(typeof(int), "i"); var j = Expression.Variable(typeof(int), "j");
             var cam = Expression.Variable(cameraState, "camera"); var space = Expression.Variable(drawSpace, "space");
@@ -508,17 +508,36 @@ internal static partial class Program
             for (int k = 0; k < data.Length; k++) data.SetValue(Particle(k, k % 3 == 0), k);
             var outerDone = Expression.Label(); var innerDone = Expression.Label();
             var self = Expression.Constant(Renderer, renderer); var sys = Expression.Constant(System, ps);
+            Expression selectPacked = packed
+                ? Expression.Assign(Expression.Field(self, renderer.GetField("packedBillboards", Flags)), Expression.Constant(true)) : Expression.Empty();
+            Expression appendPage = Expression.Empty();
+            if (page != null)
+            {
+                var core = typeof(Mesh);
+                appendPage = packed
+                    ? Expression.Call(Expression.Constant(page), core.GetMethods(Flags).Single(m => m.Name == "AppendParticleGeometry" && m.GetParameters().Length == 10),
+                        new[] { "vertices", "normals", "tangents", "colors", "packedUV", "custom1", "custom2", "indices" }
+                            .Select(n => (Expression)Expression.Field(self, n)).Append(Expression.Constant(0)).Append(Expression.Field(self, "billboardVertices")))
+                    : Expression.Call(Expression.Constant(page), core.GetMethods().Single(m => m.Name == "AppendParticleGeometry" && m.GetParameters().Length == 9),
+                        new[] { "vertices", "normals", "tangents", "colors", "packedUV", "custom1", "custom2", "indices" }
+                            .Select(n => (Expression)Expression.Field(self, n)).Append(Expression.Constant(0)));
+            }
             return Expression.Lambda<Action>(Expression.Block(new[] { i, j, cam, space },
+                page != null ? Expression.Call(Expression.Constant(page), typeof(Mesh).GetMethod("Clear"), Expression.Constant(true)) : Expression.Empty(),
                 Expression.Assign(i, Expression.Constant(0)),
                 Expression.Loop(Expression.IfThenElse(Expression.LessThan(i, Expression.Constant(chunks)), Expression.Block(
                     Expression.Call(self, renderer.GetMethod("ClearMesh", Flags)),
+                    selectPacked,
                     Expression.Assign(cam, Expression.New(cameraState.GetConstructors(Flags).Single(), Expression.Constant(Camera, Camera.GetType()), Expression.Constant(null, cameraState.GetConstructors(Flags).Single().GetParameters()[1].ParameterType), Expression.Constant(true))),
                     Expression.Assign(space, Expression.New(drawSpace.GetConstructors(Flags).Single(), sys)),
                     Expression.Assign(j, Expression.Constant(0)),
                     Expression.Loop(Expression.IfThenElse(Expression.LessThan(j, Expression.Condition(Expression.LessThan(i, Expression.Constant(extra)), Expression.Constant(perChunk + 1), Expression.Constant(perChunk))), Expression.Block(
                         Expression.Call(self, renderer.GetMethod("AppendParticle", Flags), sys, Expression.ArrayIndex(Expression.Constant(data, particle.MakeArrayType()), j), cam, space),
                         Expression.PostIncrementAssign(j), Expression.Empty()), Expression.Break(innerDone)), innerDone),
-                    Expression.PostIncrementAssign(i), Expression.Empty()), Expression.Break(outerDone)), outerDone))).Compile();
+                    appendPage,
+                    Expression.PostIncrementAssign(i), Expression.Empty()), Expression.Break(outerDone)), outerDone),
+                page != null ? Expression.Property(Expression.Constant(page), "EngineMesh") : Expression.Empty(),
+                Expression.Empty())).Compile();
         }
         internal object Particle(int id, bool withEvent)
         {
@@ -538,9 +557,10 @@ internal static partial class Program
             }
             return p;
         }
-        internal Dictionary<string, object[]> Geometry(int camera, int scenario)
+        internal Dictionary<string, object[]> Geometry(int camera, int scenario, bool packed = false)
         {
             renderer.GetMethod("ClearMesh", Flags).Invoke(Renderer, null);
+            if (packed) Set(Renderer, "packedBillboards", true);
             object cameraData = Activator.CreateInstance(cameraState, Flags, null, new[] { camera == 0 ? null : Camera, null, (object)(scenario % 2 == 0) }, null);
             object space = drawSpace == null ? null : Activator.CreateInstance(drawSpace, Flags, null, new[] { System }, null);
             var append = renderer.GetMethod("AppendParticle", Flags);

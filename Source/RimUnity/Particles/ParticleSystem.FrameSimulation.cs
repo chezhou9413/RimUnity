@@ -17,6 +17,10 @@ public sealed partial class ParticleSystem
     //原生生命周期的第一个 Update 推进全部桥接粒子，其余 Update 不重复推进。
     private static void SimulateFrame()
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Simulation);
+#endif
+
         if (simulatedFrame == Time.frameCount) return;
         using var cpu = Diagnostics.LabCpuMetrics.Measure(Diagnostics.LabCpuStage.ParticleSimulation);
         simulatedFrame = Time.frameCount;
@@ -26,6 +30,10 @@ public sealed partial class ParticleSystem
         {
             using (Diagnostics.LabCpuMetrics.Measure(Diagnostics.LabCpuStage.SimulationSchedule))
             {
+
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var detailSchedule = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Schedule);
+#endif
                 foreach (ParticleSystem system in frameSystems) Visit(system, Active, orderedSystems, visitState);
                 orderedSystems.Reverse();
                 //Start 只登记预热，统一完成整组预热后再读取本帧时间和位置。
@@ -70,6 +78,10 @@ public sealed partial class ParticleSystem
                 foreach (ParticleSystem system in systems)
                 {
                     if (activeOnly && !system.isActiveAndEnabled) continue;
+
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var detailSystem = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.SystemStep, system.GetInstanceID());
+#endif
                     using var systemCpu = Diagnostics.LabCpuMetrics.MeasureSystem(Diagnostics.LabCpuStage.SimulationSystemStep, system.GetInstanceID());
                     if (system.collision.enabled || system.trigger.enabled)
                         ParticlePhysicsWorld.PrepareSimulation(system.collision.enabled && system.collision.type != ParticleSystemCollisionType.Planes);

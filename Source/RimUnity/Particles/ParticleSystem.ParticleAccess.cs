@@ -53,7 +53,15 @@ public sealed partial class ParticleSystem
     //所有移除路径同步释放附属数据，保留允许死亡后继续淡出的轨迹。
     private void ReleaseParticle(ulong identity)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.DeathRelease);
+#endif
+
         ReleasePhysicsParticle(identity);
+
+#if RIMUNITY_PARTICLE_ANALYSIS
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.Deaths, 1);
+#endif
         FinishTrail(identity); customOverrides[0].Remove(identity); customOverrides[1].Remove(identity);
     }
 }

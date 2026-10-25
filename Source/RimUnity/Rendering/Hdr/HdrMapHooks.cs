@@ -43,7 +43,10 @@ internal static class HdrMapHooks
         {
             if (__result is not MeshDrawFrame frame) return;
             HdrDrawFrame snapshot = null;
-            if (HdrDrawFrame.Needed(frame)) { snapshot = new HdrDrawFrame(frame); Frames.Add(frame, snapshot); }
+            // Capture on the main thread: toggles affect new frames only. Existing
+            // snapshots retire normally; independent Bloom capture is not gated here.
+            if (RimUnityMod.Bloom?.mapHdrEnabled == true && HdrDrawFrame.Needed(frame))
+            { snapshot = new HdrDrawFrame(frame); Frames.Add(frame, snapshot); }
             if (Diagnostics.RenderDebugReport.Collecting) Diagnostics.RenderDebugReport.Frame(frame, snapshot != null);
             Diagnostics.ParticleDebugWindow.CaptureFinalFrame(frame, snapshot?.Frame);
         }

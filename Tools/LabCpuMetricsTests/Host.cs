@@ -66,12 +66,12 @@ namespace RimUnity
         internal void MarkDynamic() { }
         internal void Clear() { vertexCount = 0; Indices.Clear(); Submeshes.Clear(); }
         internal void AppendParticleGeometry(List<Vector3> vertices, List<Vector3> normals, List<Vector4> tangents,
-            List<Color32> colors, List<Vector4> uv0, List<Vector4> uv1, List<Vector4> uv2, List<int> indices, int submesh)
+            List<Color32> colors, List<Vector4> uv0, List<Vector4> uv1, List<Vector4> uv2, List<int> indices, int submesh, List<ParticleVertex> packed = null)
         {
             if (FailAppend) throw new InvalidOperationException("fixture append failure");
             while (Submeshes.Count <= submesh) Submeshes.Add(new());
             foreach (int index in indices) { Indices.Add(index + vertexCount); Submeshes[submesh].Add(index + vertexCount); }
-            vertexCount += vertices.Count;
+            vertexCount += packed?.Count ?? vertices.Count;
             VertexCapacity = Math.Max(VertexCapacity, vertexCount);
         }
         internal (long Vertices, long Indices, long ManagedBytes, long NativeCpuBytes) ParticleBufferUsage()

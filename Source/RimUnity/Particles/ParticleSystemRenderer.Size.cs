@@ -9,6 +9,10 @@ public sealed partial class ParticleSystemRenderer
     //沿两个面片轴计算屏幕覆盖范围，统一缩放以保留长宽比和旋转。
     private void ClampBillboardSize(Vector3 center, in ParticleCameraState cameraState, ref Vector3 x, ref Vector3 y)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Projection);
+#endif
+
         if (uiEntry == null && !cameraState.HasCamera) return;
         Vector2 horizontal = cameraState.ViewportPoint(center + x) - cameraState.ViewportPoint(center - x);
         Vector2 vertical = cameraState.ViewportPoint(center + y) - cameraState.ViewportPoint(center - y);

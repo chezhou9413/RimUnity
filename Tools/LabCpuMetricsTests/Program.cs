@@ -12,7 +12,7 @@ internal static class Program
     { if (!valid) throw new Exception(message); checks++; }
     private static void Main()
     {
-        Families(); SnapshotCoverage(); Nesting(); Lifecycle(); Windows(); Batch(); Pages(); PoolLifecycle(); Population(); ObserverCost(); Reports();
+        Families(); SnapshotCoverage(); Nesting(); Lifecycle(); Windows(); Batch(); PackedInputs(); Pages(); PoolLifecycle(); Population(); ObserverCost(); Reports();
         Console.WriteLine($"PASS {checks} CPU capture/batch checks (production collector and batch code; fake mesh/host, no GPU).");
     }
     private static void Families()
@@ -164,6 +164,26 @@ internal static class Program
         Check(cpu.InvalidScopes == 0, "batch exception leaves balanced collector stack");
         Check(LabCpuReport.Reasons(cpu)[(int)LabBatchReason.Accepted].Count > 0, "reason report populated");
         ParticleDrawBatch.Clear();
+    }
+    private static void PackedInputs()
+    {
+        ParticleDrawBatch.Clear(); Graphics.Draws.Clear(); Time.frameCount++;
+        var material = new Material();
+        var packed = Enumerable.Repeat(default(ParticleVertex), 6).ToList();
+        ParticleDrawBatch.Begin();
+        Check(ParticleDrawBatch.TryAppend(material, 0, null, new List<Vector3>(), n, t, c, t, t, t, indices, packed),
+            "packed input accepted with empty legacy channels");
+        Check(Append(material), "legacy input accepted after packed input");
+        ParticleDrawBatch.Flush(); ParticleDrawBatch.End();
+        Check(Graphics.Draws.Count == 1 && Graphics.Draws[0].Mesh.vertexCount == 9,
+            "mixed fixture counts packed vertices instead of empty legacy channels");
+        Check(Graphics.Draws[0].Indices.SequenceEqual(new[] { 0, 1, 2, 6, 7, 8 }),
+            "legacy indices use the preceding packed vertex offset");
+        ParticleDrawBatch.Begin();
+        Check(!ParticleDrawBatch.TryAppend(material, 0, null, new List<Vector3>(), n, t, c, t, t, t, indices,
+            Enumerable.Repeat(default(ParticleVertex), ParticleDrawBatch.VertexLimit + 1).ToList()),
+            "packed vertex limit enforced with empty legacy channels");
+        ParticleDrawBatch.End(); ParticleDrawBatch.Clear();
     }
     private static void Pages()
     {

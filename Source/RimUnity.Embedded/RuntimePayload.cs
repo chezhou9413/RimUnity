@@ -38,7 +38,7 @@ internal sealed class RuntimePayload
     //哈希目录只容纳一份完整资源；缓存损坏必须明确报错。
     internal string Extract(string cache)
     {
-        string target = System.IO.Path.Combine(cache, Hash);
+        string target = System.IO.Path.GetFullPath(System.IO.Path.Combine(cache, Hash));
         using var zip = new ZipArchive(new MemoryStream(Bytes));
         if (Directory.Exists(target))
         {

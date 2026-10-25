@@ -28,6 +28,10 @@ public sealed partial class ParticleSystem
     //按模块引用和 Layer 掩码累计力场与环境风力。
     private Vector3 ExternalAcceleration(Particle particle)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Forces);
+#endif
+
         if (!externalForces.enabled) return Vector3.zero;
         Vector3 position = WorldPosition(particle), velocity = WorldVelocity(particle), result = Vector3.zero;
         foreach (var field in ParticleSystemForceField.Active)

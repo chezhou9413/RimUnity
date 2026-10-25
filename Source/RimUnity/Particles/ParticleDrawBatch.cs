@@ -67,15 +67,16 @@ internal static class ParticleDrawBatch
     //相邻同材质仍合并成一段；材质切换只结束子网格，不立即上传整页。
     internal static bool TryAppend(Material source, int drawLayer, MaterialPropertyBlock properties,
         List<Vector3> vertices, List<Vector3> normals, List<Vector4> tangents, List<Color32> colors,
-        List<Vector4> uv0, List<Vector4> uv1, List<Vector4> uv2, List<int> indices)
+        List<Vector4> uv0, List<Vector4> uv1, List<Vector4> uv2, List<int> indices, List<ParticleVertex> packed = null)
     {
         using var cpu = LabCpuMetrics.Measure(LabCpuStage.BatchAttempt);
+        int vertexCount = packed?.Count ?? vertices.Count;
         if (!active) { LabCpuMetrics.Batch(LabBatchReason.Inactive); return false; }
         LabBatchReason? reject = null;
         if (Diagnostics.ParticleDebugWindow.Capturing) reject = LabBatchReason.DebugCapture;
         else if (properties is { PropertyCount: > 0 }) reject = LabBatchReason.PropertyBlock;
         else if (properties is { HasStorageBindings: true }) reject = LabBatchReason.StorageBindings;
-        else if (vertices.Count > VertexLimit) reject = LabBatchReason.InputVertexLimit;
+        else if (vertexCount > VertexLimit) reject = LabBatchReason.InputVertexLimit;
         else if (indices.Count > IndexLimit) reject = LabBatchReason.InputIndexLimit;
         else reject = ParticleBatchShaders.Check(source) switch
         {
@@ -91,12 +92,12 @@ internal static class ParticleDrawBatch
             LabBatchReason? boundary = source != material ? LabBatchReason.MaterialChanged
                 : drawLayer != layer ? LabBatchReason.LayerChanged
                 : source.engineMaterial.Version != materialVersion ? LabBatchReason.MaterialVersionChanged
-                : pending.Mesh.vertexCount + vertices.Count > VertexLimit ? LabBatchReason.BatchVertexLimit
+                : pending.Mesh.vertexCount + vertexCount > VertexLimit ? LabBatchReason.BatchVertexLimit
                 : indexCount + indices.Count > IndexLimit ? LabBatchReason.BatchIndexLimit : null;
             if (boundary.HasValue)
             {
                 LabCpuMetrics.Batch(boundary.Value);
-                bool full = pending.Mesh.vertexCount + vertices.Count > VertexLimit || indexCount + indices.Count > IndexLimit
+                bool full = pending.Mesh.vertexCount + vertexCount > VertexLimit || indexCount + indices.Count > IndexLimit
                     || segments.Count + 1 >= SegmentLimit;
                 if (full) Flush(); else CloseSegment();
             }
@@ -109,8 +110,8 @@ internal static class ParticleDrawBatch
         }
         if (material == null) { material = source; layer = drawLayer; materialVersion = source.engineMaterial.Version; }
         using (LabCpuMetrics.Measure(LabCpuStage.BatchGeometry))
-            pending.Mesh.AppendParticleGeometry(vertices, normals, tangents, colors, uv0, uv1, uv2, indices, segments.Count);
-        LabCpuMetrics.Work(LabCpuStage.BatchGeometry, vertices.Count, indices.Count);
+            pending.Mesh.AppendParticleGeometry(vertices, normals, tangents, colors, uv0, uv1, uv2, indices, segments.Count, packed);
+        LabCpuMetrics.Work(LabCpuStage.BatchGeometry, vertexCount, indices.Count);
         LabCpuMetrics.Batch(LabBatchReason.Accepted);
         indexCount += indices.Count;
         if (Sampling) Inputs++;

@@ -6,11 +6,23 @@ public sealed partial class ParticleSystem
 {
     private void Integrate(ref Particle p, float dt)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Integrate);
+#endif
+
+
+#if RIMUNITY_PARTICLE_ANALYSIS
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.Integrations, 1);
+#endif
         float age = Age(p), r = Random(p.randomSeed, 20);
         Vector3 force = new(0, -9.81f * main.gravityModifier.Evaluate(age, r), 0);
         force = ConvertSpace(force, ParticleSystemSimulationSpace.World, p.eventSpace);
         if (forceOverLifetime.enabled)
         {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var detailforceOverLifetime = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Forces);
+#endif
+
             float f = forceOverLifetime.randomized ? Random01() : r;
             force += ConvertSpace(new Vector3(forceOverLifetime.x.Evaluate(age, f), forceOverLifetime.y.Evaluate(age, f), forceOverLifetime.z.Evaluate(age, f)), forceOverLifetime.space, p.eventSpace);
         }
@@ -19,6 +31,10 @@ public sealed partial class ParticleSystem
         Vector3 v = p.velocity + InheritedVelocity(p);
         if (velocityOverLifetime.enabled)
         {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var detailvelocityOverLifetime = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Velocity);
+#endif
+
             var m = velocityOverLifetime;
             float speed = m.speedModifier.Evaluate(age, r);
             Vector3 linear = new(m.x.Evaluate(age, r), m.y.Evaluate(age, r), m.z.Evaluate(age, r));
@@ -34,6 +50,10 @@ public sealed partial class ParticleSystem
         }
         if (limitVelocityOverLifetime.enabled)
         {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var detaillimitVelocityOverLifetime = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.LimitDrag);
+#endif
+
             var m = limitVelocityOverLifetime;
             float drag = m.drag.Evaluate(age, r);
             if (m.multiplyDragByParticleSize) drag *= SizeAt(p).magnitude;
@@ -53,6 +73,10 @@ public sealed partial class ParticleSystem
         }
         if (noise.enabled)
         {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var detailnoise = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.NoiseModule);
+#endif
+
             Vector3 n = NoiseVector(p, age);
             v += n * noise.positionAmount.Evaluate(age, r);
             p.rotation3D += n * (noise.rotationAmount.Evaluate(age, r) * dt * Mathf.Rad2Deg);
@@ -62,11 +86,19 @@ public sealed partial class ParticleSystem
         p.rotation3D += p.angularVelocity3D * dt;
         if (rotationOverLifetime.enabled)
         {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var detailrotationOverLifetime = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Rotation);
+#endif
+
             var m = rotationOverLifetime;
             p.rotation3D += new Vector3(m.separateAxes ? m.x.Evaluate(age, r) : 0, m.separateAxes ? m.y.Evaluate(age, r) : 0, m.z.Evaluate(age, r)) * (dt * Mathf.Rad2Deg);
         }
         if (rotationBySpeed.enabled)
         {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var detailrotationBySpeed = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Rotation);
+#endif
+
             var m = rotationBySpeed;
             float speed = SpeedPhase(p, m.range);
             p.rotation3D += new Vector3(m.separateAxes ? m.x.Evaluate(speed, r) : 0, m.separateAxes ? m.y.Evaluate(speed, r) : 0, m.z.Evaluate(speed, r)) * (dt * Mathf.Rad2Deg);
@@ -108,11 +140,19 @@ public sealed partial class ParticleSystem
     //坐标轴模块显式转换空间，避免世界力随发射器旋转。
     private Vector3 ConvertSpace(Vector3 v, ParticleSystemSimulationSpace space, EventSpace eventSpace)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.SpaceConversions);
+#endif
+
         Vector3 world = space == ParticleSystemSimulationSpace.Local ? transform.TransformDirection(v) : v;
         return FromWorldVector(world, eventSpace);
     }
     private Vector3 ToModuleSpace(Vector3 v, ParticleSystemSimulationSpace space, EventSpace eventSpace)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.SpaceConversions);
+#endif
+
         Vector3 world = WorldVector(v, eventSpace);
         return space == ParticleSystemSimulationSpace.Local ? transform.InverseTransformDirection(world) : world;
     }
@@ -120,11 +160,23 @@ public sealed partial class ParticleSystem
     //同一播放周期共享三维旋涡场，粒子种子只影响强度和重映射曲线。
     private Vector3 NoiseVector(Particle p, float age)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.MeasureNoise();
+#endif
+
+
+#if RIMUNITY_PARTICLE_ANALYSIS
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.NoiseCalls, 1);
+#endif
         float frequency = Mathf.Max(.0001f, noise.frequency), amplitude = 1, total = 0;
         Vector3 point = p.position * frequency + Vector3.one * (elapsed * noise.scrollSpeed.Evaluate(age));
         Vector3 sum = Vector3.zero;
         for (int i = 0; i < noise.octaveCount; i++)
         {
+
+#if RIMUNITY_PARTICLE_ANALYSIS
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.NoiseOctaves, 1);
+#endif
             sum += ParticleNoise.Curl(point, randomSeed, noise.quality) * amplitude;
             total += amplitude; amplitude *= noise.octaveMultiplier; point *= noise.octaveScale;
         }

@@ -13,6 +13,8 @@ public sealed partial class Animator : MonoBehaviour
     public float speed { get; set; } = 1;
     public AnimatorUpdateMode updateMode { get; set; }
     public bool fireEvents { get; set; } = true;
+    public bool keepAnimatorStateOnDisable { get; set; }
+    public bool keepAnimatorControllerStateOnDisable { get => keepAnimatorStateOnDisable; set => keepAnimatorStateOnDisable = value; }
     //导出控制器的 Generic Avatar 路径由 Unity 编辑器解析为预制体内引用。
     public AnimatorBinding[] avatarBindings = Array.Empty<AnimatorBinding>();
     public int layerCount => playback.Length;
@@ -26,7 +28,21 @@ public sealed partial class Animator : MonoBehaviour
     }
 
     //绑定放在字段与引用恢复之后，避免首次赋值时读取半成品层级。
-    private void OnEnable() { clock.Reset(); BindTracks(); }
+    private void OnEnable()
+    {
+        clock.Reset(); BindTracks();
+        //Apply the entry pose before this instance can be drawn again. Do not
+        //advance transitions or dispatch events just because it was re-enabled.
+        if (controller != null) Sample();
+    }
+    internal override void OnHierarchyDeactivated()
+    {
+        //Keep bindings and their authored initial values: rebuilding them from
+        //the last animated pose would contaminate additive/blended layers.
+        //Disabling only this component pauses it; pooling its hierarchy resets
+        //controller state even when the component was already disabled.
+        if (!keepAnimatorStateOnDisable) ResetControllerState();
+    }
     private void Update() => Update(clock.Step(updateMode == AnimatorUpdateMode.UnscaledTime));
     public void Update(float deltaTime)
     {
@@ -40,7 +56,12 @@ public sealed partial class Animator : MonoBehaviour
     //控制器或对象层级改变后，清空有效与缺失目标的绑定结果。
     public void Rebind()
     {
-        values.Clear(); trackBindings.Clear(); poses.Clear(); rotationBindings.Clear(); clipRotations.Clear(); boundClips.Clear(); tracksBound = false;
+        trackBindings.Clear(); poses.Clear(); rotationBindings.Clear(); clipRotations.Clear(); boundClips.Clear(); tracksBound = false;
+        ResetControllerState();
+    }
+    private void ResetControllerState()
+    {
+        values.Clear();
         if (controller == null) { playback = Array.Empty<LayerPlayback>(); return; }
         foreach (var p in controller.parameters) values.Add(p.name, p.type == AnimatorControllerParameterType.Float ? p.defaultFloat : p.type == AnimatorControllerParameterType.Int ? p.defaultInt : p.defaultBool ? 1 : 0);
         playback = new LayerPlayback[controller.layers.Length];

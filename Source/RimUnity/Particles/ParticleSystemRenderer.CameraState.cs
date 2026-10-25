@@ -6,7 +6,7 @@ public sealed partial class ParticleSystemRenderer
     private readonly struct ParticleCameraState
     {
         internal readonly bool HasCamera;
-        internal readonly Vector3 Position, Forward, Up;
+        internal readonly Vector3 Position, Forward, Up, ViewRight, ViewUp, VerticalRight;
         internal readonly Quaternion ViewAlignment;
         private readonly bool overlay;
         private readonly UI.Runtime.UguiProjection guiProjection;
@@ -24,6 +24,9 @@ public sealed partial class ParticleSystemRenderer
             Forward = rotation * Vector3.forward;
             Up = allowRoll ? rotation * Vector3.up : Vector3.up;
             ViewAlignment = Align(Forward);
+            ViewRight = ViewAlignment * Vector3.right;
+            ViewUp = ViewAlignment * Vector3.up;
+            VerticalRight = Vector3.Cross(Vector3.up, Forward).normalized;
             overlay = overlayCanvas != null;
             guiProjection = overlay ? new UI.Runtime.UguiProjection(overlayCanvas) : default;
             viewProjection = HasCamera ? camera.projectionMatrix * camera.worldToCameraMatrix : Matrix4x4.identity;
@@ -48,10 +51,15 @@ public sealed partial class ParticleSystemRenderer
             if (overlay) screen = guiProjection.ToGui(point);
             else
             {
-                Vector4 clip = viewProjection * new Vector4(point.x, point.y, point.z, 1);
-                if (Mathf.Abs(clip.w) < 1e-7f) return Vector2.zero;
-                screen = new Vector2(viewport.x + (clip.x / clip.w + 1) * .5f * viewport.width,
-                    viewport.y + (1 - clip.y / clip.w) * .5f * viewport.height);
+                // Only x/y/w are consumed. Keep the original dot-product and
+                // viewport arithmetic order, without copying a matrix or computing z.
+                ref readonly Matrix4x4 m = ref viewProjection;
+                float w = m.m30 * point.x + m.m31 * point.y + m.m32 * point.z + m.m33 * 1;
+                if (Mathf.Abs(w) < 1e-7f) return Vector2.zero;
+                float x = m.m00 * point.x + m.m01 * point.y + m.m02 * point.z + m.m03 * 1;
+                float y = m.m10 * point.x + m.m11 * point.y + m.m12 * point.z + m.m13 * 1;
+                screen = new Vector2(viewport.x + (x / w + 1) * .5f * viewport.width,
+                    viewport.y + (1 - y / w) * .5f * viewport.height);
             }
             return new Vector2(screen.x / screenSize.x, screen.y / screenSize.y);
         }

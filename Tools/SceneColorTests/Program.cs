@@ -11,17 +11,27 @@ using RimUnity.Rendering;
 
 namespace RimUnity { internal static class RimUnityMod { internal static string ShaderDirectory; } }
 
-internal static class Program
+internal static partial class Program
 {
     [DllImport("kernel32", CharSet = CharSet.Unicode)] private static extern bool SetDllDirectory(string path);
-    private static string root, shaders, scratch;
+    private static string root, shaders, scratch, runtimeAssembly, harmonyPath;
     private static int checks;
     private static readonly Vector3 Display = new(.25f, .5f, .75f);
     private static int Main(string[] args)
     {
+        if (args.Length > 0 && args[0] == "--audit") return ArtifactAudit.Run(args.Skip(1).ToArray());
+        if (args.Length < 3) throw new ArgumentException("Usage: <game root> <shader directory> <scratch directory>");
         root = Path.GetFullPath(args[0]); shaders = Path.GetFullPath(args[1]); scratch = Path.GetFullPath(args[2]);
+        runtimeAssembly = args.Length > 3 ? Path.GetFullPath(args[3]) : null;
+        harmonyPath = args.Length > 4 ? Path.GetFullPath(args[4]) : null;
         Directory.CreateDirectory(scratch);
         AssemblyLoadContext.Default.Resolving += (_, name) => {
+            if (name.Name == "0Harmony" && harmonyPath != null) return AssemblyLoadContext.Default.LoadFromAssemblyPath(harmonyPath);
+            if (runtimeAssembly != null)
+            {
+                string runtimePath = Path.Combine(Path.GetDirectoryName(runtimeAssembly), name.Name + ".dll");
+                if (File.Exists(runtimePath)) return AssemblyLoadContext.Default.LoadFromAssemblyPath(runtimePath);
+            }
             string path = Path.Combine(root, name.Name + ".dll");
             return File.Exists(path) ? AssemblyLoadContext.Default.LoadFromAssemblyPath(path) : null;
         };
@@ -40,6 +50,10 @@ internal static class Program
             InitialWindowSize = new Brutal.Numerics.int2(64, 64), EnableVideoDecode = false
         });
         using var runner = new GpuRunner(app);
+        runner.CheckTransferSequences();
+        runner.CheckFrameSlots();
+        runner.CheckMapColorChains();
+        runner.CheckRuntimeTargets();
         runner.CheckFormats();
         Console.WriteLine($"PASS {checks} real Vulkan pixel checks; hidden window, no game/save loaded.");
         return 0;
@@ -61,13 +75,13 @@ internal static class Program
         checks++; Console.WriteLine($"PASS {name}: {actual}");
     }
 
-    private sealed class GpuRunner : IDisposable
+    private sealed partial class GpuRunner : IDisposable
     {
         private readonly EngineApplication app;
         private readonly VkCommandPool pool;
         private readonly CommandBuffer command;
         private readonly VkFence fence;
-        private readonly BloomPreviewContext context;
+        private readonly TestRenderContext context;
         private readonly RenderTexture anchor;
         private readonly VkRenderPass anchorPass;
         private readonly List<IDisposable> owned = new();
@@ -82,7 +96,7 @@ internal static class Program
             }, device.VkAllocator);
             command = device.AllocateCommandBuffer(new VkCommandBufferAllocateInfo { CommandPool = pool, Level = VkCommandBufferLevel.Primary });
             fence = device.CreateFence(new VkFenceCreateInfo(), device.VkAllocator);
-            context = new BloomPreviewContext(g, pool);
+            context = new TestRenderContext(g, pool);
             anchor = Target(VkFormat.R16G16B16A16SFloat);
             anchorPass = PostFxPassHelpers.CreateColorRenderPass(device, anchor.ColorFormat);
             context.SetTarget(anchor, anchorPass);
@@ -102,6 +116,7 @@ internal static class Program
         }
         private void Submit(Action<FrameContext> record)
         {
+            context.Slot = 0;
             var ctx = new FrameContext(context, context.FrameResources[0], command, anchorPass,
                 anchor.GetFramebuffer(anchorPass), anchor.Extent, VkSampleCountFlags._1Bit, anchor.ColorFormat, VkFormat.Undefined);
             command.Begin(VkCommandBufferUsageFlags.OneTimeSubmitBit);
@@ -150,8 +165,7 @@ internal static class Program
         internal void CheckFormats()
         {
             var zero = Constant(Vector3.Zero); var bloom = Constant(new(.04f, .02f, .01f));
-            foreach (var format in new[] { VkFormat.R8G8B8A8UNorm, VkFormat.B8G8R8A8UNorm,
-                VkFormat.R8G8B8A8SRGB, VkFormat.A2B10G10R10UNormPack32, VkFormat.R16G16B16A16SFloat })
+            foreach (var format in SceneFormats)
             {
                 var host = Constant(Display, format);
                 var sampled = Transfer(host, 0);

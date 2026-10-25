@@ -17,27 +17,31 @@ public sealed partial class Mesh
         Runtime.NativeRuntime.AssertThread();
         if (!this) throw new ObjectDisposedException(name);
         if (!dirty) return;
+        bool packed = particleVertices.Count != 0;
         int mask = ChannelBit(normalData.Count, 0) | ChannelBit(tangentData.Count, 1) | ChannelBit(colorData.Count, 2);
         for (int i = 0; i < 8; i++) mask |= ChannelBit(texcoords[i]?.Count ?? 0, i + 3);
+        if (packed) mask = 63;
         if (mask != layoutMask)
         {
             attributes.Clear(); attributes.Add(new(VertexAttributeSemantic.Position, VertexAttributeFormat.Float32, 3));
-            if (normalData.Count > 0) attributes.Add(new(VertexAttributeSemantic.Normal, VertexAttributeFormat.Float32, 3));
-            if (tangentData.Count > 0) attributes.Add(new(VertexAttributeSemantic.Tangent, VertexAttributeFormat.Float32, 4));
-            if (colorData.Count > 0) attributes.Add(new(VertexAttributeSemantic.Color, VertexAttributeFormat.UNorm8, 4));
+            if (packed || normalData.Count > 0) attributes.Add(new(VertexAttributeSemantic.Normal, VertexAttributeFormat.Float32, 3));
+            if (packed || tangentData.Count > 0) attributes.Add(new(VertexAttributeSemantic.Tangent, VertexAttributeFormat.Float32, 4));
+            if (packed || colorData.Count > 0) attributes.Add(new(VertexAttributeSemantic.Color, VertexAttributeFormat.UNorm8, 4));
             for (int i = 0; i < 8; i++)
-                if (texcoords[i]?.Count > 0) attributes.Add(new(MeshArrays.TexCoordSemantic(i), VertexAttributeFormat.Float32, 4));
+                if (packed && i < 3 || texcoords[i]?.Count > 0) attributes.Add(new(MeshArrays.TexCoordSemantic(i), VertexAttributeFormat.Float32, 4));
             uploadLayout = new VertexLayout(attributes); layoutMask = mask;
         }
         int indexCount = 0;
         for (int i = 0; i < activeSubmeshes; i++) { ValidateIndices(submeshes[i]); indexCount = checked(indexCount + submeshes[i].Count); }
-        if (format == IndexFormat.UInt16 && positions.Count > ushort.MaxValue + 1) throw new InvalidOperationException("顶点数量超过 UInt16 索引容量，请选择 UInt32。");
+        if (format == IndexFormat.UInt16 && vertexCount > ushort.MaxValue + 1) throw new InvalidOperationException("顶点数量超过 UInt16 索引容量，请选择 UInt32。");
         var layout = uploadLayout;
         CpuMeshData storage = native.CpuStorage;
-        storage.SetVertexLayout(layout, positions.Count);
+        storage.SetVertexLayout(layout, vertexCount);
         int stride = layout.GetStreamStride(0);
         byte* target = (byte*)storage.GetVertexStream(0).Pointer;
-        if (!UploadParticleVertices(target, mask, stride)) foreach (VertexAttribute description in attributes)
+        bool particleUpload = UploadParticleVertices(target, mask, stride);
+        if (packed && !particleUpload) throw new InvalidOperationException("Particle vertex layout does not match the upload contract.");
+        if (!particleUpload) foreach (VertexAttribute description in attributes)
         {
             layout.TryGetAttribute(description.Semantic, out var slot);
             for (int i = 0; i < positions.Count; i++)

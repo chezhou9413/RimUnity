@@ -35,6 +35,10 @@ public sealed partial class ParticleSystem
 
         internal Vector3 WorldPosition(Vector3 point, EventSpace eventSpace)
         {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.SpaceConversions, 1);
+#endif
+
             if (eventSpace is { local: true } space)
                 return space.position + space.rotation * Vector3.Scale(point, space.scale);
             if (localUnscaled) return position + rotation * Vector3.Scale(point, scale);
@@ -43,6 +47,10 @@ public sealed partial class ParticleSystem
 
         internal Vector3 WorldVelocity(in Particle particle)
         {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.SpaceConversions, 1);
+#endif
+
             if (particle.eventSpace is { local: true } space)
                 return space.rotation * Vector3.Scale(particle.totalVelocity, space.scale);
             if (localUnscaled) return rotation * Vector3.Scale(particle.totalVelocity, scale);

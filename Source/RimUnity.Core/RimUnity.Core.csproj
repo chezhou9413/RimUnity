@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <AssemblyName>RimUnity.Core</AssemblyName>
-    <OutputPath>../../1.7/Assemblies/</OutputPath>
+    <OutputPath>../../1.7/Assemblies/</OutputPath><OutputPath Condition="'$(RimUnityParticleAnalysis)' == 'true'">$(ParticleAnalysisRoot)/Assemblies/</OutputPath>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>

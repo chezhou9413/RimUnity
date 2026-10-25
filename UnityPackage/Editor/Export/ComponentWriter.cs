@@ -61,7 +61,7 @@ namespace RimUnity.Editor
             ["UnityEngine.MeshRenderer"] = new[] { "sharedMaterials", "enabled", "shadowCastingMode", "receiveShadows" },
             ["UnityEngine.SpriteRenderer"] = new[] { "sprite", "color", "flipX", "flipY", "sharedMaterial", "sortingOrder", "enabled" },
             ["UnityEngine.SkinnedMeshRenderer"] = new[] { "sharedMesh", "sharedMaterials", "bones", "rootBone", "localBounds", "enabled", "updateWhenOffscreen" },
-            ["UnityEngine.Animator"] = new[] { "runtimeAnimatorController", "speed", "updateMode", "fireEvents" },
+            ["UnityEngine.Animator"] = new[] { "runtimeAnimatorController", "speed", "updateMode", "fireEvents", "keepAnimatorStateOnDisable" },
             ["UnityEngine.ParticleSystemRenderer"] = new[] { "sharedMaterial", "trailMaterial", "renderMode", "alignment", "sortMode", "lengthScale", "velocityScale", "minParticleSize", "maxParticleSize", "pivot", "flip", "allowRoll", "enabled" },
             ["UnityEngine.EventSystems.EventSystem"] = new[] { "sendNavigationEvents", "firstSelectedGameObject", "pixelDragThreshold" },
             ["UnityEngine.EventSystems.EventTrigger"] = new[] { "triggers" }
@@ -129,6 +129,11 @@ namespace RimUnity.Editor
             {
                 foreach (string name in names)
                 {
+                    //False is the runtime default. Older standalone runtimes do not
+                    //expose this property, so do not require it for default assets.
+                    //Keep explicit retention: silently dropping true changes semantics.
+                    if (component is Animator animator && name == "keepAnimatorStateOnDisable" && !animator.keepAnimatorStateOnDisable)
+                        continue;
                     if (name == "padding" && component is LayoutGroup)
                     {
                         RectOffset padding = (RectOffset)component.GetType().GetProperty(name).GetValue(component);

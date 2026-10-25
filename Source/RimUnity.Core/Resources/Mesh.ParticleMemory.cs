@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace RimUnity;
 
 public sealed partial class Mesh
@@ -8,7 +10,7 @@ public sealed partial class Mesh
     {
         long indices = 0;
         foreach (var list in submeshes) indices += list.Capacity;
-        long managed = (positions.Capacity + (long)normalData.Capacity) * 12
+        long managed = (long)particleVertices.Capacity * Unsafe.SizeOf<ParticleVertex>() + (positions.Capacity + (long)normalData.Capacity) * 12
             + (long)tangentData.Capacity * 16 + (long)colorData.Capacity * 4 + indices * 4
             + (long)particleSubmeshBounds.Capacity * 24;
         foreach (var channel in texcoords) managed += (long)(channel?.Capacity ?? 0) * 16;
@@ -16,6 +18,6 @@ public sealed partial class Mesh
         long nativeBytes = storage.GetIndexBuffer().LengthBytes;
         if (storage.Layout is { } layout)
             for (int i = 0; i < layout.StreamCount; i++) nativeBytes += storage.GetVertexStream(i).LengthBytes;
-        return (positions.Capacity, indices, managed, nativeBytes);
+        return (positions.Capacity + (long)particleVertices.Capacity, indices, managed, nativeBytes);
     }
 }

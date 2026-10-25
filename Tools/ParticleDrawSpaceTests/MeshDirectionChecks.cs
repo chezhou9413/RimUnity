@@ -39,12 +39,13 @@ internal static partial class Program
         for (int i = 0; i < oldChoices.Count; i++) foreach (string channel in oldChoices[i].Keys)
             Check(ChannelBytes(channel, oldChoices[i][channel]).SequenceEqual(ChannelBytes(channel, newChoices[i][channel])), $"cached mesh switch differs: {i}/{channel}");
         Console.WriteLine("PASS multiple cached mesh choices refresh direction metadata and preserve tangent handedness.");
+        foreach (var layout in new[] { Array.Empty<string>(), new[] { "UV" }, new[] { "Position", "Color" }, new[] { "UV", "VertexID" } })
         foreach (int count in new[] { 4, 32, 128 })
         foreach (int pattern in new[] { 0, 1, 2, 5, 9 })
         {
-            foreach (var rig in new[] { old, current }) { rig.Configure("Local", "Hierarchy", "Mesh", "View", 1, 1); rig.MeshDirections(count, pattern); }
+            foreach (var rig in new[] { old, current }) { rig.Configure("Local", "Hierarchy", "Mesh", "View", 1, 1); rig.MeshDirections(count, pattern); rig.Streams(layout); }
             var slow = old.BuildGeometryBatch(256, 4); var fast = current.BuildGeometryBatch(256, 4);
-            for (int i = 0; i < 60; i++) { slow(); fast(); }
+            for (int i = 0; i < 1000; i++) { slow(); fast(); }
             for (int run = 0; run < 3; run++) foreach (bool optimized in new[] { run % 2 == 0, run % 2 != 0 })
             {
                 var action = optimized ? fast : slow;
@@ -52,7 +53,7 @@ internal static partial class Program
                 for (int i = 0; i < 100; i++) action();
                 long ticks = Stopwatch.GetTimestamp() - start;
                 Check(GC.GetAllocatedBytesForCurrentThread() == bytes, "mesh directions allocate after warmup");
-                Console.WriteLine($"Mesh CPU run {run + 1}, vertices={count}, pattern={pattern}, optimized={optimized}: {ticks * 1000d / Stopwatch.Frequency / 100:F6} ms per 256 particles/4 chunks; 0 B, CPU geometry only, no upload/GPU.");
+                Console.WriteLine($"Mesh CPU run {run + 1}, vertices={count}, pattern={pattern}, layout=[{string.Join('+', layout)}], optimized={optimized}: {ticks * 1000d / Stopwatch.Frequency / 100:F6} ms per 256 particles/4 chunks; 0 B, CPU geometry only, no upload/GPU.");
             }
         }
     }

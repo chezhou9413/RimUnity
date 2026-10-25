@@ -55,20 +55,25 @@ internal static partial class Program
             void Compare(Dictionary<string, object[]> a, Dictionary<string, object[]> b, string step)
             {
                 foreach (string channel in a.Keys)
-                    Check(a[channel].SequenceEqual(b[channel]), $"trail channels {step}/{cases}/{string.Join('+', layout)}/{texture}/{ribbon}/{count}: {channel}");
+                    Check(ChannelBytes(channel, a[channel]).SequenceEqual(ChannelBytes(channel, b[channel])), $"trail channels {step}/{cases}/{string.Join('+', layout)}/{texture}/{ribbon}/{count}: {channel}");
             }
         }
-        Console.WriteLine($"PASS {cases} trail stream/growth cases x 3 draws, all supported streams, clear/nonempty append, changed camera direction and degenerate sides; nine channels match the old DLL. No GPU.");
+        Console.WriteLine($"PASS {cases} trail stream/growth cases x 3 draws, all supported streams, clear/nonempty append, changed camera direction and degenerate sides; nine channels match the old DLL byte for byte. No GPU.");
     }
 
     private static void BenchmarkTrailSpaces(Rig old, Rig current)
     {
+        foreach (var layout in new[] { Array.Empty<string>(), new[] { "UV" }, new[] { "Position", "Color" }, new[] { "UV", "VertexID" } })
         foreach (var (simulation, scaling, space, ribbon) in new[] {
             ("Local", "Hierarchy", 0, false), ("Local", "Local", 0, false), ("Local", "Shape", 0, false),
             ("Custom", "Hierarchy", 0, false), ("World", "Hierarchy", 0, false),
             ("Local", "Hierarchy", 1, false), ("Local", "Hierarchy", 2, false), ("Local", "Hierarchy", 0, true) })
         {
-            foreach (var rig in new[] { old, current }) rig.Configure(simulation, scaling, "Billboard", "View", 1, 1);
+            foreach (var rig in new[] { old, current })
+            {
+                rig.Configure(simulation, scaling, "Billboard", "View", 1, 1);
+                rig.Streams(layout);
+            }
             var slow = old.TrailBatch(old.Trail(17, "Stretch", ribbon, space, 1), ribbon);
             var fast = current.TrailBatch(current.Trail(17, "Stretch", ribbon, space, 1), ribbon);
             for (int i = 0; i < 60; i++) { slow(); fast(); }
@@ -80,7 +85,7 @@ internal static partial class Program
                 for (int i = 0; i < 100; i++) action();
                 long ticks = Stopwatch.GetTimestamp() - start;
                 Check(GC.GetAllocatedBytesForCurrentThread() == bytes, "trail geometry allocates after warmup");
-                Console.WriteLine($"Trail CPU run {run + 1}, {simulation}/{scaling}/space{space}/ribbon{ribbon}, optimized={optimized}: {ticks * 1000d / Stopwatch.Frequency / 100:F6} ms per 256 trails x 17 points, 0 B; synthetic geometry only, per-draw snapshot setup included.");
+                Console.WriteLine($"Trail CPU run {run + 1}, {simulation}/{scaling}/space{space}/ribbon{ribbon}/layout[{string.Join('+', layout)}], optimized={optimized}: {ticks * 1000d / Stopwatch.Frequency / 100:F6} ms per 256 trails x 17 points, 0 B; synthetic geometry only, per-draw snapshot setup included.");
             }
         }
     }

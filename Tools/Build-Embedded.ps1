@@ -1,15 +1,16 @@
-﻿param([Parameter(Mandatory)][string]$GameRoot, [Parameter(Mandatory)][string]$HarmonyPath)
+﻿param([Parameter(Mandatory)][string]$GameRoot, [Parameter(Mandatory)][string]$HarmonyPath, [string]$RuntimeDirectory = '', [string]$OutputDirectory = '')
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $repo = Split-Path $PSScriptRoot -Parent
-$output = Join-Path $repo 'artifacts/Embedded'
+$output = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $repo 'artifacts/Embedded' }
+$runtime = if ($RuntimeDirectory) { [IO.Path]::GetFullPath($RuntimeDirectory) } else { Join-Path $repo '1.7/Assemblies' }
 [IO.Directory]::CreateDirectory($output) | Out-Null
 $payload = Join-Path $output 'payload.zip'
 $version = (Get-Content -LiteralPath (Join-Path $repo 'UnityPackage/package.json') -Encoding UTF8 -Raw | ConvertFrom-Json).version
 #固定条目顺序和时间，使同一源码与资源生成相同载荷哈希。
 $files = [Collections.Generic.SortedDictionary[string,string]]::new([StringComparer]::Ordinal)
 foreach ($name in @('RimUnity.Core.dll','RimUnity.dll','RimUnity.Spine.dll')) {
-    $files.Add("Assemblies/$name", (Join-Path $repo "1.7/Assemblies/$name"))
+    $files.Add("Assemblies/$name", (Join-Path $runtime $name))
 }
 foreach ($folder in @('Defs','Shaders','Languages')) {
     $root = Join-Path $repo "1.7/$folder"
@@ -44,12 +45,12 @@ Get-ChildItem -LiteralPath (Join-Path $repo 'Source/RimUnity.Embedded') -File | 
     $identity += $_.Name + (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
 }
 $containerId = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($identity)))
-& dotnet build (Join-Path $repo 'Source/RimUnity.Embedded/RimUnity.Embedded.csproj') -c Release --nologo "-p:RimWorldDir=$GameRoot" "-p:HarmonyPath=$HarmonyPath" "-p:PayloadPath=$payload" "-p:ContainerId=$containerId"
+& dotnet build (Join-Path $repo 'Source/RimUnity.Embedded/RimUnity.Embedded.csproj') -c Release --nologo "-p:RimWorldDir=$GameRoot" "-p:HarmonyPath=$HarmonyPath" "-p:PayloadPath=$payload" "-p:ContainerId=$containerId" "-p:OutputPath=$output/"
 if ($LASTEXITCODE -ne 0) { throw '内置运行时编译失败。' }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'RimUnity.Embedded.targets') -Destination $output -Force
 $references = Join-Path $output 'References'
 [IO.Directory]::CreateDirectory($references) | Out-Null
 foreach ($name in @('RimUnity.Core.dll','RimUnity.dll','RimUnity.Spine.dll')) {
-    Copy-Item -LiteralPath (Join-Path $repo "1.7/Assemblies/$name") -Destination $references -Force
+    Copy-Item -LiteralPath (Join-Path $runtime $name) -Destination $references -Force
 }
 Write-Output "内置运行时：$output"

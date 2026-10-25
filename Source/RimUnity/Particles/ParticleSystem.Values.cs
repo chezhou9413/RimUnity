@@ -16,13 +16,21 @@ public sealed partial class ParticleSystem
         public MinMaxCurve(float min, float max) : this(max) { mode = ParticleSystemCurveMode.TwoConstants; constantMin = min; }
         public MinMaxCurve(float multiplier, AnimationCurve curve) : this(0) { mode = ParticleSystemCurveMode.Curve; curveMultiplier = multiplier; curveMax = curve; }
         public MinMaxCurve(float multiplier, AnimationCurve min, AnimationCurve max) : this(multiplier, max) { mode = ParticleSystemCurveMode.TwoCurves; curveMin = min; }
-        public float Evaluate(float time, float factor = 1) => mode switch
+        public float Evaluate(float time, float factor = 1)
+        {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.CurveCalls, 1);
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.CurveSamples,
+            mode == ParticleSystemCurveMode.TwoCurves ? 2 : mode == ParticleSystemCurveMode.Curve ? 1 : 0);
+#endif
+            return mode switch
         {
             ParticleSystemCurveMode.Curve => curveMax.Evaluate(time) * curveMultiplier,
             ParticleSystemCurveMode.TwoCurves => Mathf.Lerp(curveMin.Evaluate(time), curveMax.Evaluate(time), factor) * curveMultiplier,
             ParticleSystemCurveMode.TwoConstants => Mathf.Lerp(constantMin, constantMax, factor),
             _ => constantMax
         };
+        }
         public static implicit operator MinMaxCurve(float value) => new(value);
     }
 
@@ -38,7 +46,14 @@ public sealed partial class ParticleSystem
         public MinMaxGradient(Gradient gradient) { this = default; mode = ParticleSystemGradientMode.Gradient; gradientMax = gradient; }
         public MinMaxGradient(Color min, Color max) : this(max) { mode = ParticleSystemGradientMode.TwoColors; colorMin = min; }
         public MinMaxGradient(Gradient min, Gradient max) : this(max) { mode = ParticleSystemGradientMode.TwoGradients; gradientMin = min; }
-        public Color Evaluate(float time, float factor = 1) => mode switch
+        public Color Evaluate(float time, float factor = 1)
+        {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.GradientCalls, 1);
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.GradientSamples,
+            mode == ParticleSystemGradientMode.TwoGradients ? 2 : mode == ParticleSystemGradientMode.Gradient || mode == ParticleSystemGradientMode.RandomColor ? 1 : 0);
+#endif
+            return mode switch
         {
             ParticleSystemGradientMode.Gradient => gradientMax.Evaluate(time),
             ParticleSystemGradientMode.TwoGradients => Color.Lerp(gradientMin.Evaluate(time), gradientMax.Evaluate(time), factor),
@@ -46,6 +61,7 @@ public sealed partial class ParticleSystem
             ParticleSystemGradientMode.RandomColor => gradientMax.Evaluate(factor),
             _ => colorMax
         };
+        }
         public static implicit operator MinMaxGradient(Color color) => new(color);
         public static implicit operator MinMaxGradient(Gradient gradient) => new(gradient);
     }

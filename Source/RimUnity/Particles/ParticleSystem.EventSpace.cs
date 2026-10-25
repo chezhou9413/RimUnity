@@ -13,8 +13,13 @@ public sealed partial class ParticleSystem
 
     //世界和 Custom 模式仍沿用显式配置，只有 Local 事件使用独立跟随框架。
     internal Vector3 WorldPosition(Particle particle) => WorldPosition(particle.position, particle.eventSpace);
-    internal Vector3 WorldPosition(Vector3 position, EventSpace space) => space is { local: true }
-        ? space.position + space.rotation * Vector3.Scale(position, space.scale) : WorldPosition(position);
+    internal Vector3 WorldPosition(Vector3 position, EventSpace space)
+    {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.SpaceConversions);
+#endif
+        return space is { local: true } ? space.position + space.rotation * Vector3.Scale(position, space.scale) : WorldPosition(position);
+    }
     internal Vector3 WorldVector(Vector3 vector, EventSpace space) => space is { local: true } ? space.rotation * vector : WorldVector(vector);
     private Vector3 FromWorld(Vector3 position, EventSpace space)
     {

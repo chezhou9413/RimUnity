@@ -29,3 +29,10 @@ and require the observed extra encoding/brightening to occur. They demonstrate t
 bad conversion independently of the research animation. This is pixel validation
 on the current GPU, not proof of every GPU driver, complete game map, occlusion,
 transparent draw ordering or real-game performance.
+
+With the optional fourth argument pointing to a compiled `RimUnity.dll` and the
+fifth to `0Harmony.dll`, the real-runtime tests also check the map HDR setting.
+They submit actual Linear shader draws and verify that capture follows the
+false/true/false sequence while independent Bloom layer selection stays intact.
+New settings and Reset defaults must both leave map HDR disabled. Older supplied
+runtime builds without this setting explicitly skip this regression.

@@ -90,7 +90,7 @@ internal sealed partial class LabSampler : IDisposable
             BloomEnabled = bloom.Enabled, BloomLayerMask = bloom.LayerMask, BloomThreshold = bloom.Threshold, BloomIntensity = bloom.Intensity,
             BloomSoftKnee = bloom.SoftKnee, BloomScatter = bloom.Scatter,
             BloomSource = lab.Scenario == LabStressScenario.Version ? "TestMapOnlyOverride" : "PlayerAndContentSettings",
-            CpuStagesEnabled = lab.MeasureCpuStages, CpuStageSchema = 4,
+            CpuStagesEnabled = lab.MeasureCpuStages, CpuStageSchema = 4, ParticleAnalysisBuild,
             ParticleUploadMode = "OrderedSubmeshPages", ParticlePageSegmentLimit = ParticleDrawBatch.SegmentLimit,
             ProcessMemorySampling = "BeforeAndAfterOnly; frame process memory columns retain the before-sample snapshot",
             RuntimeVersion = RuntimeInfo.Version, RuntimeProvider = RuntimeInfo.Provider,
@@ -102,6 +102,9 @@ internal sealed partial class LabSampler : IDisposable
         startPool = endPool = ParticleDrawBatch.ReadPoolUsage();
         startPopulation = endPopulation = LabPopulation.Capture(lab, populationRoots);
         endMemoryCaptured = false; endMemoryError = null;
+#if RIMUNITY_PARTICLE_ANALYSIS
+        StartParticleDetail();
+#endif
         cpu?.Start();
         allocated = GC.GetTotalAllocatedBytes(false);
         mainAllocated = GC.GetAllocatedBytesForCurrentThread();
@@ -117,7 +120,13 @@ internal sealed partial class LabSampler : IDisposable
     //提交项是地图快照数量，不能当作驱动实际 DrawCall 或 GPU 耗时。
     internal void SetSubmittedItems(int value) => submitted = value;
 
-    private void PrePoll(EngineApplication app) => cpu?.BeginMainFrame();
+    private void PrePoll(EngineApplication app)
+    {
+        cpu?.BeginMainFrame();
+#if RIMUNITY_PARTICLE_ANALYSIS
+        BeginParticleDetailFrame();
+#endif
+    }
 
     //只在采样开启时累计，字典规模最多等于本次选择的资源数。
     internal void RecordSpawn(string path, double milliseconds, long bytes)
@@ -139,6 +148,9 @@ internal sealed partial class LabSampler : IDisposable
             long mainTotal = GC.GetAllocatedBytesForCurrentThread();
             long total = GC.GetTotalAllocatedBytes(false);
             cpu?.CompleteFrame(now, mainTotal);
+#if RIMUNITY_PARTICLE_ANALYSIS
+            CompleteParticleDetailFrame();
+#endif
             int g0 = GC.CollectionCount(0), g1 = GC.CollectionCount(1), g2 = GC.CollectionCount(2);
             bool refresh = now - memoryTime >= Stopwatch.Frequency;
             if (refresh) { managedBytes = GC.GetTotalMemory(false); memoryTime = now; }
@@ -178,6 +190,9 @@ internal sealed partial class LabSampler : IDisposable
     {
         if (!Sampling) return;
         Sampling = false;
+#if RIMUNITY_PARTICLE_ANALYSIS
+        particleDetail?.Stop();
+#endif
         cpu?.Stop();
         ParticleDrawBatch.Sampling = false;
         application.FrameEnqueued -= Frame;

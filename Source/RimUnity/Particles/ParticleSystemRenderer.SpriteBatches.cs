@@ -23,7 +23,12 @@ public sealed partial class ParticleSystemRenderer
     //连续纹理段独立提交，不重排透明粒子来压低绘制调用。
     private void DrawParticleBatches(ParticleSystem system, Camera camera, in ParticleCameraState cameraState, in ParticleSystem.DrawSpace drawSpace)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Geometry, system.GetInstanceID());
+#endif
+
         using var cpu = Diagnostics.LabCpuMetrics.Measure(Diagnostics.LabCpuStage.ParticleGeometry);
+        packedBillboards = CanPackBillboards(system);
         if (!system.textureSheetAnimation.enabled || system.textureSheetAnimation.mode != ParticleSystemAnimationMode.Sprites)
         {
             foreach (int i in order) { streamParticleIndex = i; AppendParticle(system, system.particles[i], in cameraState, in drawSpace); }

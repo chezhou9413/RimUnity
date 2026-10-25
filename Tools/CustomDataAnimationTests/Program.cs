@@ -16,7 +16,7 @@ internal static class Program
             }
             return null;
         };
-        try { Run(); return 0; }
+        try { Run(); AnimatorReuseChecks.Run(); return 0; }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
     }
 

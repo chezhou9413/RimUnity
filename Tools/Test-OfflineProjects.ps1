@@ -6,7 +6,7 @@
 #
 # 注意：不要给 `dotnet run` 追加 --nologo 之类的开关——它会被当成**程序参数**传进去，
 # 而 MemoryAttributionTests 带参数时会进入需要游戏 DLL 的反射分支。
-param([string[]]$Projects = @('CatalogPolicyTests', 'MemoryAttributionTests', 'SpikeCaptureTests', 'WarmupTests', 'LabCpuMetricsTests'))
+param([string[]]$Projects = @('CatalogPolicyTests', 'MemoryAttributionTests', 'SpikeCaptureTests', 'WarmupTests', 'LabCpuMetricsTests', 'ParticleDetailTests'))
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 

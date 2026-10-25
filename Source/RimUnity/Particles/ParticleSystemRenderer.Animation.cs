@@ -8,6 +8,10 @@ public sealed partial class ParticleSystemRenderer
     //每轮重新采样帧曲线，循环次数不能直接乘在非线性曲线的结果上。
     private Rect UV(ParticleSystem system, ParticleSystem.Particle particle)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Atlas);
+#endif
+
         var module = system.textureSheetAnimation;
         if (!module.enabled) { streamFrame = streamBlend = 0; return streamCurrentUV = streamNextUV = new Rect(0, 0, 1, 1); }
         if (module.numTilesX <= 0 || module.numTilesY <= 0 || module.cycleCount < 0)

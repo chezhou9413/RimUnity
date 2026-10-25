@@ -1,6 +1,9 @@
 <Project>
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <ParticleAnalysisRoot Condition="'$(ParticleAnalysisRoot)' == ''">$(MSBuildThisFileDirectory)../Artifacts/ParticleAnalysis</ParticleAnalysisRoot>
+    <DefineConstants Condition="'$(RimUnityParticleAnalysis)' == 'true'">$(DefineConstants);RIMUNITY_PARTICLE_ANALYSIS</DefineConstants>
+    <BaseIntermediateOutputPath Condition="'$(RimUnityParticleAnalysis)' == 'true'">$(TEMP)/RimUnity/ParticleAnalysis/$(MSBuildProjectName)/obj/</BaseIntermediateOutputPath>
     <Version>0.1.17</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>0.1.17.0</FileVersion>

@@ -38,6 +38,10 @@ public sealed partial class ParticleSystem
     //记录本小步真实的父粒子轨迹，死亡后也能在正确的最后位置完成发射。
     private void CaptureParentMotion(Particle particle, Vector3 from, float aliveTime)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.SubMotion);
+#endif
+
         if (subEmissionEvents.Count != 0)
         {
             if (subParentMotions.TryGetValue(particle.identity, out var previous))
@@ -49,6 +53,10 @@ public sealed partial class ParticleSystem
     //Birth 跟随父粒子存活区间，Death 独立执行一次子系统时长。
     private void AdvanceSubEmissions(float dt)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.SubAdvance);
+#endif
+
         for (int i = subEmissionEvents.Count - 1; i >= 0; i--)
         {
             SubEmissionEvent instance = subEmissionEvents[i];

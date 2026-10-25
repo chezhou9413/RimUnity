@@ -16,7 +16,8 @@ public static class RuntimeInfo
     //引导器在创建内置运行时 Mod 实例前调用；独立版只更新诊断状态。
     public static void Configure(string resourceRoot, bool standalone, string provider, int embeddedCopies, string payloadHash)
     {
-        ResourceRoot = resourceRoot;
+        //ShaderSourceLoader 将相对路径视为内置 Shader 路径；内容目录必须固定为文件系统绝对路径。
+        ResourceRoot = Path.GetFullPath(resourceRoot);
         IsStandalone = standalone;
         Provider = provider;
         EmbeddedCopies = embeddedCopies;

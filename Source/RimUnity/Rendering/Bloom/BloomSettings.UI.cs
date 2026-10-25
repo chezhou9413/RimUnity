@@ -8,9 +8,15 @@ public sealed partial class BloomSettings
 {
     private bool parametersExpanded = true, layersExpanded = true;
 
-    //只调整布局与文字，公共参数、设置键和层接管规则保持一致。
+    //地图 HDR 与 Bloom 分开配置，文字高度沿用公共布局规则。
     internal void DrawContent(Listing_Standard list)
     {
+        list.Label(L("地图渲染", "Map rendering"));
+        string hdrLabel = L("启用地图 HDR 接管", "Enable map HDR rendering");
+        Widgets.CheckboxLabeled(list.GetRect(Height(hdrLabel, list.ColumnWidth)), hdrLabel, ref mapHdrEnabled);
+        list.Label(L("默认关闭。关闭时沿用原版地图绘制，Bloom 仍可独立生效。启用后使用线性 HDR 混合，可能改变透明特效的亮度与叠加效果。切换从下一帧生效。",
+            "Off by default. Use native map rendering while keeping independent Bloom. Enabling this uses linear HDR blending and may change the brightness and blending of transparent effects. Changes apply from the next frame."));
+        list.Gap(8);
         list.Label(L("Bloom 泛光", "Bloom"));
         list.Label(L("让明亮特效向周围扩散光晕。参数同时影响手动层和模组接管的层。", "Spread a glow around bright effects. Parameters affect both manual and mod-controlled layers."));
         if (Button(list, L("恢复全部默认设置", "Restore all defaults"))) ResetDefaults();

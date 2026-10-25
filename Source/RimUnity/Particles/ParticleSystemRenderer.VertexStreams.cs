@@ -54,6 +54,10 @@ public sealed partial class ParticleSystemRenderer
     // call ClearMesh and keep the original per-vertex evaluation path below.
     private void PrepareParticleStreams(Vector4 c1, Vector4 c2)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.StreamPrepare);
+#endif
+
         streamValuesPrepared = false;
         if (streamPacking != StreamPacking.General) return;
         Span<float> values = preparedStreamValues; values.Clear();
@@ -93,6 +97,10 @@ public sealed partial class ParticleSystemRenderer
     //动画第二帧 UV 由同一个局部坐标映射，避免帧间混合重复采样当前帧。
     private void PackStreams(Vector2 uvValue, Vector4 c1, Vector4 c2)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.StreamPack);
+#endif
+
         // Explicit UV-only layouts have zero custom channels, unlike the empty
         // default layout, which passes custom values through. Also used by trails.
         switch (streamPacking)

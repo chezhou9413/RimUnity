@@ -22,6 +22,10 @@ public sealed partial class ParticleSystem
 
     private void EmitScheduled(float dt, Vector3 emitterFrom, Vector3 emitterTo)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.EmissionTimeline);
+#endif
+
         float advanced = 0;
         float? capacityUntil = null;
         try
@@ -29,6 +33,9 @@ public sealed partial class ParticleSystem
             while (true)
             {
                 int next = -1; float offset = float.PositiveInfinity;
+#if RIMUNITY_PARTICLE_ANALYSIS
+                Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.EmissionScheduleVisits, scheduledEmissions.Count);
+#endif
                 for (int i = 0; i < scheduledEmissions.Count; i++)
                 {
                     var candidate = scheduledEmissions[i];
@@ -44,6 +51,9 @@ public sealed partial class ParticleSystem
                     if (!capacityUntil.HasValue)
                     {
                         float death = float.PositiveInfinity;
+#if RIMUNITY_PARTICLE_ANALYSIS
+                        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.CapacityVisits, count);
+#endif
                         for (int i = 0; i < count; i++)
                             death = Math.Min(death, Math.Max(advanced, particles[i].birthOffset) + Math.Max(0, particles[i].remainingLifetime));
                         capacityUntil = death;
@@ -125,8 +135,16 @@ public sealed partial class ParticleSystem
 
     private void ReclaimNaturalDeaths(float at, float advanced)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.CapacityReclaim);
+#endif
+
         for (int i = count - 1; i >= 0; i--)
         {
+
+#if RIMUNITY_PARTICLE_ANALYSIS
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.CapacityVisits, 1);
+#endif
             ref Particle particle = ref particles[i];
             float death = Math.Max(advanced, particle.birthOffset) + Math.Max(0, particle.remainingLifetime);
             if (death > at) continue;

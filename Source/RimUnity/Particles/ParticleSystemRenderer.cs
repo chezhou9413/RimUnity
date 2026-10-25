@@ -133,9 +133,27 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
         Vector3 center, size; Color32 color; Vector4 c1, c2; Rect rect;
         using (LabCpuMetrics.Measure(LabCpuStage.ParticleAttributes))
         {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var detailAttributes = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Attributes);
+#endif
+
             particleRandom = ParticleSystem.Random(p.randomSeed, 97);
-            center = drawSpace.WorldPosition(p); size = Vector3.Scale(s.SizeAt(p), drawSpace.ParticleScale(p));
-            color = s.ColorAt(p); c1 = s.CustomAt(p, 0); c2 = s.CustomAt(p, 1);
+#if RIMUNITY_PARTICLE_ANALYSIS
+            using (Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Space))
+#endif
+            { center = drawSpace.WorldPosition(p); }
+#if RIMUNITY_PARTICLE_ANALYSIS
+            using (Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Size))
+#endif
+            { size = Vector3.Scale(s.SizeAt(p), drawSpace.ParticleScale(p)); }
+#if RIMUNITY_PARTICLE_ANALYSIS
+            using (Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Color))
+#endif
+            { color = s.ColorAt(p); }
+#if RIMUNITY_PARTICLE_ANALYSIS
+            using (Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Custom))
+#endif
+            { c1 = s.CustomAt(p, 0); c2 = s.CustomAt(p, 1); }
             streamParticle = p; streamSize = size; streamVelocity = drawSpace.WorldVelocity(p); streamCenter = center;
             rect = UV(s, p);
             if (ParticleSystem.Random(p.randomSeed, 80) < flip.x) { rect.x += rect.width; rect.width = -rect.width; }
@@ -143,29 +161,7 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
         }
         if (renderMode == ParticleSystemRenderMode.Mesh)
         {
-            SelectMesh(p);
-            int offset = vertices.Count;
-            // Shape-aligned particles already carry their emission orientation; other meshes obey Renderer alignment.
-            Quaternion orientation = p.alignedToDirection ? s.ParticleRotation(p) : BillboardAlignment(s, in cameraState, center, streamVelocity);
-            Matrix4x4 matrix = Matrix4x4.TRS(center, orientation * Quaternion.Euler(p.rotation3D), size);
-            Matrix4x4 normalMatrix = sourcePositions.Length != 0 && sourceNormals.Length != 0 ? matrix.inverse.transpose : default;
-            // Reuse identical source directions only within this particle's current pose.
-            Vector3 sharedNormal = sourceUniformNormals ? normalMatrix.MultiplyVector(sourceNormals[0]).normalized : default;
-            Vector4 sharedTangent = sourceUniformTangents ? (Vector4)matrix.MultiplyVector((Vector3)sourceTangents[0]).normalized : default;
-            bool flipMesh = ParticleSystem.Random(p.randomSeed, 82) < flip.z;
-            if (sourcePositions.Length != 0 && streamPacking == StreamPacking.General) PrepareParticleStreams(c1, c2);
-            for (int i = 0; i < sourcePositions.Length; i++)
-            {
-                streamNormal = i < sourceNormals.Length ? (sourceUniformNormals ? sharedNormal : normalMatrix.MultiplyVector(sourceNormals[i]).normalized) : Vector3.forward;
-                streamTangent = i < sourceTangents.Length ? (sourceUniformTangents ? sharedTangent : (Vector4)matrix.MultiplyVector((Vector3)sourceTangents[i]).normalized) : new Vector4(1, 0, 0, 1);
-                if (i < sourceTangents.Length) streamTangent.w = sourceTangents[i].w;
-                Vector2 source = i < sourceUV.Length ? sourceUV[i] : Vector2.zero;
-                streamVertexId = i; streamUV3 = i < sourceUV3.Length ? sourceUV3[i] : Vector2.zero; streamUV4 = i < sourceUV4.Length ? sourceUV4[i] : Vector2.zero;
-                Vector3 local = sourcePositions[i] + pivot;
-                if (flipMesh) local.z = -local.z;
-                Vertex(matrix.MultiplyPoint3x4(local), new Vector2(rect.x + source.x * rect.width, rect.y + source.y * rect.height), color, c1, c2);
-            }
-            foreach (int index in sourceTriangles) indices.Add(offset + index);
+            AppendMeshParticle(s, p, in cameraState, center, size, rect, color, c1, c2);
             return;
         }
         BillboardAxesPrepared(s, p, in cameraState, center, size, streamVelocity, out Vector3 x, out Vector3 y);
@@ -173,7 +169,7 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
         Vector3 tangent = x.normalized;
         streamTangent = new Vector4(tangent.x, tangent.y, tangent.z, 1);
         center += x * (pivot.x * 2) + y * (pivot.y * 2);
-        int start = vertices.Count;
+        int start = GeometryVertexCount;
         streamVertexId = 0; streamUV3 = streamUV4 = Vector2.zero;
         if (streamPacking != StreamPacking.General)
         {
@@ -192,14 +188,24 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
         Vertex(center + x - y, new Vector2(rect.xMax, rect.yMin), color, c1, c2);
         Quad(start);
     }
-    private void ClearMesh() { vertices.Clear(); uv.Clear(); packedUV.Clear(); colors.Clear(); custom1.Clear(); custom2.Clear(); indices.Clear(); normals.Clear(); tangents.Clear(); particleRandom = 0; streamValuesPrepared = false; streamNormal = Vector3.forward; streamTangent = new Vector4(1, 0, 0, 1); }
+    private void ClearMesh() { packedBillboards = false; billboardVertices.Clear(); vertices.Clear(); uv.Clear(); packedUV.Clear(); colors.Clear(); custom1.Clear(); custom2.Clear(); indices.Clear(); normals.Clear(); tangents.Clear(); particleRandom = 0; streamValuesPrepared = false; streamNormal = Vector3.forward; streamTangent = new Vector4(1, 0, 0, 1); }
     private void Vertex(Vector3 p, Vector2 t, Color32 c, Vector4 c1 = default, Vector4 c2 = default)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.VertexWrite);
+#endif
+
         vertices.Add(p); uv.Add(t);
         PackStreams(t, c1, c2);
         colors.Add(c); normals.Add(streamNormal); tangents.Add(streamTangent);
     }
-    private void Quad(int start) { indices.Add(start); indices.Add(start + 1); indices.Add(start + 2); indices.Add(start); indices.Add(start + 2); indices.Add(start + 3); }
+    private void Quad(int start)
+    {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var detailIndices = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.IndexWrite);
+#endif
+        indices.Add(start); indices.Add(start + 1); indices.Add(start + 2); indices.Add(start); indices.Add(start + 2); indices.Add(start + 3);
+    }
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
     private void PrepareSubmitUI(Material mat)
     {
@@ -208,8 +214,20 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
     }
     private void Submit(ref Mesh target, Material mat, Camera camera)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Submit);
+#endif
+
         using var cpu = LabCpuMetrics.Measure(LabCpuStage.ParticleSubmit);
-        LabCpuMetrics.Work(LabCpuStage.ParticleSubmit, vertices.Count, indices.Count);
+        LabCpuMetrics.Work(LabCpuStage.ParticleSubmit, GeometryVertexCount, indices.Count);
+#if RIMUNITY_PARTICLE_ANALYSIS
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.Vertices, GeometryVertexCount);
+#endif
+
+#if RIMUNITY_PARTICLE_ANALYSIS
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.Indices, indices.Count);
+#endif
+
         var dpaToken = Diagnostics.DpaDiagnostics.BeginSubmit();
         int dpaRoute = 0;
         try
@@ -230,7 +248,7 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
                 using (LabCpuMetrics.Measure(LabCpuStage.SubmitUI)) PrepareSubmitUI(mat);
             }
             if (cameraUiEntry == null && ParticleDrawBatch.TryAppend(mat, gameObject.layer, propertyBlock,
-                vertices, normals, tangents, colors, packedUV, custom1, custom2, indices)) { dpaRoute = 3; return; }
+                vertices, normals, tangents, colors, packedUV, custom1, custom2, indices, packedBillboards ? billboardVertices : null)) { dpaRoute = 3; return; }
             using (LabCpuMetrics.Measure(LabCpuStage.MeshFill))
             {
                 if (target == null)
@@ -238,10 +256,18 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
                     target = new Mesh { name = "RimUnity Particle Batch", indexFormat = IndexFormat.UInt32 };
                     target.MarkDynamic();
                 }
-                target.SetVertices(vertices); target.SetColors(colors); target.SetUVs(0, packedUV); target.SetUVs(1, custom1); target.SetUVs(2, custom2); target.SetTriangles(indices, 0);
-                target.SetNormals(normals); target.SetTangents(tangents);
+                if (packedBillboards)
+                {
+                    target.Clear();
+                    target.AppendParticleGeometry(vertices, normals, tangents, colors, packedUV, custom1, custom2, indices, 0, billboardVertices);
+                }
+                else
+                {
+                    target.SetVertices(vertices); target.SetColors(colors); target.SetUVs(0, packedUV); target.SetUVs(1, custom1); target.SetUVs(2, custom2); target.SetTriangles(indices, 0);
+                    target.SetNormals(normals); target.SetTangents(tangents);
+                }
             }
-            LabCpuMetrics.Work(LabCpuStage.MeshFill, vertices.Count, indices.Count);
+            LabCpuMetrics.Work(LabCpuStage.MeshFill, GeometryVertexCount, indices.Count);
             CaptureDiagnostics(mat, target);
             using (LabCpuMetrics.Measure(LabCpuStage.DrawMesh))
                 RimUnity.Graphics.DrawMesh(target, Matrix4x4.identity, mat, cameraUiEntry?.RenderLayer ?? gameObject.layer, 0, propertyBlock);
@@ -249,7 +275,7 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
         }
         finally
         {
-            if (dpaToken.Start != 0) Diagnostics.DpaDiagnostics.EndSubmit(dpaToken, UnityEngine.Time.frameCount, vertices.Count, indices.Count, dpaRoute);
+            if (dpaToken.Start != 0) Diagnostics.DpaDiagnostics.EndSubmit(dpaToken, UnityEngine.Time.frameCount, GeometryVertexCount, indices.Count, dpaRoute);
         }
     }
 }

@@ -20,20 +20,23 @@ public sealed partial class Mesh
         => AppendParticleGeometryCore(vertices, normals, tangents, colors, uv0, uv1, uv2, indices, submesh, false);
 
     private void AppendParticleGeometryCore(List<Vector3> vertices, List<Vector3> normals, List<Vector4> tangents,
-        List<Color32> colors, List<Vector4> uv0, List<Vector4> uv1, List<Vector4> uv2, List<int> indices, int submesh, bool singleRange)
+        List<Color32> colors, List<Vector4> uv0, List<Vector4> uv1, List<Vector4> uv2, List<int> indices, int submesh, bool singleRange, List<ParticleVertex> packed = null)
     {
         Runtime.NativeRuntime.AssertThread();
-        ArgumentNullException.ThrowIfNull(vertices); ArgumentNullException.ThrowIfNull(normals);
-        ArgumentNullException.ThrowIfNull(tangents); ArgumentNullException.ThrowIfNull(colors);
-        ArgumentNullException.ThrowIfNull(uv0); ArgumentNullException.ThrowIfNull(uv1);
-        ArgumentNullException.ThrowIfNull(uv2); ArgumentNullException.ThrowIfNull(indices);
-        int count = vertices.Count, offset = positions.Count;
+        ArgumentNullException.ThrowIfNull(indices);
+        if (packed == null)
+        {
+            ArgumentNullException.ThrowIfNull(vertices); ArgumentNullException.ThrowIfNull(normals);
+            ArgumentNullException.ThrowIfNull(tangents); ArgumentNullException.ThrowIfNull(colors);
+            ArgumentNullException.ThrowIfNull(uv0); ArgumentNullException.ThrowIfNull(uv1); ArgumentNullException.ThrowIfNull(uv2);
+        }
+        int count = packed?.Count ?? vertices.Count, offset = vertexCount;
         if (submesh < 0 || submesh > activeSubmeshes) throw new ArgumentOutOfRangeException(nameof(submesh));
-        if (normals.Count != count || tangents.Count != count || colors.Count != count
-            || uv0.Count != count || uv1.Count != count || uv2.Count != count)
+        if (packed == null && (normals.Count != count || tangents.Count != count || colors.Count != count
+            || uv0.Count != count || uv1.Count != count || uv2.Count != count))
             throw new ArgumentException("粒子顶点通道数量不一致。");
-        if (offset != 0 && (normalData.Count != offset || tangentData.Count != offset || colorData.Count != offset
-            || texcoords[0]?.Count != offset || texcoords[1]?.Count != offset || texcoords[2]?.Count != offset
+        if (offset != 0 && (particleVertices.Count == 0 && (normalData.Count != offset || tangentData.Count != offset || colorData.Count != offset
+            || texcoords[0]?.Count != offset || texcoords[1]?.Count != offset || texcoords[2]?.Count != offset)
             || singleRange && activeSubmeshes != 1))
             throw new InvalidOperationException("只能追加到相同布局的粒子几何。");
         if (indices.Count % 3 != 0) throw new ArgumentException("粒子三角形索引数量必须是三的倍数。", nameof(indices));
@@ -49,8 +52,20 @@ public sealed partial class Mesh
         bool newRange = submesh == activeSubmeshes;
         if (newRange) { subMeshCount = submesh + 1; particleSubmeshBounds.Add(default); }
         bool emptyRange = offset == 0 || newRange || submeshes[submesh].Count == 0;
-        positions.AddRange(vertices); normalData.AddRange(normals); tangentData.AddRange(tangents); colorData.AddRange(colors);
-        (texcoords[0] ??= new()).AddRange(uv0); (texcoords[1] ??= new()).AddRange(uv1); (texcoords[2] ??= new()).AddRange(uv2);
+        Vector3 min = default, max = default;
+        bool boundsCalculated = false;
+        if (packed != null && (offset == 0 || particleVertices.Count != 0)) particleVertices.AddRange(packed);
+        else if (packed != null) AppendParticleChannels(CollectionsMarshal.AsSpan(packed));
+        else if (particleVertices.Count != 0)
+        {
+            (min, max) = AppendUnpackedParticleVertices(vertices, normals, tangents, colors, uv0, uv1, uv2);
+            boundsCalculated = true;
+        }
+        else
+        {
+            positions.AddRange(vertices); normalData.AddRange(normals); tangentData.AddRange(tangents); colorData.AddRange(colors);
+            (texcoords[0] ??= new()).AddRange(uv0); (texcoords[1] ??= new()).AddRange(uv1); (texcoords[2] ??= new()).AddRange(uv2);
+        }
         var triangles = submeshes[submesh];
         int start = triangles.Count, end = checked(start + indices.Count);
         triangles.EnsureCapacity(end);
@@ -59,9 +74,18 @@ public sealed partial class Mesh
         var targetIndices = CollectionsMarshal.AsSpan(triangles).Slice(start, indices.Count);
         var sourceIndices = CollectionsMarshal.AsSpan(indices);
         for (int i = 0; i < sourceIndices.Length; i++) targetIndices[i] = checked(sourceIndices[i] + offset);
-        var sourceVertices = CollectionsMarshal.AsSpan(vertices);
-        Vector3 min = sourceVertices[0], max = sourceVertices[0];
-        foreach (var vertex in sourceVertices) { min = Vector3.Min(min, vertex); max = Vector3.Max(max, vertex); }
+        if (packed != null)
+        {
+            var source = CollectionsMarshal.AsSpan(packed);
+            min = max = source[0].Position;
+            foreach (ref readonly var vertex in source) { min = Vector3.Min(min, vertex.Position); max = Vector3.Max(max, vertex.Position); }
+        }
+        else if (!boundsCalculated)
+        {
+            var source = CollectionsMarshal.AsSpan(vertices);
+            min = max = source[0];
+            foreach (var vertex in source) { min = Vector3.Min(min, vertex); max = Vector3.Max(max, vertex); }
+        }
         Vector3 globalMin = offset == 0 ? min : Vector3.Min(meshBounds.min, min);
         Vector3 globalMax = offset == 0 ? max : Vector3.Max(meshBounds.max, max);
         meshBounds.SetMinMax(globalMin, globalMax); dirty = true;

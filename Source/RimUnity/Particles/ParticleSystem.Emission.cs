@@ -26,6 +26,11 @@ public sealed partial class ParticleSystem
         elapsed += dt;
         float now = elapsed - delay;
         PrepareCollisionCandidates();
+
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using (Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.EmissionSchedule))
+#endif
+        {
         scheduledEmissions.Clear();
         if (emitting && emission.enabled && now >= 0)
         {
@@ -55,6 +60,7 @@ public sealed partial class ParticleSystem
                     }
             }
         }
+        }
         //duration 与 emission 开关无关，禁用发射模块也必须结束非循环系统。
         if (emitting && !main.loop && now >= main.duration) emitting = false;
         previousPosition = emitterTo;
@@ -72,8 +78,16 @@ public sealed partial class ParticleSystem
 
     private void AdvanceParticles(float to, float from)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.AdvanceParticles);
+#endif
+
         for (int i = count - 1; i >= 0; i--)
         {
+
+#if RIMUNITY_PARTICLE_ANALYSIS
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.ParticleVisits, 1);
+#endif
             ref Particle p = ref particles[i];
             if (p.birthOffset > to) continue;
             float birthOffset = Mathf.Max(from, p.birthOffset);
@@ -123,6 +137,13 @@ public sealed partial class ParticleSystem
     private void Spawn(EmitParams args, Vector3? emitterPosition = null, float? sampleTime = null, float birthOffset = 0,
         float? emissionTime = null, int batchIndex = 0, int batchCount = 1)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Spawn);
+#endif
+
+#if RIMUNITY_PARTICLE_ANALYSIS
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.SpawnAttempts);
+#endif
         float t = args.sampleTime ?? sampleTime ?? (main.duration > 0 ? Mathf.Repeat(Math.Max(0, elapsed - delay), main.duration) / main.duration : 0);
         uint seed = args.seed ?? (uint)(Random01() * uint.MaxValue);
         float Eval(MinMaxCurve c, uint salt) => c.Evaluate(t, Random(seed, salt));
@@ -166,6 +187,10 @@ public sealed partial class ParticleSystem
         p.remainingLifetime = p.startLifetime;
         if (p.startLifetime <= 0) return;
         ReserveParticleSlot();
+
+#if RIMUNITY_PARTICLE_ANALYSIS
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.Births, 1);
+#endif
         completed = false; particles[count++] = p; RecordTrail(p); SubEmit(p, 0, p.birthOffset);
     }
 

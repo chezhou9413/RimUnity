@@ -85,6 +85,8 @@ internal sealed class LabCpuMetrics
         frameWindows = new Window[checked(capacity * (int)LabFrameWindow.Count)];
         validWindows = new bool[capacity];
     }
+    internal int DetailFamily(int systemId) => systemFamilies.TryGetValue(systemId, out int family) ? family : 12;
+
     internal void Start()
     {
         if (Environment.CurrentManagedThreadId != thread) throw new InvalidOperationException("CPU capture must start on its owner thread.");

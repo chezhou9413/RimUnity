@@ -61,7 +61,7 @@ internal sealed partial class LabSampler
                 "\n\n" + Summary() + "\n\n测试条件\n" + config + "\n\n实例创建耗时（包含加载、对象构建及激活；不含销毁和随后帧中的粒子预热，二者仍计入整帧）\n" +
                 string.Join("\n", spawnCosts.OrderByDescending(p => p.Value.MaxMs).Select(p =>
                     $"{p.Key} | 次数 {p.Value.Count} | 首次 {p.Value.FirstMs:F3}ms | 平均 {p.Value.TotalMs / p.Value.Count:F3}ms | 最大 {p.Value.MaxMs:F3}ms | 分配 {p.Value.AllocatedBytes}B")) +
-                "\n\n" + PopulationText() + "\n\n" + CpuText(stages, batchReasons) + "\n\n测量边界\n" + Caveats, encoding);
+                "\n\n" + PopulationText() + "\n\n" + CpuText(stages, batchReasons) + "\n\n" + ParticleDetailText() + "\n\n测量边界\n" + Caveats, encoding);
             File.WriteAllText(prefix + ".json", JsonSerializer.Serialize(new
             {
                 Schema = 8, StartedUtc = startedUtc, StopReason = stopReason, Configuration = configuration,
@@ -78,7 +78,7 @@ internal sealed partial class LabSampler
                     StartPrivateBytes = startPrivateBytes, EndCaptured = endMemoryCaptured,
                     EndWorkingSetBytes = endMemoryCaptured ? (long?)workingSet : null,
                     EndPrivateBytes = endMemoryCaptured ? (long?)privateBytes : null, EndError = endMemoryError },
-                Summary = Summary(), Caveats, Cpu = CpuJson(stages, batchReasons), SpawnCosts = spawnCosts, Frames = samples.Take(count).ToArray()
+                Summary = Summary(), Caveats, ParticleDetail = ParticleDetailJson(), Cpu = CpuJson(stages, batchReasons), SpawnCosts = spawnCosts, Frames = samples.Take(count).ToArray()
             }, Json), encoding);
             using (var csv = new StreamWriter(prefix + ".frames.csv", false, encoding))
             {
@@ -89,6 +89,9 @@ internal sealed partial class LabSampler
                     csv.WriteLine(FormattableString.Invariant($"{s.Frame},{s.ElapsedMs:F3},{s.IntervalMs:F3},{s.AllocatedBytes},{s.Gen0},{s.Gen1},{s.Gen2},{s.Instances},{s.Systems},{s.Particles},{s.SubmittedItems},{s.ManagedBytes},{s.WorkingSetBytes},{s.PrivateBytes},{s.Spawned},{s.ThrottledFrames},{s.DetailedProbes},{s.ParticleDrawsBeforeBatch},{s.ParticleDrawsAfterBatch},{s.MainThreadAllocatedBytes},{s.ObserverCpuMs:F6},{s.ObserverAllocatedBytes},{s.ParticleUploadPages},{s.ParticlePool.Pages},{s.ParticlePool.UsedThisFrame},{s.ParticlePool.IdlePages},{s.ParticlePool.VertexCapacity},{s.ParticlePool.IndexCapacity},{s.ParticlePool.ManagedBufferBytes},{s.ParticlePool.NativeCpuBytes}"));
                 }
             }
+#if RIMUNITY_PARTICLE_ANALYSIS
+            particleDetail?.WriteFrames(prefix + ".particle-detail.frames.csv");
+#endif
             WriteCpuFrames(prefix, encoding);
             WritePopulationFrames(prefix, encoding);
             lastReport = prefix + ".txt";

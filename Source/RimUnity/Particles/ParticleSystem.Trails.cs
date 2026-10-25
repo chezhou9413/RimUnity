@@ -48,6 +48,10 @@ public sealed partial class ParticleSystem
     //采样容器在粒子死亡后复用，避免循环发射不断创建 List。
     private void RecordTrail(Particle p)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.TrailRecord);
+#endif
+
         if (!trails.enabled || trails.mode == ParticleSystemTrailMode.Ribbon || Random(p.randomSeed, 61) >= trails.ratio) return;
         if (!trailStates.TryGetValue(p.identity, out TrailState state)) trailStates.Add(p.identity, state = RentTrail());
         state.space = p.eventSpace;
@@ -60,6 +64,10 @@ public sealed partial class ParticleSystem
             * (trails.sizeAffectsLifetime ? SizeAt(p).x : 1);
         if (life <= 0) return;
         if (state.points.Count > 0) state.distance += Vector3.Distance(state.points[^1].position, position);
+
+#if RIMUNITY_PARTICLE_ANALYSIS
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.TrailPointsAdded, 1);
+#endif
         state.points.Add(new TrailPoint { position = position, remaining = life, lifetime = life, distance = state.distance });
     }
     private void FinishTrail(ulong identity)
@@ -70,6 +78,10 @@ public sealed partial class ParticleSystem
     }
     private void AgeTrails(float dt)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.TrailAging);
+#endif
+
         expiredTrails.Clear();
         foreach (var entry in trailStates)
         {
@@ -77,6 +89,10 @@ public sealed partial class ParticleSystem
             int alive = 0;
             for (int i = 0; i < points.Count; i++)
             {
+
+#if RIMUNITY_PARTICLE_ANALYSIS
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.TrailPointVisits, 1);
+#endif
                 var p = points[i]; p.remaining -= dt;
                 if (p.remaining > 0) points[alive++] = p;
             }
