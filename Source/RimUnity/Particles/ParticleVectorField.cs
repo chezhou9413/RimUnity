@@ -1,6 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
-using TexturePixelData = Waylith.Rendering.TexturePixelData;
+using TexturePixelData = Waylith.Graphics.Textures.TexturePixelData;
 using LoadedTextureFormat = Waylith.Rendering.LoadedTextureFormat;
 
 namespace RimUnity;
@@ -8,6 +8,7 @@ namespace RimUnity;
 //读取三维浮点体素，保留深度与有符号速度分量。
 internal static class ParticleVectorField
 {
+    //按贴图过滤模式采样三维力场速度。
     internal static Vector3 Sample(Texture3D texture, Vector3 uvw)
     {
         TexturePixelData data = texture.CoreTexture.CpuData;

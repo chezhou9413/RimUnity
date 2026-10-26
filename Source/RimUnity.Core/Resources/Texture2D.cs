@@ -34,7 +34,7 @@ public sealed partial class Texture2D : Texture
     public bool LoadImage(byte[] bytes, bool markNonReadable = false)
     {
         //宿主通用加载器会扩散透明像素的 RGB，破坏 Spine 等预乘纹理；PNG 直接保留解码像素。
-        byte[] pixels = Waylith.Rendering.PngDecoder.TryDecodeRgba32(bytes, out int decodedWidth, out int decodedHeight);
+        byte[] pixels = Waylith.Graphics.Textures.PngDecoder.TryDecodeRgba32(bytes, out int decodedWidth, out int decodedHeight);
         if (pixels != null)
         {
             PrepareFileWrite(true);

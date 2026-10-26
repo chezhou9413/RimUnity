@@ -8,9 +8,9 @@ RimUnity 是面向 RimWorld 1.7 的 Unity 资源导出与运行框架。在 Unit
 
 ## 快速开始
 
-**当前版本：0.1.18。独立模组、内置运行时和 Unity 导出工具见 [Releases](https://github.com/chezhou9413/RimUnity/releases/tag/v0.1.18)。**
+**当前版本：0.1.19。独立模组、内置运行时和 Unity 导出工具见 [Releases](https://github.com/chezhou9413/RimUnity/releases/tag/v0.1.19)。**
 
-0.1.18 优化粒子渲染，修复动画复用、材质与内置运行时加载问题，并提供默认关闭的地图 HDR 开关。使用内置运行时的内容模组需同步更新内置包。
+0.1.19 适配 RimWorld 1.7.4990 的 Waylith 贴图接口调整，修复 PNG 读取、贴图处理与粒子力场访问旧类型导致的异常。使用内置运行时的内容模组需同步更新内置包。
 
 | 接入方式 | 使用方法 |
 | --- | --- |
@@ -19,7 +19,7 @@ RimUnity 是面向 RimWorld 1.7 的 Unity 资源导出与运行框架。在 Unit
 
 **两种方式均需要 Harmony。** 从 0.1.13 起，独立版恢复提前加载，以兼容已有普通 DLL 模组；启用时固定使用独立版，内容模组应在它之后加载。未启用独立版时，选择满足内容要求的最高兼容内置版本。`References` 仅用于编译，不能额外复制到模组。没有联网检测或自动更新，支持离线游玩。
 
-RimUnity 基于 Waylith 提供兼容接口，**不包含、也不另行加载真正的 Unity 引擎**。本版功能变化详见[更新说明](Docs/zh-CN/Release-0.1.18.md)。
+RimUnity 基于 Waylith 提供兼容接口，**不包含、也不另行加载真正的 Unity 引擎**。本版功能变化详见[更新说明](Docs/zh-CN/Release-0.1.19.md)。
 
 只玩模组的玩家安装 Harmony、RimUnity 和对应内容模组即可，不需要 Unity 编辑器。制作资源的作者请先阅读[导出工具安装与第一次导出](Docs/zh-CN/ExporterSetup.md)。
 
