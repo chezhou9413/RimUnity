@@ -14,7 +14,9 @@ internal sealed partial class LabSampler
         particleDetail = null;
         particleDetailStatus = cpu == null ? "CpuStagesDisabled" : ParticleSpikeCapture.LabCaptureActive ? "ConflictingSpikeCapture" : "Enabled";
         if (particleDetailStatus != "Enabled") return;
-        particleDetail = new LabParticleDetail(Capacity, cpu.DetailFamily); particleDetail.Start();
+        particleDetail = new LabParticleDetail(Capacity, cpu.DetailFamily);
+        try { particleDetail.Start(); }
+        catch { particleDetail.Stop(); particleDetail = null; particleDetailStatus = "StartFailed"; throw; }
         lab.Status = "分析构建：几何/模拟交错抽样；细分耗时包含探针影响，不能作为优化前后基线。";
     }
     private void BeginParticleDetailFrame()
@@ -52,7 +54,7 @@ internal sealed partial class LabSampler
         text.AppendLine($"空 scope 校准 {report.EmptyScopeNanoseconds:F1} ns；数值缓冲 {report.BufferBytes} B。校准不从耗时扣除。");
         foreach (var domain in report.Domains)
         {
-            text.AppendLine($"\n{domain.Domain}：{domain.SelectedFrames} 个有效选中帧；以下平均均按这些帧计算，包含零调用帧。");
+            text.AppendLine($"\n{domain.Domain}：{domain.SelectedFrames} 个有效选中帧、{domain.ScopeCount} 次 scope；以下平均均按这些帧计算，包含零调用帧。");
             text.AppendLine("stage\tcalls\tcalls/selected_frame\tincl_ms\tself_ms\tp95_self_ms\tp99_self_ms\tmax_call_ms\tself_B/selected_frame");
             foreach (var row in domain.Stages)
                 text.AppendLine(FormattableString.Invariant($"{row.Stage}\t{row.Calls}\t{row.CallsPerSelectedFrame:F3}\t{row.InclusiveMs:F6}\t{row.SelfMs:F6}\t{row.P95SelfMs:F6}\t{row.P99SelfMs:F6}\t{row.MaxCallMs:F6}\t{row.SelfBytes:F1}"));
@@ -61,6 +63,8 @@ internal sealed partial class LabSampler
             text.AppendLine("family\tstage\tcalls\tincl_ms/selected_frame\tself_ms/selected_frame");
             foreach (var row in domain.Families) text.AppendLine(FormattableString.Invariant($"{row.Family}\t{row.Stage}\t{row.Calls}\t{row.InclusiveMs:F6}\t{row.SelfMs:F6}"));
         }
+        text.AppendLine("family 对照：" + string.Join(", ", System.Linq.Enumerable.Select(LabStressScenario.Names, (name, i) => i + "=" + name)) + ", 12=未归类");
+        text.AppendLine("counter 口径：CurveCalls/GradientCalls 包含常量模式；Samples 为实际曲线/渐变采样。SpaceConversions 为转换入口调用次数，包含恒等转换。");
         text.AppendLine(report.Caveats);
         return text.ToString();
     }

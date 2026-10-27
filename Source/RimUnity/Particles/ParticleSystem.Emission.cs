@@ -82,6 +82,10 @@ public sealed partial class ParticleSystem
         using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.AdvanceParticles);
 #endif
 
+        // No script callbacks run inside this synchronous advance. Module switches
+        // are read again at every emission/physics checkpoint, never cached across Steps.
+        bool physics = collision.enabled || trigger.enabled;
+        bool recordTrails = trails.enabled && trails.mode != ParticleSystemTrailMode.Ribbon;
         for (int i = count - 1; i >= 0; i--)
         {
 
@@ -91,7 +95,9 @@ public sealed partial class ParticleSystem
             ref Particle p = ref particles[i];
             if (p.birthOffset > to) continue;
             float birthOffset = Mathf.Max(from, p.birthOffset);
-            Vector3 fromPosition = WorldPosition(p);
+            // Death/collision subemitters may add events while this loop runs.
+            // Keep the event count live; disabled emission modules do not retire events.
+            Vector3 fromPosition = physics || subEmissionEvents.Count != 0 ? WorldPosition(p) : default;
             float particleDt = Mathf.Max(0, to - birthOffset); p.birthOffset = to;
             bool ring = main.ringBufferMode != ParticleSystemRingBufferMode.Disabled && p.remainingLifetime >= 0;
             float aliveDt = Mathf.Min(particleDt, Mathf.Max(0, p.remainingLifetime));
@@ -100,9 +106,9 @@ public sealed partial class ParticleSystem
             p.remainingLifetime -= particleDt;
             if (ring) UpdateRingAge(ref p);
             Integrate(ref p, aliveDt);
-            ApplyParticlePhysics(ref p, fromPosition, aliveDt, birthOffset);
-            RecordTrail(p);
-            CaptureParentMotion(p, fromPosition, aliveDt);
+            if (physics) ApplyParticlePhysics(ref p, fromPosition, aliveDt, birthOffset);
+            if (recordTrails) RecordTrail(p);
+            if (subEmissionEvents.Count != 0) CaptureParentMotion(p, fromPosition, aliveDt);
             if (p.physicsKilled || p.remainingLifetime < 0 || p.remainingLifetime == 0 && !ring)
             {
                 SubEmit(p, 2, birthOffset + aliveDt); ReleaseParticle(p.identity);

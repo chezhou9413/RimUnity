@@ -29,7 +29,7 @@ internal sealed partial class LabSampler
             uploadPages += samples[i].ParticleUploadPages;
         }
         var last = samples[count - 1];
-        return $"{stopReason} · {Seconds:F2} 秒 · {count} 帧\n" +
+        return (ParticleAnalysisBuild ? "分析构建：细分探针影响 CPU 耗时；本报告不能作为正式性能基线。\n" : "") + $"{stopReason} · {Seconds:F2} 秒 · {count} 帧\n" +
             $"平均 {1000 / Math.Max(.001, mean):F1} FPS / {mean:F2} ms\n" +
             $"P50 {Percentile(.5):F2} · P95 {Percentile(.95):F2} · P99 {Percentile(.99):F2} · 最大 {values[^1]:F2} ms\n" +
             $">33.3ms：{values.Count(v => v > 33.333)} 帧；>100ms：{values.Count(v => v > 100)} 帧\n" +

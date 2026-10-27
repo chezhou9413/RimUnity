@@ -369,6 +369,18 @@ internal static class Program
             && root.GetProperty("Frames")[0].GetProperty("ParticlePool").GetProperty("ManagedBufferBytes").GetInt64() > 0,
             "pool start, sampled peak and cleared endpoint remain distinct in report");
         Check(root.GetProperty("Cpu").GetProperty("Enabled").GetBoolean() && !root.GetProperty("Configuration").GetProperty("RuntimeIsStandalone").GetBoolean(), "source/measurement metadata exported");
+#if RIMUNITY_PARTICLE_ANALYSIS
+        var detail = root.GetProperty("ParticleDetail");
+        Check(root.GetProperty("Configuration").GetProperty("ParticleAnalysisBuild").GetBoolean()
+            && detail.GetProperty("Status").GetString() == "Enabled", "analysis flag and session status exported");
+        Check(detail.GetProperty("Capture").GetProperty("Domains")[0].GetProperty("SelectedFrames").GetInt32() == 1
+            && detail.GetProperty("Capture").GetProperty("OrdinaryFrames").GetInt64() == 1,
+            "sampler detailed and ordinary frame denominators exported");
+        Check(File.Exists(prefix + ".particle-detail.frames.csv") && File.ReadAllText(prefix + ".txt").Contains("不能作为正式性能基线"),
+            "detailed CSV and prominent baseline warning exported");
+#else
+        Check(!root.GetProperty("ParticleDetail").GetProperty("Available").GetBoolean(), "normal build reports details not compiled");
+#endif
         var coverage = root.GetProperty("Cpu").GetProperty("SnapshotCoverage");
         var familyRows = root.GetProperty("Cpu").GetProperty("Families");
         Check(familyRows.GetArrayLength() == 2 && familyRows[0].GetProperty("Calls").GetInt64() == 2

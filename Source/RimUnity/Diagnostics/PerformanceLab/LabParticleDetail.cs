@@ -113,6 +113,7 @@ internal sealed class LabParticleDetail
         writer.WriteLine("frame,domain,stage,calls,inclusive_ms,self_ms,self_bytes,scope_count");
         for (int f = 0; f < recorded; f++) for (int s = 0; s < Stages; s++)
         {
+            if ((s >= (int)ParticleDetailStage.Simulation) != (domains[f] == (byte)ParticleDetailDomain.Simulation)) continue;
             var m = frames[f * Stages + s];
             writer.WriteLine(FormattableString.Invariant($"{ordinals[f]},{(ParticleDetailDomain)domains[f]},{(ParticleDetailStage)s},{m.Calls},{Ms(m.Ticks):F6},{Ms(m.SelfTicks):F6},{m.SelfBytes},{scopesPerFrame[f]}"));
         }

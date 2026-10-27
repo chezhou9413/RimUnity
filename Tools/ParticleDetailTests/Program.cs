@@ -36,7 +36,7 @@ internal static class Program
         Check(JsonSerializer.Serialize(report).Contains("CallsPerSelectedFrame"), "JSON report serializes named measurements");
         var directory = Path.Combine(Path.GetTempPath(), "RimUnity", "ParticleDetail-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory); capture.WriteFrames(Path.Combine(directory, "frames.csv"));
-        Check(File.ReadAllLines(Path.Combine(directory, "frames.csv")).Length == 1 + 5 * (int)ParticleDetailStage.Count, "selected-frame CSV only");
+        Check(File.ReadAllLines(Path.Combine(directory, "frames.csv")).Length == 1 + 3 * (int)ParticleDetailStage.Simulation + 2 * ((int)ParticleDetailStage.Count - (int)ParticleDetailStage.Simulation), "selected-frame CSV only");
         Check(report.EmptyScopeNanoseconds > 0 && new LabParticleDetail(36000).BufferBytes <= 16 * 1024 * 1024, "calibration and memory bound");
         bool rejected = false; try { capture.Start(); } catch (InvalidOperationException) { rejected = true; }
         Check(rejected, "retired session cannot restart");

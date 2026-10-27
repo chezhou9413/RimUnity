@@ -105,7 +105,14 @@ internal sealed partial class LabSampler : IDisposable
 #if RIMUNITY_PARTICLE_ANALYSIS
         StartParticleDetail();
 #endif
-        cpu?.Start();
+        try { cpu?.Start(); }
+        catch
+        {
+#if RIMUNITY_PARTICLE_ANALYSIS
+            particleDetail?.Stop();
+#endif
+            process?.Dispose(); process = null; throw;
+        }
         allocated = GC.GetTotalAllocatedBytes(false);
         mainAllocated = GC.GetAllocatedBytesForCurrentThread();
         previous0 = GC.CollectionCount(0); previous1 = GC.CollectionCount(1); previous2 = GC.CollectionCount(2);
