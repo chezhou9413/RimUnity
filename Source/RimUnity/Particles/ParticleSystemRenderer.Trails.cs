@@ -21,10 +21,19 @@ public sealed partial class ParticleSystemRenderer
         var drawSpace = new ParticleSystem.DrawSpace(system);
         bool ribbon = module.mode == ParticleSystemTrailMode.Ribbon;
         Vector3 forward = camera != null ? camera.transform.forward : Vector3.forward;
+        bool reserved = streamPacking != StreamPacking.General;
         if (ribbon)
-            foreach (var trail in system.RibbonTrails()) AppendTrail(system, trail, true, forward, in drawSpace);
+        {
+            foreach (var trail in system.RibbonTrails())
+                if (reserved) AppendReservedTrail(system, trail, true, forward, in drawSpace);
+                else AppendTrail(system, trail, true, forward, in drawSpace);
+        }
         else
-            foreach (var trail in system.trailStates.Values) AppendTrail(system, trail, false, forward, in drawSpace);
+        {
+            foreach (var trail in system.trailStates.Values)
+                if (reserved) AppendReservedTrail(system, trail, false, forward, in drawSpace);
+                else AppendTrail(system, trail, false, forward, in drawSpace);
+        }
         Submit(ref trailBatch, trailMaterial, camera);
     }
 
@@ -91,7 +100,7 @@ public sealed partial class ParticleSystemRenderer
             }
             int start = vertices.Count;
             AppendTrailQuad(p0 - side * width0, p0 + side * width0, p1 + side * width1, p1 - side * width1,
-                u0, u1, c0, c1); Quad(start);
+                u0, u1, c0, c1); AppendTrailIndices(start);
             previousWidth = width1; previousColor = c1;
         }
     }

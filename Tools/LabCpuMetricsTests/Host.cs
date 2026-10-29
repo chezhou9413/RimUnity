@@ -153,17 +153,22 @@ namespace RimUnity.Diagnostics
     internal sealed class PerformanceLab
     {
         internal string Scenario = "selected-prefabs";
+        internal int StressParticleTarget = 64, StressOnlyFamily = -1;
+        internal string MeasurementJob => null;
         internal bool RegisterFixtureFamily;
         internal void RegisterCpuFamilies(LabCpuMetrics capture) { if (RegisterFixtureFamily) capture?.RegisterSystem(123, 0); }
         internal Dictionary<string, int> FixedDistribution => new();
         internal string[] ActiveEffects => Effects.Where(e => e.Selected).Select(e => e.Mod.PackageIdPlayerFacing + "/" + e.Path).ToArray();
-        internal bool IsCurrent = true, StableReady = true, FixedInstances = true, Playing = true, MeasureCpuStages = true;
+        internal bool IsCurrent = true, StableReady = true, FixedInstances = true, Playing = true;
+        internal LabCpuMode CpuMode = LabCpuMode.Stages;
+        internal bool MeasureCpuStages { get => CpuMode == LabCpuMode.Stages; set => CpuMode = value ? LabCpuMode.Stages : LabCpuMode.Off; }
         internal string Status;
         internal int Concurrency = 20, WarmupSeconds = 10, LiveCount = 20, Spawned = 20, ThrottledFrames;
         internal float Rate = 5, Lifetime = 5, Radius = 8, Scale = 1, RotationX;
         internal readonly List<Effect> Effects = new();
         internal readonly HashSet<GameObject> OwnedRoots = new();
         internal void CollectPopulationRoots(HashSet<GameObject> roots) { roots.Clear(); foreach (var root in OwnedRoots) roots.Add(root); }
+        internal int TrailPointCount() => 0;
         internal (int Systems, int Particles) Counts() => LiveCount == 0 ? (0, 0) : (80, 800);
         internal sealed class Effect
         {

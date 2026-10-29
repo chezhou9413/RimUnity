@@ -101,4 +101,12 @@ public sealed partial class ParticleSystem
         }
         foreach (ulong key in expiredTrails) { ReturnTrail(trailStates[key]); trailStates.Remove(key); }
     }
+    // Explicit lab observer only. Counts both ordinary and Ribbon stored points.
+    internal int DiagnosticTrailPointCount()
+    {
+        int total = 0;
+        foreach (var trail in trailStates.Values) total += trail.points.Count;
+        foreach (var trail in ribbons.Values) total += trail.points.Count;
+        return total;
+    }
 }

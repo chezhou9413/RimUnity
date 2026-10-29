@@ -38,6 +38,7 @@ internal sealed partial class LabWindow : Window
     //自动退出场景后及时关闭旧面板，避免窗口继续强制暂停游戏。
     public override void WindowUpdate()
     {
+        preventCameraMotion = lab.MeasurementRunning;
         base.WindowUpdate();
         if (PerformanceLab.Current != lab) Close();
     }
@@ -76,9 +77,15 @@ internal sealed partial class LabWindow : Window
             try
             {
                 float at = 0;
-                if (tab == 0) DrawControls(view.width, row, ref at);
-                else if (tab == 1) DrawEffects(view.width, row, ref at);
-                else DrawReports(view.width, row, ref at);
+                bool enabled = GUI.enabled;
+                try
+                {
+                    GUI.enabled = enabled && !lab.MeasurementRunning;
+                    if (tab == 0) DrawControls(view.width, row, ref at);
+                    else if (tab == 1) DrawEffects(view.width, row, ref at);
+                    else DrawReports(view.width, row, ref at);
+                }
+                finally { GUI.enabled = enabled; }
                 contentHeight = Math.Max(viewport.height, at + 8);
             }
             finally { Widgets.EndScrollView(); }

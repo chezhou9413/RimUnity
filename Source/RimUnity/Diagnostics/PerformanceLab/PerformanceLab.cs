@@ -23,7 +23,9 @@ internal sealed partial class PerformanceLab
     internal Map Map { get; private set; }
     internal List<LabEffect> Effects { get; private set; }
     internal LabSampler Sampler { get; private set; }
-    internal bool MeasureCpuStages = true;
+    internal LabMeasurementPanel MeasurementPanel { get; }
+    internal LabCpuMode CpuMode = LabCpuMode.Stages;
+    internal bool MeasureCpuStages { get => CpuMode == LabCpuMode.Stages; set => CpuMode = value ? LabCpuMode.Stages : LabCpuMode.Off; }
     internal string Status = "选择特效后开始播放；测试期间使用真实时间，殖民地保持暂停。";
     internal bool IsCurrent => !closing && Prefs.DevMode && Verse.Current.Game == game
         && Find.CurrentMap == Map && Map != null && WorldRendererUtility.DrawingMap;
@@ -34,6 +36,7 @@ internal sealed partial class PerformanceLab
         game = Verse.Current.Game; returnMap = Find.CurrentMap;
         previousSpeed = Find.TickManager.CurTimeSpeed; previousCameraSize = Find.CameraDriver.RootSize;
         application = EngineApplication.Instance;
+        MeasurementPanel = new LabMeasurementPanel(this);
     }
 
     [DebugAction("RimUnity", "特效性能测试场", allowedGameStates = AllowedGameStates.PlayingOnMap)]
@@ -116,6 +119,7 @@ internal sealed partial class PerformanceLab
         application.BeforeGraphicsShutdown -= Shutdown;
         try
         {
+            EndMeasurementSequence("退出测试场");
             Sampler?.Stop("退出测试场", export: true);
             ParticleSpikeCapture.EndLabCapture(detailedCapture);
             StopPlayback();

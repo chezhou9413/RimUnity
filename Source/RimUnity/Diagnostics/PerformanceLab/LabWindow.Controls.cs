@@ -83,16 +83,17 @@ internal sealed partial class LabWindow
     private void DrawReports(float width, float row, ref float y)
     {
         Label(lab.Sampler.Display, width, ref y);
-        const string cpuLabel = "记录 CPU 阶段、分配与合批原因（关闭可做对照）";
-        float cpuHeight = Math.Max(row, Text.CalcHeight(cpuLabel, width - 34) + 8);
         bool enabled = UnityEngine.GUI.enabled;
+        string modeLabel = lab.CpuMode switch { LabCpuMode.Off => "关闭（无 Bridge 计时）", LabCpuMode.BridgeOnly => "仅 Bridge 边界", _ => "分阶段" };
+        float modeHeight = Math.Max(row, Text.CalcHeight("采样模式：" + modeLabel + "（点击切换）", width - 16) + 12);
         try
         {
             UnityEngine.GUI.enabled = enabled && !lab.Sampler.Sampling;
-            Widgets.CheckboxLabeled(new URect(0, y, width, cpuHeight), cpuLabel, ref lab.MeasureCpuStages);
+            if (Widgets.ButtonText(new URect(0, y, width, modeHeight), "采样模式：" + modeLabel + "（点击切换）"))
+                lab.CpuMode = (LabCpuMode)(((int)lab.CpuMode + 1) % 3);
         }
         finally { UnityEngine.GUI.enabled = enabled; }
-        y += cpuHeight + 8;
+        y += modeHeight + 8;
         Slider("采样时长（秒）", ref seconds, 10, 300, 10, width, row, ref y);
         if (Widgets.ButtonText(new URect(0, y, width, row), lab.Sampler.Sampling ? "停止采样并导出" : "开始常规采样"))
         {
@@ -122,6 +123,6 @@ internal sealed partial class LabWindow
         }
         Label(lab.Status, width, ref y);
         Label("常规采样最多保留 36000 帧，达到上限也会停止并导出。退出场景自动停止采样、移除临时探针并清理实例。测试地图不允许保存。", width, ref y);
-        Label("CPU 阶段只在采样期间记录，默认开启；关闭后重新采样可检查探针影响。报告分别记录进程分配、主线程分配和已覆盖阶段分配。阶段时间是 CPU 调用耗时，包含宿主 API 和脚本；不是 GPU 时间。详细探针报告也保存在 RimUnityReports 目录。", width, ref y);
+        Label("CPU 阶段只在采样期间记录，默认开启；仅 Bridge 模式可用于对照内部阶段探针；关闭模式没有 Bridge 计时。报告分别记录进程分配、主线程分配和已覆盖阶段分配。阶段时间是 CPU 调用耗时，包含宿主 API 和脚本；不是 GPU 时间。详细探针报告也保存在 RimUnityReports 目录。", width, ref y);
     }
 }

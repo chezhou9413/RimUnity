@@ -12,7 +12,7 @@ internal static class Program
     { if (!valid) throw new Exception(message); checks++; }
     private static void Main()
     {
-        Families(); SnapshotCoverage(); Nesting(); Lifecycle(); Windows(); Batch(); PackedInputs(); Pages(); PoolLifecycle(); Population(); ObserverCost(); Reports();
+        MeasurementChecks.Run(m => Append(m)); Families(); SnapshotCoverage(); Nesting(); Lifecycle(); Windows(); Batch(); PackedInputs(); Pages(); PoolLifecycle(); Population(); ObserverCost(); Reports();
         Console.WriteLine($"PASS {checks} CPU capture/batch checks (production collector and batch code; fake mesh/host, no GPU).");
     }
     private static void Families()
@@ -394,7 +394,7 @@ internal static class Program
         var bridge = root.GetProperty("Cpu").GetProperty("Stages")[0];
         Check(bridge.GetProperty("Calls").GetInt64() == 2 && bridge.GetProperty("SelfBytesPerFrame").GetDouble() >= 256, "real sampler exports phase calls/allocations");
         var rows = File.ReadAllLines(prefix + ".frames.csv");
-        Check(rows.Length == 3 && rows.All(row => row.Split(',').Length == 30), "frame CSV headers/rows align including pool capacities");
+        Check(rows.Length == 3 && rows.All(row => row.Split(',').Length == 33), "frame CSV headers/rows align including pool capacities");
         Check(File.ReadAllLines(prefix + ".stages.csv").Count(row => row.Contains(",BridgeUpdate,")) == 2
             && File.ReadAllLines(prefix + ".batch.csv").Count(row => row.Contains(",MaterialChanged,")) == 2,
             "stage/batch CSV frame rows exported alongside pool activity");

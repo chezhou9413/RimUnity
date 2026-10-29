@@ -13,7 +13,7 @@ internal static class LabHooks
 {
     private const string Id = "Chezhou.RimUnity.PerformanceLab";
     private static readonly Harmony patcher = new(Id);
-    private static MethodInfo capture, save, bloom;
+    private static MethodInfo capture, save, bloom, nativeUi;
     private static Map removingMap;
 
     //地图快照计数和临时地图存档保护共用会话生命周期。
@@ -26,7 +26,18 @@ internal static class LabHooks
         patcher.Patch(capture, postfix: new HarmonyMethod(typeof(LabHooks), nameof(Captured)));
         bloom = AccessTools.Method(typeof(Rendering.BloomSettings), "Snapshot");
         patcher.Patch(bloom, postfix: new HarmonyMethod(typeof(LabHooks), nameof(OverrideBloom)));
+        // The native host is internal to RimWorld.dll. Resolve the verified real
+        // implementation once at session setup; no replacement type or shim.
+        var host = AccessTools.TypeByName("RimWorldWaylith.Imgui.ImGuiHost");
+        var snapshot = AccessTools.TypeByName("RimWorldWaylith.Imgui.ImGuiDrawSnapshot");
+        nativeUi = host == null || snapshot == null ? null : AccessTools.Method(host, "EndFrame", new[] { snapshot });
+        if (nativeUi == null) throw new MissingMethodException("宿主缺少原生 ImGui 帧提交入口，自动测量面板不可用。");
+        patcher.Patch(nativeUi, prefix: new HarmonyMethod(typeof(LabHooks), nameof(DrawNativeMeasurementPanel)));
     }
+
+    // EndFrame starts with ImGui.Render: the prefix is still in the native frame
+    // scope and runs once, unlike compatibility GUI's layout/repaint passes.
+    private static void DrawNativeMeasurementPanel() => PerformanceLab.Current?.MeasurementPanel.Draw();
 
     // Session-only frame settings. Never take ownership of another mod's layer,
     // and never write player settings or controls used by the normal map.
@@ -88,6 +99,7 @@ internal static class LabHooks
         if (capture != null) patcher.Unpatch(capture, HarmonyPatchType.All, Id);
         if (save != null) patcher.Unpatch(save, HarmonyPatchType.All, Id);
         if (bloom != null) patcher.Unpatch(bloom, HarmonyPatchType.All, Id);
-        capture = save = bloom = null;
+        if (nativeUi != null) patcher.Unpatch(nativeUi, HarmonyPatchType.All, Id);
+        capture = save = bloom = nativeUi = null;
     }
 }

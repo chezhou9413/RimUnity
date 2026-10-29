@@ -23,7 +23,7 @@ internal static partial class Program
         foreach (var layout in layouts)
         foreach (bool ribbon in new[] { false, true })
         foreach (string texture in new[] { "Stretch", "Tile", "DistributePerSegment", "RepeatPerSegment", "Static" })
-        foreach (int count in new[] { 0, 1, 2, 3, 17, 65, 257 })
+        foreach (int count in new[] { 0, 1, 2, 3, 16, 17, 32, 33, 64, 65, 256, 257 })
         {
             // Draw particle geometry first so stale per-particle stream fields are nonzero.
             // Trail ClearMesh must preserve its established fallback contract for all layouts.
@@ -59,10 +59,12 @@ internal static partial class Program
             }
         }
         Console.WriteLine($"PASS {cases} trail stream/growth cases x 3 draws, all supported streams, clear/nonempty append, changed camera direction and degenerate sides; nine channels match the old DLL byte for byte. No GPU.");
+        current.CheckTrailReservationFailure();
     }
 
     private static void BenchmarkTrailSpaces(Rig old, Rig current)
     {
+        Console.WriteLine("WARNING: cross-load-context timings are diagnostic only; same-DLL controls found large bias. Use Measure-TrailReservation.ps1 for performance comparisons.");
         foreach (var layout in new[] { Array.Empty<string>(), new[] { "UV" }, new[] { "Position", "Color" }, new[] { "UV", "VertexID" } })
         foreach (var (simulation, scaling, space, ribbon) in new[] {
             ("Local", "Hierarchy", 0, false), ("Local", "Local", 0, false), ("Local", "Shape", 0, false),

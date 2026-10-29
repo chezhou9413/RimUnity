@@ -12,7 +12,7 @@ internal sealed partial class LabSampler
     private void StartParticleDetail()
     {
         particleDetail = null;
-        particleDetailStatus = cpu == null ? "CpuStagesDisabled" : ParticleSpikeCapture.LabCaptureActive ? "ConflictingSpikeCapture" : "Enabled";
+        particleDetailStatus = cpu?.StagesEnabled != true ? "CpuStagesDisabled" : ParticleSpikeCapture.LabCaptureActive ? "ConflictingSpikeCapture" : "Enabled";
         if (particleDetailStatus != "Enabled") return;
         particleDetail = new LabParticleDetail(Capacity, cpu.DetailFamily);
         try { particleDetail.Start(); }

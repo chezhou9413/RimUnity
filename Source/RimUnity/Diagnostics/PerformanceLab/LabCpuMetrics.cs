@@ -7,6 +7,8 @@ namespace RimUnity.Diagnostics;
 
 // Main-thread source scopes, owned by one explicit lab sample. No engine/resource references.
 // Buffers are allocated before the sample clock starts and released with its report.
+internal enum LabCpuMode { Off, BridgeOnly, Stages }
+
 internal enum LabCpuStage
 {
     BridgeUpdate, ParticleSimulation, SceneDraw, ParticleRenderer, ParticleSort,
@@ -64,7 +66,10 @@ internal sealed class LabCpuMetrics
     internal readonly record struct SnapshotWork(long HdrCalls, long HdrCommands, long BloomCalls, long BloomCommands, int BloomMask);
     private SnapshotWork pendingSnapshot;
     private readonly SnapshotWork[] snapshotFrames;
-    internal readonly record struct Window(long Ticks, long Bytes);
+    internal readonly record struct Window(long Ticks, long Bytes, int Gen0 = 0, int Gen1 = 0, int Gen2 = 0);
+    private int bridgeGen0, bridgeGen1, bridgeGen2, bridgeEndGen0, bridgeEndGen1, bridgeEndGen2;
+    internal LabCpuMode Mode { get; }
+    internal bool StagesEnabled => Mode == LabCpuMode.Stages;
     private readonly Window[] frameWindows;
     private readonly bool[] validWindows;
     private long lastEnqueue, lastEnqueueBytes, prePoll, prePollBytes, bridgeStart, bridgeStartBytes, bridgeEnd, bridgeEndBytes;
@@ -77,10 +82,13 @@ internal sealed class LabCpuMetrics
     internal long CrossThreadScopes => Interlocked.Read(ref crossThreadScopes);
     private long crossThreadScopes;
 
-    internal LabCpuMetrics(int capacity)
+    internal LabCpuMetrics(int capacity, LabCpuMode mode = LabCpuMode.Stages)
     {
-        frames = new Metric[checked(capacity * StageCount)];
-        frameReasons = new long[checked(capacity * ReasonCount)];
+        if (mode == LabCpuMode.Off) throw new ArgumentOutOfRangeException(nameof(mode));
+        if (capacity < 1) throw new ArgumentOutOfRangeException(nameof(capacity));
+        Mode = mode;
+        frames = StagesEnabled ? new Metric[checked(capacity * StageCount)] : Array.Empty<Metric>();
+        frameReasons = StagesEnabled ? new long[checked(capacity * ReasonCount)] : Array.Empty<long>();
         snapshotFrames = new SnapshotWork[capacity];
         frameWindows = new Window[checked(capacity * (int)LabFrameWindow.Count)];
         validWindows = new bool[capacity];
@@ -105,7 +113,7 @@ internal sealed class LabCpuMetrics
     {
         if (stopped || ReferenceEquals(current, this) || Environment.CurrentManagedThreadId != thread)
             throw new InvalidOperationException("Register diagnostic identities before capture starts.");
-        if ((uint)family < FamilyCount && systemFamilies.Count < 1024) systemFamilies[instanceId] = family;
+        if (StagesEnabled && (uint)family < FamilyCount && systemFamilies.Count < 1024) systemFamilies[instanceId] = family;
     }
     internal Metric Family(int family, LabCpuStage stage) => familyTotals[family * StageCount + (int)stage];
     internal static Scope Measure(LabCpuStage stage)
@@ -115,7 +123,7 @@ internal sealed class LabCpuMetrics
     private static Scope Begin(LabCpuStage stage, int instanceId, bool identifySystem)
     {
         var capture = current;
-        if (capture == null) return default;
+        if (capture == null || !capture.StagesEnabled) return default;
         if (Environment.CurrentManagedThreadId != capture.thread)
         { Interlocked.Increment(ref capture.crossThreadScopes); return default; }
         if (capture.depth == StackCapacity) { capture.InvalidScopes++; return default; }
@@ -163,14 +171,14 @@ internal sealed class LabCpuMetrics
     internal static void Work(LabCpuStage stage, int vertices, int indices)
     {
         var capture = current;
-        if (capture == null || Environment.CurrentManagedThreadId != capture.thread) return;
+        if (capture == null || !capture.StagesEnabled || Environment.CurrentManagedThreadId != capture.thread) return;
         ref var metric = ref capture.pending[(int)stage];
         metric.Vertices += vertices; metric.Indices += indices;
     }
     internal static void Batch(LabBatchReason reason)
     {
         var capture = current;
-        if (capture != null && Environment.CurrentManagedThreadId == capture.thread) capture.reasons[(int)reason]++;
+        if (capture?.StagesEnabled == true && Environment.CurrentManagedThreadId == capture.thread) capture.reasons[(int)reason]++;
     }
     // Called at FrameEnqueued, outside source scopes; rows correspond to the lab frame CSV.
     internal void CompleteFrame(long now = 0, long allocated = -1)
@@ -179,7 +187,7 @@ internal sealed class LabCpuMetrics
         if (now == 0) now = Stopwatch.GetTimestamp();
         if (allocated < 0) allocated = GC.GetAllocatedBytesForCurrentThread();
         if (depth != 0) { InvalidScopes += depth; depth = 0; }
-        if (FrameCount == frames.Length / StageCount) return;
+        if (FrameCount == validWindows.Length) return;
         bool valid = prePollVisits == 1 && bridgeVisits == 1 && lastEnqueue != 0 && prePoll >= lastEnqueue && bridgeStart >= prePoll
             && bridgeEnd >= bridgeStart && now >= bridgeEnd;
         validWindows[FrameCount] = valid;
@@ -188,12 +196,13 @@ internal sealed class LabCpuMetrics
             int offset = FrameCount * (int)LabFrameWindow.Count;
             frameWindows[offset] = new(prePoll - lastEnqueue, Math.Max(0, prePollBytes - lastEnqueueBytes));
             frameWindows[offset + 1] = new(bridgeStart - prePoll, Math.Max(0, bridgeStartBytes - prePollBytes));
-            frameWindows[offset + 2] = new(bridgeEnd - bridgeStart, Math.Max(0, bridgeEndBytes - bridgeStartBytes));
+            frameWindows[offset + 2] = new(bridgeEnd - bridgeStart, Math.Max(0, bridgeEndBytes - bridgeStartBytes), bridgeEndGen0 - bridgeGen0, bridgeEndGen1 - bridgeGen1, bridgeEndGen2 - bridgeGen2);
             frameWindows[offset + 3] = new(now - bridgeEnd, Math.Max(0, allocated - bridgeEndBytes));
         }
         lastEnqueue = now; lastEnqueueBytes = allocated;
         prePoll = bridgeStart = bridgeEnd = 0;
         prePollVisits = bridgeVisits = 0;
+        if (!StagesEnabled) { FrameCount++; return; }
         Array.Copy(pending, 0, frames, FrameCount * StageCount, StageCount);
         Array.Copy(reasons, 0, frameReasons, FrameCount * ReasonCount, ReasonCount);
         for (int i = 0; i < familyTotals.Length; i++)
@@ -212,15 +221,15 @@ internal sealed class LabCpuMetrics
     internal static void RecordSnapshot(bool bloom, int commands, int mask)
     {
         var capture = current;
-        if (capture == null || Environment.CurrentManagedThreadId != capture.thread) return;
+        if (capture == null || !capture.StagesEnabled || Environment.CurrentManagedThreadId != capture.thread) return;
         var previous = capture.pendingSnapshot;
         capture.pendingSnapshot = bloom
             ? previous with { BloomCalls = previous.BloomCalls + 1, BloomCommands = previous.BloomCommands + commands, BloomMask = previous.BloomMask | mask }
             : previous with { HdrCalls = previous.HdrCalls + 1, HdrCommands = previous.HdrCommands + commands };
     }
     internal SnapshotWork GetSnapshot(int frame) => snapshotFrames[frame];
-    internal Metric Get(int frame, LabCpuStage stage) => frames[frame * StageCount + (int)stage];
-    internal long Reason(int frame, LabBatchReason reason) => frameReasons[frame * ReasonCount + (int)reason];
+    internal Metric Get(int frame, LabCpuStage stage) => StagesEnabled ? frames[frame * StageCount + (int)stage] : default;
+    internal long Reason(int frame, LabBatchReason reason) => StagesEnabled ? frameReasons[frame * ReasonCount + (int)reason] : 0;
     internal bool HasWindows(int frame) => validWindows[frame];
     internal Window GetWindow(int frame, LabFrameWindow window) => frameWindows[frame * (int)LabFrameWindow.Count + (int)window];
     internal void BeginMainFrame()
@@ -236,6 +245,7 @@ internal sealed class LabCpuMetrics
         var capture = current;
         if (capture == null || Environment.CurrentManagedThreadId != capture.thread) return default;
         capture.bridgeVisits++;
+        capture.bridgeGen0 = GC.CollectionCount(0); capture.bridgeGen1 = GC.CollectionCount(1); capture.bridgeGen2 = GC.CollectionCount(2);
         capture.bridgeStartBytes = GC.GetAllocatedBytesForCurrentThread(); capture.bridgeStart = Stopwatch.GetTimestamp();
         capture.bridgeEnd = 0;
         return new BridgeScope(capture);
@@ -248,6 +258,7 @@ internal sealed class LabCpuMetrics
         {
             if (owner == null || owner.stopped || Environment.CurrentManagedThreadId != owner.thread) return;
             owner.bridgeEnd = Stopwatch.GetTimestamp(); owner.bridgeEndBytes = GC.GetAllocatedBytesForCurrentThread();
+            owner.bridgeEndGen0 = GC.CollectionCount(0); owner.bridgeEndGen1 = GC.CollectionCount(1); owner.bridgeEndGen2 = GC.CollectionCount(2);
         }
     }
 }

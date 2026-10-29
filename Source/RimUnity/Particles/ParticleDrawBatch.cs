@@ -29,6 +29,9 @@ internal static class ParticleDrawBatch
     internal static int Outputs { get; private set; }
     internal static int IndependentDraws { get; private set; }
     private static int uploadPages;
+    private static long submittedVertices, submittedIndices;
+    internal static long SubmittedVertices => frame == Time.frameCount ? submittedVertices : 0;
+    internal static long SubmittedIndices => frame == Time.frameCount ? submittedIndices : 0;
     internal static int UploadPages => frame == Time.frameCount ? uploadPages : 0;
     internal static int Before => frame == Time.frameCount ? Inputs + IndependentDraws : 0;
     internal static int After => frame == Time.frameCount ? Outputs + IndependentDraws : 0;
@@ -59,6 +62,7 @@ internal static class ParticleDrawBatch
         {
             frame = Time.frameCount; cursor = 0;
             Inputs = Outputs = IndependentDraws = uploadPages = 0;
+            submittedVertices = submittedIndices = 0;
             Trim();
         }
         active = true;
@@ -72,6 +76,7 @@ internal static class ParticleDrawBatch
         using var cpu = LabCpuMetrics.Measure(LabCpuStage.BatchAttempt);
         int vertexCount = packed?.Count ?? vertices.Count;
         if (!active) { LabCpuMetrics.Batch(LabBatchReason.Inactive); return false; }
+        if (Sampling) { submittedVertices += vertexCount; submittedIndices += indices.Count; }
         LabBatchReason? reject = null;
         if (Diagnostics.ParticleDebugWindow.Capturing) reject = LabBatchReason.DebugCapture;
         else if (properties is { PropertyCount: > 0 }) reject = LabBatchReason.PropertyBlock;
@@ -168,5 +173,6 @@ internal static class ParticleDrawBatch
         End();
         foreach (var slot in slots) Object.DestroyImmediate(slot.Mesh);
         slots.Clear(); cursor = 0; frame = -1; Inputs = Outputs = IndependentDraws = uploadPages = 0;
+        submittedVertices = submittedIndices = 0;
     }
 }

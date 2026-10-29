@@ -16,7 +16,7 @@ internal static partial class Program
     {
         runtime = Path.GetFullPath(args[0]); game = Path.GetFullPath(args[1]); harmony = Path.GetFullPath(args[2]);
         AssemblyLoadContext.Default.Resolving += (_, name) => Resolve(name);
-        try { if (args[3] == "--simulation-dispatch") SimulationDispatchChecks.Run(args[4]); else if (args[3] == "--simulation-dispatch-bench") SimulationDispatchChecks.Benchmark(); else if (args[3] == "--particle-detail") CheckParticleDetail(); else if (args[3] == "--billboard-math") CheckBillboardMath(Path.GetFullPath(args[4])); else if (args[3] == "--billboard-phases") MeasureBillboardPhases(); else if (args[3] == "--packed-billboards") CheckPackedBillboards(Path.GetFullPath(args[4])); else if (args[3] == "--attribute-evaluation") CheckAttributeEvaluation(Path.GetFullPath(args[4])); else if (args[3] == "--stream-pack") CheckStreamPacking(Path.GetFullPath(args[4])); else if (args[3] == "--mesh-directions") CheckMeshDirections(Path.GetFullPath(args[4])); else if (args[3] == "--geometry-batch") CheckGeometryBatch(Path.GetFullPath(args[4])); else if (args[3] == "--sort-reuse") CheckSortReuse(Path.GetFullPath(args[4])); else if (args[3] == "--noise-reuse") NoiseReuseChecks.Run(Path.GetFullPath(args[4])); else if (args[3] == "--trail-reuse") CheckTrailReuse(Path.GetFullPath(args[4])); else if (args[3] == "--mixed-stress") MixedStressChecks.Run(); else if (args[3] == "--particle-physics-timeline") ParticlePhysicsTimelineChecks.Run(); else if (args[3] == "--particle-turnover") ParticleTurnoverChecks.Run(); else if (args[3] == "--mesh-alignment") CheckMeshAlignment(); else Run(Path.GetFullPath(args[3]), args.Length > 4 && !string.IsNullOrWhiteSpace(args[4]) ? Path.GetFullPath(args[4]) : null); return 0; }
+        try { if (args[3] == "--trail-reserve-single") BenchmarkTrailSingleRuntime(args[4]); else if (args[3] == "--trail-reserve-bench") BenchmarkTrailReservation(args[4], args[5]); else if (args[3] == "--measurement-load") CheckMeasurementLoad(); else if (args[3] == "--trail-phases") MeasureTrailPhases(args[4]); else if (args[3] == "--simulation-dispatch") SimulationDispatchChecks.Run(args[4]); else if (args[3] == "--simulation-dispatch-bench") SimulationDispatchChecks.Benchmark(); else if (args[3] == "--particle-detail") CheckParticleDetail(); else if (args[3] == "--billboard-math") CheckBillboardMath(Path.GetFullPath(args[4])); else if (args[3] == "--billboard-phases") MeasureBillboardPhases(); else if (args[3] == "--packed-billboards") CheckPackedBillboards(Path.GetFullPath(args[4])); else if (args[3] == "--attribute-evaluation") CheckAttributeEvaluation(Path.GetFullPath(args[4])); else if (args[3] == "--stream-pack") CheckStreamPacking(Path.GetFullPath(args[4])); else if (args[3] == "--mesh-directions") CheckMeshDirections(Path.GetFullPath(args[4])); else if (args[3] == "--geometry-batch") CheckGeometryBatch(Path.GetFullPath(args[4])); else if (args[3] == "--sort-reuse") CheckSortReuse(Path.GetFullPath(args[4])); else if (args[3] == "--noise-reuse") NoiseReuseChecks.Run(Path.GetFullPath(args[4])); else if (args[3] == "--trail-reuse") CheckTrailReuse(Path.GetFullPath(args[4])); else if (args[3] == "--mixed-stress") MixedStressChecks.Run(); else if (args[3] == "--particle-physics-timeline") ParticlePhysicsTimelineChecks.Run(); else if (args[3] == "--particle-turnover") ParticleTurnoverChecks.Run(); else if (args[3] == "--mesh-alignment") CheckMeshAlignment(); else Run(Path.GetFullPath(args[3]), args.Length > 4 && !string.IsNullOrWhiteSpace(args[4]) ? Path.GetFullPath(args[4]) : null); return 0; }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
     }
     private static void CheckTrailReuse(string baseline)
@@ -47,6 +47,7 @@ internal static partial class Program
         }
         Console.WriteLine($"PASS {scenario} trail scenarios / {scenario * 9} exact channel comparisons, including empty, Ribbon, five texture modes, event/world/local/custom spaces and edited curves. No GPU.");
         CheckTrailChannelWrites(old, current);
+        CheckShortLivedTrails(old, current);
         BenchmarkTrailSpaces(old, current);
     }
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
@@ -609,10 +610,13 @@ internal static partial class Program
             }
             return trail;
         }
+        private MethodInfo TrailAppendMethod() => Get(Renderer, "streamPacking").ToString() != "General"
+            ? renderer.GetMethod("AppendReservedTrail", Flags) ?? renderer.GetMethod("AppendTrail", Flags)
+            : renderer.GetMethod("AppendTrail", Flags);
         internal Dictionary<string, object[]> TrailChannels(object trail, bool ribbon, Vector3? forward = null, bool clear = true)
         {
             if (clear) renderer.GetMethod("ClearMesh", Flags).Invoke(Renderer, null);
-            var append = renderer.GetMethod("AppendTrail", Flags);
+            var append = TrailAppendMethod();
             object[] args = { System, trail, ribbon, forward ?? Vector3.forward };
             if (append.GetParameters().Length == 5)
                 args = args.Append(Activator.CreateInstance(drawSpace, Flags, null, new[] { System }, null)).ToArray();
@@ -624,7 +628,7 @@ internal static partial class Program
             var i = Expression.Variable(typeof(int), "i"); var done = Expression.Label();
             var self = Expression.Constant(Renderer, renderer);
             var space = Expression.Variable(drawSpace, "space");
-            var append = renderer.GetMethod("AppendTrail", Flags);
+            var append = TrailAppendMethod();
             var args = new List<Expression> { Expression.Constant(System, ps), Expression.Constant(trail, trail.GetType()), Expression.Constant(ribbon), Expression.Constant(Vector3.forward) };
             if (append.GetParameters().Length == 5) args.Add(space);
             return Expression.Lambda<Action>(Expression.Block(new[] { i, space },

@@ -52,6 +52,7 @@ internal sealed partial class PerformanceLab
     {
         // Bypasses authored emission limits only inside the developer test map.
         if (!IsCurrent || !DebugSettings.ShowDevGizmos) return;
+        StressParticleTarget = 64; StressOnlyFamily = -1;
         Concurrency = LabStressScenario.Families * LabStressScenario.Copies;
         FixedInstances = true; WarmupSeconds = 12; SampleSeconds = 60;
         Radius = 14; Scale = 1; RotationX = 0; Rate = 16; Lifetime = 4;
@@ -86,7 +87,7 @@ internal sealed partial class PerformanceLab
             {
                 stress = new LabStressScenario();
                 for (int i = 0; i < LabStressScenario.Families; i++)
-                    sequence.Add(new LabEffect { StressKind = i, Systems = i == 11 ? 2 : 1 });
+                    if (StressOnlyFamily < 0 || StressOnlyFamily == i) sequence.Add(new LabEffect { StressKind = i, Systems = i == 11 ? 2 : 1 });
             }
             catch (Exception ex) { stress?.Dispose(); stress = null; sequence.Clear(); Status = "混合场景创建失败：" + ex.Message; Log.Error("[RimUnity] " + ex); return; }
         }
@@ -122,6 +123,7 @@ internal sealed partial class PerformanceLab
             {
                 Sampler.Stop("关闭开发权限", export: true); StopPlayback(); Status = "混合压力场景已清空：开发权限已关闭。"; return;
             }
+            UpdateMeasurementSequence();
             double now = Now;
             for (int i = live.Count - 1; i >= 0; i--)
             {
@@ -167,6 +169,7 @@ internal sealed partial class PerformanceLab
         catch (Exception ex)
         {
             Sampler.Stop("播放异常：" + ex.Message, export: true);
+            EndMeasurementSequence("播放异常：" + ex.Message);
             StopPlayback();
             Status = "播放已停止：" + ex.Message;
             Log.Error("[RimUnity] 测试场播放失败：" + ex);
@@ -194,6 +197,7 @@ internal sealed partial class PerformanceLab
                 root.transform.localScale *= Scale;
                 var systems = root.GetComponentsInChildren<ParticleSystem>(true);
                 if (FixedInstances) ConfigureFixedSystems(systems, instance);
+                if (MeasurementRunning) ConfigureMeasurementLoad(systems);
                 foreach (var system in systems) { system.main.useUnscaledTime = true; system.main.playOnAwake = true; }
                 root.SetActive(true);
                 live.Add(new LiveEffect(root, systems, FixedInstances ? double.PositiveInfinity : now + Lifetime, effect.StressKind));
@@ -233,6 +237,18 @@ internal sealed partial class PerformanceLab
             foreach (var system in effect.Systems)
                 if (system != null && system.isActiveAndEnabled) { systems++; particles += system.particleCount; }
         return (systems, particles);
+    }
+
+    // Observer-only point counts; no curve/geometry evaluation and no retained references.
+    internal int TrailPointCount()
+    {
+        int count = 0;
+        foreach (var effect in live) foreach (var system in effect.Systems)
+            if (system != null && system.isActiveAndEnabled)
+            {
+                count += system.DiagnosticTrailPointCount();
+            }
+        return count;
     }
 
     // Include dynamically attached descendants by hierarchy, not only the initial component list.

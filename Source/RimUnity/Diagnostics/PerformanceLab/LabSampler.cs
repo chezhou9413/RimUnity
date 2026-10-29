@@ -42,7 +42,7 @@ internal sealed partial class LabSampler : IDisposable
         long ManagedBytes, long WorkingSetBytes, long PrivateBytes, int Spawned, int ThrottledFrames, bool DetailedProbes,
         int ParticleDrawsBeforeBatch, int ParticleDrawsAfterBatch,
         long MainThreadAllocatedBytes, double ObserverCpuMs, long ObserverAllocatedBytes, int ParticleUploadPages,
-        ParticleDrawBatch.PoolUsage ParticlePool, LabPopulation.State ParticlePopulation);
+        ParticleDrawBatch.PoolUsage ParticlePool, LabPopulation.State ParticlePopulation, int TrailPoints, long SubmittedVertices, long SubmittedIndices);
 
     //实例化阶段单独按资源汇总，预热和逐帧模拟耗时由详细探针报告定位。
     internal sealed class SpawnCost
@@ -64,7 +64,7 @@ internal sealed partial class LabSampler : IDisposable
         if (!lab.StableReady && !emptyBaseline) { lab.Status = "固定实例仍在建立或预热，完成后会自动开始采样。"; return; }
         Stop("重新开始采样", export: true);
         samples = new Sample[Capacity]; count = 0; submitted = 0; lastReport = null;
-        cpu = lab.MeasureCpuStages ? new LabCpuMetrics(Capacity) : null;
+        cpu = lab.CpuMode != LabCpuMode.Off ? new LabCpuMetrics(Capacity, lab.CpuMode) : null;
         lab.RegisterCpuFamilies(cpu);
         spawnCosts.Clear();
         duration = seconds; startedUtc = DateTime.UtcNow.ToString("O"); stopReason = "";
@@ -78,10 +78,13 @@ internal sealed partial class LabSampler : IDisposable
             PlaybackEnabled = lab.Playing, EmptyBaseline = emptyBaseline,
             ParticleBatchVertexLimit = ParticleDrawBatch.VertexLimit, ParticleBatchIndexLimit = ParticleDrawBatch.IndexLimit,
             Scenario = lab.Scenario, Effects = lab.ActiveEffects, CameraRootSize = Find.CameraDriver?.RootSize,
-            StressFamilies = lab.Scenario == LabStressScenario.Version ? LabStressScenario.Names : Array.Empty<string>(),
+            StressFamilies = lab.Scenario != LabStressScenario.Version ? Array.Empty<string>() : lab.StressOnlyFamily < 0 ? LabStressScenario.Names : new[] { LabStressScenario.Names[lab.StressOnlyFamily] },
             FixedInstanceDistribution = lab.FixedDistribution,
             StressWorldLayer = lab.Scenario == LabStressScenario.Version ? LabStressScenario.WorldLayer : -1,
-            StressMaxParticlesPerSystem = lab.Scenario == LabStressScenario.Version ? LabStressScenario.ParticleLimit : 0,
+            StressMaxParticlesPerSystem = lab.Scenario == LabStressScenario.Version ? lab.StressParticleTarget : 0,
+            lab.StressOnlyFamily, AutomaticMeasurementJob = lab.MeasurementJob,
+            StressEmissionRule = lab.MeasurementJob == null ? "AuthoredRecipe" : "RootRate=Target/StartLifetime; ChildEventContractPreserved",
+            GeometryCounters = "WorldBatchInputs; all active world cameras; accepted and independent fallback inputs; not GPU work",
             AssetWarnings = lab.Effects.FindAll(e => lab.Scenario == "selected-prefabs" && e.Selected && e.Warnings.Length > 0)
                 .ConvertAll(e => new { Effect = e.Mod.PackageIdPlayerFacing + "/" + e.Path, e.Warnings }),
             RimUnityVersion = typeof(PerformanceLab).Assembly.ManifestModule.ModuleVersionId.ToString(),
@@ -90,7 +93,7 @@ internal sealed partial class LabSampler : IDisposable
             BloomEnabled = bloom.Enabled, BloomLayerMask = bloom.LayerMask, BloomThreshold = bloom.Threshold, BloomIntensity = bloom.Intensity,
             BloomSoftKnee = bloom.SoftKnee, BloomScatter = bloom.Scatter,
             BloomSource = lab.Scenario == LabStressScenario.Version ? "TestMapOnlyOverride" : "PlayerAndContentSettings",
-            CpuStagesEnabled = lab.MeasureCpuStages, CpuStageSchema = 4, ParticleAnalysisBuild,
+            CpuStagesEnabled = lab.MeasureCpuStages, CpuMode = lab.CpuMode.ToString(), CpuStageSchema = 5, ParticleAnalysisBuild,
             ParticleUploadMode = "OrderedSubmeshPages", ParticlePageSegmentLimit = ParticleDrawBatch.SegmentLimit,
             ProcessMemorySampling = "BeforeAndAfterOnly; frame process memory columns retain the before-sample snapshot",
             RuntimeVersion = RuntimeInfo.Version, RuntimeProvider = RuntimeInfo.Provider,
@@ -167,7 +170,7 @@ internal sealed partial class LabSampler : IDisposable
                 submitted, managedBytes, workingSet, privateBytes, lab.Spawned - spawnStart,
                 lab.ThrottledFrames - throttledStart, ParticleSpikeCapture.LabCaptureActive,
                 ParticleDrawBatch.Before, ParticleDrawBatch.After,
-                Math.Max(0, mainTotal - mainAllocated), 0, 0, ParticleDrawBatch.UploadPages, ParticleDrawBatch.ReadPoolUsage(), LabPopulation.Read(lab, populationRoots));
+                Math.Max(0, mainTotal - mainAllocated), 0, 0, ParticleDrawBatch.UploadPages, ParticleDrawBatch.ReadPoolUsage(), LabPopulation.Read(lab, populationRoots), lab.TrailPointCount(), ParticleDrawBatch.SubmittedVertices, ParticleDrawBatch.SubmittedIndices);
             count++;
             previous = now; allocated = total; mainAllocated = mainTotal; previous0 = g0; previous1 = g1; previous2 = g2;
             if (refresh)

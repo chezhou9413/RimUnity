@@ -11,7 +11,8 @@ internal static class LabCpuReport
         double P95SelfMs, double P99SelfMs, double MaxFrameInclusiveMs, double MaxCallMs,
         double InclusiveBytesPerFrame, double SelfBytesPerFrame, long Vertices, long Indices);
     internal sealed record BatchCounter(string Name, long Count, double PerFrame);
-    internal sealed record FrameWindow(string Name, int CompleteFrames, double MeanMs, double P95Ms, double MaxMs, double BytesPerFrame);
+    internal sealed record FrameWindow(string Name, int CompleteFrames, double MeanMs, double P95Ms, double MaxMs, double BytesPerFrame, double P99Ms, double StdDevMs, long Gen0, long Gen1, long Gen2)
+    { public bool GcCountersAvailable => Name == "Bridge"; }
     internal static FrameWindow[] Windows(LabCpuMetrics cpu)
     {
         if (cpu == null) return Array.Empty<FrameWindow>();
@@ -22,23 +23,27 @@ internal static class LabCpuReport
         var ticks = new long[complete];
         for (int w = 0; w < result.Length; w++)
         {
-            long totalTicks = 0, bytes = 0; int index = 0;
+            long totalTicks = 0, bytes = 0, g0 = 0, g1 = 0, g2 = 0; int index = 0;
             for (int f = 0; f < cpu.FrameCount; f++)
                 if (cpu.HasWindows(f))
                 {
                     var value = cpu.GetWindow(f, (LabFrameWindow)w);
                     ticks[index++] = value.Ticks; totalTicks += value.Ticks; bytes += value.Bytes;
+                    g0 += value.Gen0; g1 += value.Gen1; g2 += value.Gen2;
                 }
             Array.Sort(ticks);
             int p95 = Math.Clamp((int)Math.Ceiling(complete * .95) - 1, 0, complete - 1);
+            double variance = 0, mean = totalTicks / (double)complete;
+            foreach (long value in ticks) variance += (value - mean) * (value - mean);
+            int p99 = Math.Clamp((int)Math.Ceiling(complete * .99) - 1, 0, complete - 1);
             result[w] = new FrameWindow(((LabFrameWindow)w).ToString(), complete, Ms(totalTicks) / complete,
-                Ms(ticks[p95]), Ms(ticks[^1]), bytes / (double)complete);
+                Ms(ticks[p95]), Ms(ticks[^1]), bytes / (double)complete, Ms(ticks[p99]), Math.Sqrt(variance / complete) * 1000d / Stopwatch.Frequency, g0, g1, g2);
         }
         return result;
     }
     internal static Stage[] Stages(LabCpuMetrics cpu)
     {
-        if (cpu == null || cpu.FrameCount == 0) return Array.Empty<Stage>();
+        if (cpu == null || !cpu.StagesEnabled || cpu.FrameCount == 0) return Array.Empty<Stage>();
         int frames = cpu.FrameCount;
         var result = new Stage[LabCpuMetrics.StageCount];
         var inclusive = new long[frames]; var self = new long[frames];
@@ -65,7 +70,7 @@ internal static class LabCpuReport
     }
     internal static BatchCounter[] Reasons(LabCpuMetrics cpu)
     {
-        if (cpu == null || cpu.FrameCount == 0) return Array.Empty<BatchCounter>();
+        if (cpu == null || !cpu.StagesEnabled || cpu.FrameCount == 0) return Array.Empty<BatchCounter>();
         var result = new BatchCounter[LabCpuMetrics.ReasonCount];
         for (int r = 0; r < result.Length; r++)
         {
