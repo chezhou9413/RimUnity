@@ -17,7 +17,7 @@ namespace RimUnity.Editor
             ["UnityEngine.AudioSource"] = new[] { "clip", "playOnAwake", "loop", "mute", "volume", "pitch", "panStereo", "spatialBlend" },
             ["UnityEngine.AudioListener"] = Array.Empty<string>(),
             ["UnityEngine.Video.VideoPlayer"] = new[] { "clip", "url", "source", "renderMode", "targetTexture", "aspectRatio", "audioOutputMode", "playOnAwake", "waitForFirstFrame", "skipOnDrop", "isLooping", "playbackSpeed" },
-            ["UnityEngine.Camera"] = new[] { "orthographic", "orthographicSize", "nearClipPlane", "farClipPlane", "fieldOfView", "cullingMask", "rect", "targetTexture", "backgroundColor", "clearFlags", "depth" },
+            ["UnityEngine.Camera"] = new[] { "orthographic", "orthographicSize", "nearClipPlane", "farClipPlane", "fieldOfView", "cullingMask", "rect", "targetTexture", "backgroundColor", "allowHDR", "clearFlags", "depth" },
             ["UnityEngine.Light"] = new[] { "type", "color", "intensity", "range", "spotAngle", "shadows", "shadowStrength", "shadowBias", "shadowNormalBias", "cullingMask" },
             ["UnityEngine.Canvas"] = new[] { "renderMode", "sortingOrder", "worldCamera", "scaleFactor", "referencePixelsPerUnit", "overrideSorting", "planeDistance" },
             ["UnityEngine.CanvasGroup"] = new[] { "alpha", "interactable", "blocksRaycasts", "ignoreParentGroups" },
