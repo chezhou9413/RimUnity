@@ -8,9 +8,9 @@ RimUnity is a Unity asset exporter and runtime framework for RimWorld 1.7. Creat
 
 ## Quick start
 
-**Current version: 0.1.19. Download the standalone mod, embedded runtime and Unity exporter from [Releases](https://github.com/chezhou9413/RimUnity/releases/tag/v0.1.19).**
+**Current version: 0.1.20. Download the standalone mod, embedded runtime and Unity exporter from [Releases](https://github.com/chezhou9413/RimUnity/releases/tag/v0.1.20).**
 
-Version 0.1.19 adapts to the Waylith texture API changes in RimWorld 1.7.4990, fixing errors caused by old type references in PNG loading, texture processing and particle force fields. Content mods using the embedded runtime should update their embedded package.
+Version 0.1.20 optimizes particle simulation and trail writes, improves automated performance measurement, fixes UI positioning, hover events and text visibility, and makes the settings window draggable. Content mods using the embedded runtime should update their embedded package.
 
 | Integration | Usage |
 | --- | --- |
@@ -19,7 +19,7 @@ Version 0.1.19 adapts to the Waylith texture API changes in RimWorld 1.7.4990, f
 
 **Both modes require Harmony.** Since 0.1.13, standalone runtime DLLs load early again to support ordinary C# mods. Enabled standalone always supplies the runtime; dependent mods load after it. Without standalone, the highest compatible embedded version satisfying content requirements wins. References are compile-only. Selection works offline without automatic updates.
 
-RimUnity provides compatibility APIs on Waylith and **does not include or load a separate, real Unity engine**. See the [release notes](Docs/en/Release-0.1.19.md) for this version's changes.
+RimUnity provides compatibility APIs on Waylith and **does not include or load a separate, real Unity engine**. See the [release notes](Docs/en/Release-0.1.20.md) for this version's changes.
 
 Players only need Harmony, RimUnity and the relevant content mod; the Unity Editor is not required. Asset authors should start with [installing the exporter and exporting a first prefab](Docs/en/ExporterSetup.md).
 

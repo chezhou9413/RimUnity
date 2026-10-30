@@ -16,7 +16,8 @@ internal static partial class UguiTextRenderer
         GlyphVertices.Clear();
         Material material = text.material;
         if (material != null) material.SetFloat("_ClTime", Time.unscaledTime);
-        //截断模式先排除放不下的行，再计算对齐，末尾空行不能把可见文字向上挤。
+        //首行与宿主一样保留并按文字框裁剪，字体行高或缩放取整不能让单行控件完全空白。
+        //后续放不下的行不参与对齐，末尾空行不能把可见文字向上挤。
         int lineCount = layout.Lines.Length;
         float height = layout.Size.y;
         if (text.verticalOverflow == VerticalWrapMode.Truncate)
@@ -26,7 +27,7 @@ internal static partial class UguiTextRenderer
             foreach (var line in layout.Lines)
             {
                 float bottom = line.Top * text.lineSpacing + line.FirstLine;
-                if (bottom > bounds.height + 0.001f) break;
+                if (lineCount > 0 && bottom > bounds.height + 0.001f) break;
                 height = bottom;
                 lineCount++;
             }
