@@ -64,7 +64,8 @@ internal sealed partial class LabSampler : IDisposable
         if (!lab.StableReady && !emptyBaseline) { lab.Status = "固定实例仍在建立或预热，完成后会自动开始采样。"; return; }
         Stop("重新开始采样", export: true);
         samples = new Sample[Capacity]; count = 0; submitted = 0; lastReport = null;
-        cpu = lab.CpuMode != LabCpuMode.Off ? new LabCpuMetrics(Capacity, lab.CpuMode) : null;
+        cpu = lab.CpuMode != LabCpuMode.Off ? new LabCpuMetrics(Capacity, lab.CpuMode,
+            LabMeasurementPlan.IsTrailComparison(lab.MeasurementJob) || lab.MeasurementJob?.StartsWith("trail-detail-", StringComparison.Ordinal) == true) : null;
         lab.RegisterCpuFamilies(cpu);
         spawnCosts.Clear();
         duration = seconds; startedUtc = DateTime.UtcNow.ToString("O"); stopReason = "";
@@ -83,6 +84,7 @@ internal sealed partial class LabSampler : IDisposable
             StressWorldLayer = lab.Scenario == LabStressScenario.Version ? LabStressScenario.WorldLayer : -1,
             StressMaxParticlesPerSystem = lab.Scenario == LabStressScenario.Version ? lab.StressParticleTarget : 0,
             lab.StressOnlyFamily, AutomaticMeasurementJob = lab.MeasurementJob,
+            TrailWriteComparison = LabMeasurementPlan.IsTrailComparison(lab.MeasurementJob),
             StressEmissionRule = lab.MeasurementJob == null ? "AuthoredRecipe" : "RootRate=Target/StartLifetime; ChildEventContractPreserved",
             GeometryCounters = "WorldBatchInputs; all active world cameras; accepted and independent fallback inputs; not GPU work",
             AssetWarnings = lab.Effects.FindAll(e => lab.Scenario == "selected-prefabs" && e.Selected && e.Warnings.Length > 0)

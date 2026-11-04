@@ -73,6 +73,9 @@ internal static class ParticleDrawBatch
         List<Vector3> vertices, List<Vector3> normals, List<Vector4> tangents, List<Color32> colors,
         List<Vector4> uv0, List<Vector4> uv1, List<Vector4> uv2, List<int> indices, List<ParticleVertex> packed = null)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var detailAttempt = LabParticleDetail.Measure(ParticleDetailStage.BatchAttempt);
+#endif
         using var cpu = LabCpuMetrics.Measure(LabCpuStage.BatchAttempt);
         int vertexCount = packed?.Count ?? vertices.Count;
         if (!active) { LabCpuMetrics.Batch(LabBatchReason.Inactive); return false; }
@@ -114,7 +117,14 @@ internal static class ParticleDrawBatch
             indexCount = 0;
         }
         if (material == null) { material = source; layer = drawLayer; materialVersion = source.engineMaterial.Version; }
+#if RIMUNITY_PARTICLE_ANALYSIS
+        LabParticleDetail.Work(ParticleDetailWork.BatchVertices, vertexCount);
+        LabParticleDetail.Work(ParticleDetailWork.BatchIndices, indices.Count);
+#endif
         using (LabCpuMetrics.Measure(LabCpuStage.BatchGeometry))
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using (LabParticleDetail.Measure(ParticleDetailStage.BatchAppend))
+#endif
             pending.Mesh.AppendParticleGeometry(vertices, normals, tangents, colors, uv0, uv1, uv2, indices, segments.Count, packed);
         LabCpuMetrics.Work(LabCpuStage.BatchGeometry, vertexCount, indices.Count);
         LabCpuMetrics.Batch(LabBatchReason.Accepted);
@@ -133,6 +143,10 @@ internal static class ParticleDrawBatch
     internal static void Flush()
     {
         if (pending == null) return;
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var detailFlush = LabParticleDetail.Measure(ParticleDetailStage.BatchFlush);
+#endif
+        using var trailCpu = LabTrailCpu.Measure(LabTrailCpu.Stage.GlobalFlush);
         using var cpu = LabCpuMetrics.Measure(LabCpuStage.BatchFlush);
         using var spike = Diagnostics.ParticleSpikeCapture.Measure("Particle.BatchFlush");
         try
@@ -142,6 +156,9 @@ internal static class ParticleDrawBatch
             {
                 var segment = segments[i];
                 using (LabCpuMetrics.Measure(LabCpuStage.DrawMesh))
+#if RIMUNITY_PARTICLE_ANALYSIS
+                using (LabParticleDetail.Measure(ParticleDetailStage.BatchDraw))
+#endif
                     Graphics.DrawMesh(pending.Mesh, Matrix4x4.identity, segment.Material, segment.Layer, i);
                 if (Sampling) Outputs++;
             }

@@ -37,6 +37,9 @@ internal static partial class Program
             var expected = old.TrailChannels(left, ribbon);
             var actual = current.TrailChannels(right, ribbon);
             Compare(expected, actual, "clear");
+            current.LegacyTrailWrites(true);
+            try { Compare(expected, current.TrailChannels(right, ribbon), "legacy reference"); }
+            finally { current.LegacyTrailWrites(false); }
             // Append behind existing channels, with a second camera direction, then clear/reuse.
             expected = old.TrailChannels(left, ribbon, new Vector3(.3f, -.7f, .2f), false);
             actual = current.TrailChannels(right, ribbon, new Vector3(.3f, -.7f, .2f), false);

@@ -19,6 +19,9 @@ public sealed partial class ParticleSystemRenderer
     // no channel is resized or submitted until the entire trail has been written.
     private void ReserveTrail(int segments)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var detail = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.TrailReserve);
+#endif
         int count = checked(segments * 4), indexCount = checked(segments * 6);
         AppendSlots(vertices, count);
         AppendSlots(uv, count);

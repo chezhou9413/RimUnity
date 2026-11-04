@@ -47,7 +47,7 @@ internal sealed partial class LabSampler
     }
     private string ParticleDetailText()
     {
-        var text = new StringBuilder("粒子细分测量（分析构建） / schema 1 / 状态：" + particleDetailStatus + "\n");
+        var text = new StringBuilder("粒子细分测量（分析构建） / schema 2 / 状态：" + particleDetailStatus + "\n");
         if (particleDetail == null) return text.ToString();
         var report = particleDetail.Snapshot();
         text.AppendLine($"每 {report.Stride} 帧：几何偏移 0、模拟偏移 15；普通完整帧 {report.OrdinaryFrames}；无效 {report.InvalidFramesOrScopes}；跨线程调用 {report.CrossThreadCalls}。");

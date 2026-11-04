@@ -17,6 +17,9 @@ public sealed partial class Mesh
         Runtime.NativeRuntime.AssertThread();
         if (!this) throw new ObjectDisposedException(name);
         if (!dirty) return;
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var detail = ParticleMeshProbe.Measure(ParticleMeshStage.Flush);
+#endif
         bool packed = particleVertices.Count != 0;
         int mask = ChannelBit(normalData.Count, 0) | ChannelBit(tangentData.Count, 1) | ChannelBit(colorData.Count, 2);
         for (int i = 0; i < 8; i++) mask |= ChannelBit(texcoords[i]?.Count ?? 0, i + 3);
@@ -57,23 +60,28 @@ public sealed partial class Mesh
                 }
             }
         }
-        storage.SetIndexBufferParams(indexCount, format == IndexFormat.UInt32 ? MeshIndexFormat.UInt32 : MeshIndexFormat.UInt16);
-        storage.SetSubMeshCount(activeSubmeshes);
-        Vector3 min = meshBounds.min, max = meshBounds.max;
-        storage.Bounds = new(min.x, min.y, min.z, max.x, max.y, max.z);
-        byte* indicesTarget = (byte*)storage.GetIndexBuffer().Pointer;
-        int cursor = 0;
-        for (int s = 0; s < activeSubmeshes; s++)
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using (ParticleMeshProbe.Measure(ParticleMeshStage.PackIndices))
+#endif
         {
-            int start = cursor;
-            foreach (int index in submeshes[s])
+            storage.SetIndexBufferParams(indexCount, format == IndexFormat.UInt32 ? MeshIndexFormat.UInt32 : MeshIndexFormat.UInt16);
+            storage.SetSubMeshCount(activeSubmeshes);
+            Vector3 min = meshBounds.min, max = meshBounds.max;
+            storage.Bounds = new(min.x, min.y, min.z, max.x, max.y, max.z);
+            byte* indicesTarget = (byte*)storage.GetIndexBuffer().Pointer;
+            int cursor = 0;
+            for (int s = 0; s < activeSubmeshes; s++)
             {
-                if (format == IndexFormat.UInt32) ((uint*)indicesTarget)[cursor++] = (uint)index;
-                else ((ushort*)indicesTarget)[cursor++] = checked((ushort)index);
+                int start = cursor;
+                foreach (int index in submeshes[s])
+                {
+                    if (format == IndexFormat.UInt32) ((uint*)indicesTarget)[cursor++] = (uint)index;
+                    else ((ushort*)indicesTarget)[cursor++] = checked((ushort)index);
+                }
+                var bounds = particleBoundsValid && s < particleSubmeshBounds.Count ? particleSubmeshBounds[s] : meshBounds;
+                Vector3 subMin = bounds.min, subMax = bounds.max;
+                storage.SetSubMesh(s, new(start, cursor - start, bounds: new MeshBounds(subMin.x, subMin.y, subMin.z, subMax.x, subMax.y, subMax.z)));
             }
-            var bounds = particleBoundsValid && s < particleSubmeshBounds.Count ? particleSubmeshBounds[s] : meshBounds;
-            Vector3 subMin = bounds.min, subMax = bounds.max;
-            storage.SetSubMesh(s, new(start, cursor - start, bounds: new MeshBounds(subMin.x, subMin.y, subMin.z, subMax.x, subMax.y, subMax.z)));
         }
         native.MarkCpuStorageChanged(); dirty = false;
         edgeVersion++;

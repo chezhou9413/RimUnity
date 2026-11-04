@@ -9,6 +9,9 @@ public sealed partial class Mesh
     //只接管已有的完整粒子布局，其他 Mesh 继续使用通用通道上传。
     private unsafe bool UploadParticleVertices(byte* target, int mask, int stride)
     {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var detail = ParticleMeshProbe.Measure(ParticleMeshStage.PackVertices);
+#endif
         if (mask != 63 || stride != sizeof(ParticleVertex)) return false;
         if (particleVertices.Count != 0)
         {

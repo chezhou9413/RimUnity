@@ -198,6 +198,10 @@ internal sealed partial class PerformanceLab
                 var systems = root.GetComponentsInChildren<ParticleSystem>(true);
                 if (FixedInstances) ConfigureFixedSystems(systems, instance);
                 if (MeasurementRunning) ConfigureMeasurementLoad(systems);
+                if (MeasurementRunning)
+                    foreach (var system in systems)
+                        if (system.GetComponent<ParticleSystemRenderer>() is { } renderer)
+                            renderer.LabLegacyTrailWrites = measurementJobs[measurementIndex].LegacyTrails;
                 foreach (var system in systems) { system.main.useUnscaledTime = true; system.main.playOnAwake = true; }
                 root.SetActive(true);
                 live.Add(new LiveEffect(root, systems, FixedInstances ? double.PositiveInfinity : now + Lifetime, effect.StressKind));

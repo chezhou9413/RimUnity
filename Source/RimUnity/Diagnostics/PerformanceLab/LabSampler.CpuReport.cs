@@ -16,6 +16,7 @@ internal sealed partial class LabSampler
         ClockFrequency = System.Diagnostics.Stopwatch.Frequency,
         InvalidScopes = cpu?.InvalidScopes ?? 0, CrossThreadScopesSkipped = cpu?.CrossThreadScopes ?? 0,
         SnapshotCoverage = SnapshotCoverage(), Families = FamilyStages(), Caveats = CpuCaveats, Stages = stages, BatchCounters = reasons, FrameWindows = LabCpuReport.Windows(cpu),
+        TrailCpu = cpu?.Trails?.Snapshot(),
         FrameWindowCaveats = "Disjoint timeline windows partition complete FrameEnqueued intervals; overlap source scopes, so never add them to stage times. EnqueueToPrePoll includes the preceding Observer callback, event tails and waits. Missing, partial or reordered boundaries are omitted, never reported as zero. BridgeToEnqueue covers host work after the bridge; it is not proof of a specific host subsystem's allocation.",
         FrameData = "*.stages.csv, *.batch.csv and *.windows.csv; keyed by frame in *.frames.csv"
     };
@@ -49,6 +50,18 @@ internal sealed partial class LabSampler
             text.AppendLine("EnqueueToPrePoll 包含上一帧统计回调、后续事件及等待；PrePollToBridge 为桥接更新前的宿主工作；Bridge 包含测试场更新；BridgeToEnqueue 为桥接更新后的宿主工作。缺失/不完整边界不计入窗口汇总，不能当作零耗时。窗口只缩小范围，不证明分配属于某个宿主子系统。");
         }
         text.AppendLine("Bridge-only 仍包含边界计时、主线程分配与进程级 GC 计数开销，并非零探针。GC 只在 Bridge 边界读取，其他窗口不采集；其他线程触发也会被计入，不能据此归因 RU 或计算暂停时长。StdDev 为有效帧窗口的总体标准差，不是均值置信区间。");
+        if (cpu?.Trails is { } trails)
+        {
+            var trail = trails.Snapshot();
+            text.AppendLine($"拖尾系统级测量：有效帧 {trail.Frames}；异常帧 {trail.InvalidFrames}；未注册系统 scope {trail.UnknownSystemScopes}；非主线程 scope {trail.WrongThreadScopes}；旧/新几何调用 {trail.LegacyGeometryCalls}/{trail.CurrentGeometryCalls}");
+            text.AppendLine("trail_stage\tcalls/frame\tmean_ms\tp95_ms\tp99_ms\tmax_ms\tB/frame");
+            foreach (var row in trail.Stages)
+                text.AppendLine(FormattableString.Invariant($"{row.Stage}\t{row.CallsPerFrame:F3}\t{row.MeanMs:F6}\t{row.P95Ms:F6}\t{row.P99Ms:F6}\t{row.MaxMs:F6}\t{row.BytesPerFrame:F1}"));
+            text.AppendLine("system_slot\tinstance_id\tgeometry_ms/frame\tsubmit_ms/frame\tgeometry_calls/frame\tsubmit_calls/frame");
+            foreach (var row in trail.Systems)
+                text.AppendLine(FormattableString.Invariant($"{row.Slot}\t{row.InstanceId}\t{row.Geometry.MeanMs:F6}\t{row.Submit.MeanMs:F6}\t{row.Geometry.CallsPerFrame:F3}\t{row.Submit.CallsPerFrame:F3}"));
+            text.AppendLine(trail.Caveats);
+        }
         return text.AppendLine(CpuCaveats).ToString();
     }
 

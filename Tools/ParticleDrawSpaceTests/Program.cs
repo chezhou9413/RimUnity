@@ -610,7 +610,10 @@ internal static partial class Program
             }
             return trail;
         }
-        private MethodInfo TrailAppendMethod() => Get(Renderer, "streamPacking").ToString() != "General"
+        internal void LegacyTrailWrites(bool enabled) => renderer.GetField("LabLegacyTrailWrites", Flags)?.SetValue(Renderer, enabled);
+        private MethodInfo TrailAppendMethod() => renderer.GetField("LabLegacyTrailWrites", Flags)?.GetValue(Renderer) is true
+            ? renderer.GetMethod("AppendLegacyTrail", Flags)
+            : Get(Renderer, "streamPacking").ToString() != "General"
             ? renderer.GetMethod("AppendReservedTrail", Flags) ?? renderer.GetMethod("AppendTrail", Flags)
             : renderer.GetMethod("AppendTrail", Flags);
         internal Dictionary<string, object[]> TrailChannels(object trail, bool ribbon, Vector3? forward = null, bool clear = true)

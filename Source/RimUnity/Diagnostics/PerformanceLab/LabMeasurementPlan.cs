@@ -7,7 +7,20 @@ namespace RimUnity.Diagnostics;
 // Pure diagnostic plan/statistics. No engine state, global caches or runtime objects.
 internal static class LabMeasurementPlan
 {
-    internal sealed record Job(string Name, LabCpuMode Mode, int Roots, int ParticlesPerRoot, int Family = -1, string Group = "mixed");
+    internal sealed record Job(string Name, LabCpuMode Mode, int Roots, int ParticlesPerRoot, int Family = -1, string Group = "mixed", bool LegacyTrails = false);
+    internal static Job[] TrailDetailJobs() => new[]
+    {
+        new Job("trail-detail-boundary", LabCpuMode.BridgeOnly, 4, 256, 5, "trail-detail"),
+        new Job("trail-detail-stages", LabCpuMode.Stages, 4, 256, 5, "trail-detail")
+    };
+    internal static Job[] TrailJobs() => new[]
+    {
+        new Job("trail-ab-A1", LabCpuMode.BridgeOnly, 4, 256, 5, "trail-ab", true),
+        new Job("trail-ab-B1", LabCpuMode.BridgeOnly, 4, 256, 5, "trail-ab"),
+        new Job("trail-ab-B2", LabCpuMode.BridgeOnly, 4, 256, 5, "trail-ab"),
+        new Job("trail-ab-A2", LabCpuMode.BridgeOnly, 4, 256, 5, "trail-ab", true)
+    };
+    internal static bool IsTrailComparison(string name) => name != null && TrailJobs().Any(j => j.Name == name);
     // Same configurations as the full suite, for before/after geometry checks.
     internal static Job[] GeometryJobs() => new[]
     {
@@ -34,8 +47,33 @@ internal static class LabMeasurementPlan
     internal sealed record Run(Job Job, string Report, int Frames, int ValidBridgeFrames,
         double BridgeMeanMs, double BridgeStdDevMs, double BridgeP95Ms, double BridgeP99Ms,
         double Systems, double Particles, double TrailPoints, double Vertices, double Indices,
-        double PrePollToBridgeMs, double ParticleStdDev, long BridgeGen0, long BridgeGen1, long BridgeGen2)
+        double PrePollToBridgeMs, double ParticleStdDev, long BridgeGen0, long BridgeGen1, long BridgeGen2, LabTrailCpu.Report TrailCpu = null)
     { public bool BridgeAvailable => ValidBridgeFrames > 0; }
+
+    internal sealed record TrailComparison(string Status, double BridgeDeltaMs = 0, double GeometryDeltaMs = 0,
+        double SubmitDeltaMs = 0, double GlobalFlushDeltaMs = 0, double ObservedBridgeSpreadMs = 0,
+        double MaxParticleDifference = 0, double MaxGeometryDifference = 0);
+    internal static TrailComparison CompareTrailWrites(IReadOnlyList<Run> runs)
+    {
+        var rows = TrailJobs().Select(j => runs.FirstOrDefault(r => r.Job.Name == j.Name)).ToArray();
+        if (rows.Any(r => r == null || !r.BridgeAvailable || r.TrailCpu == null || r.TrailCpu.Frames < 2)) return new("Incomplete");
+        if (rows.Any(r => r.TrailCpu.InvalidFrames != 0 || r.TrailCpu.UnknownSystemScopes != 0 || r.TrailCpu.WrongThreadScopes != 0)) return new("CoverageInvalid");
+        if (rows.Any(r => r.TrailPoints <= 1 || r.Vertices <= 0 || r.Indices <= 0
+            || r.TrailCpu.Stages[0].Calls == 0 || r.TrailCpu.Stages[1].Calls == 0)) return new("MissingTrailWork");
+        if (rows.Any(r => r.Job.LegacyTrails
+            ? r.TrailCpu.LegacyGeometryCalls == 0 || r.TrailCpu.CurrentGeometryCalls != 0
+            : r.TrailCpu.CurrentGeometryCalls == 0 || r.TrailCpu.LegacyGeometryCalls != 0)) return new("WriteVariantMismatch");
+        double Relative(Func<Run, double> f) => (rows.Max(f) - rows.Min(f)) / Math.Max(1, rows.Average(f));
+        double particleMismatch = Relative(r => r.Particles), geometryMismatch = Math.Max(Relative(r => r.TrailPoints), Math.Max(Relative(r => r.Vertices), Relative(r => r.Indices)));
+        if (rows.Max(r => r.Systems) != rows.Min(r => r.Systems) || particleMismatch > .02 || geometryMismatch > .02)
+            return new("WorkloadMismatch", MaxParticleDifference: particleMismatch, MaxGeometryDifference: geometryMismatch);
+        double Delta(Func<Run, double> f) => (f(rows[1]) + f(rows[2]) - f(rows[0]) - f(rows[3])) / 2;
+        double spread = Math.Max(Math.Abs(rows[0].BridgeMeanMs - rows[3].BridgeMeanMs), Math.Abs(rows[1].BridgeMeanMs - rows[2].BridgeMeanMs));
+        double delta = Delta(r => r.BridgeMeanMs);
+        return new(Math.Abs(delta) <= spread ? "WithinObservedSpread" : delta < 0 ? "CurrentFasterThanObservedSpread" : "CurrentSlowerThanObservedSpread",
+            delta, Delta(r => r.TrailCpu.Stages[0].MeanMs), Delta(r => r.TrailCpu.Stages[1].MeanMs), Delta(r => r.TrailCpu.Stages[2].MeanMs), spread,
+            particleMismatch, geometryMismatch);
+    }
 
     internal sealed record ProbeComparison(string Status, double StageMinusBridgeMs,
         double ObservedMeanSpreadMs, double StageMinusBridgeP95Ms, double StageMinusBridgeP99Ms,

@@ -70,6 +70,7 @@ internal sealed class LabCpuMetrics
     private int bridgeGen0, bridgeGen1, bridgeGen2, bridgeEndGen0, bridgeEndGen1, bridgeEndGen2;
     internal LabCpuMode Mode { get; }
     internal bool StagesEnabled => Mode == LabCpuMode.Stages;
+    internal LabTrailCpu Trails { get; }
     private readonly Window[] frameWindows;
     private readonly bool[] validWindows;
     private long lastEnqueue, lastEnqueueBytes, prePoll, prePollBytes, bridgeStart, bridgeStartBytes, bridgeEnd, bridgeEndBytes;
@@ -82,11 +83,12 @@ internal sealed class LabCpuMetrics
     internal long CrossThreadScopes => Interlocked.Read(ref crossThreadScopes);
     private long crossThreadScopes;
 
-    internal LabCpuMetrics(int capacity, LabCpuMode mode = LabCpuMode.Stages)
+    internal LabCpuMetrics(int capacity, LabCpuMode mode = LabCpuMode.Stages, bool trailDetail = false)
     {
         if (mode == LabCpuMode.Off) throw new ArgumentOutOfRangeException(nameof(mode));
         if (capacity < 1) throw new ArgumentOutOfRangeException(nameof(capacity));
         Mode = mode;
+        Trails = trailDetail ? new LabTrailCpu(capacity) : null;
         frames = StagesEnabled ? new Metric[checked(capacity * StageCount)] : Array.Empty<Metric>();
         frameReasons = StagesEnabled ? new long[checked(capacity * ReasonCount)] : Array.Empty<long>();
         snapshotFrames = new SnapshotWork[capacity];
@@ -99,10 +101,12 @@ internal sealed class LabCpuMetrics
     {
         if (Environment.CurrentManagedThreadId != thread) throw new InvalidOperationException("CPU capture must start on its owner thread.");
         if (current != null || stopped) throw new InvalidOperationException("CPU capture already active or retired.");
+        Trails?.Start();
         current = this;
     }
     internal void Stop()
     {
+        Trails?.Stop();
         if (ReferenceEquals(current, this)) current = null;
         stopped = true;
         // Unfinished tail scopes do not enter completed frame statistics.
@@ -113,6 +117,7 @@ internal sealed class LabCpuMetrics
     {
         if (stopped || ReferenceEquals(current, this) || Environment.CurrentManagedThreadId != thread)
             throw new InvalidOperationException("Register diagnostic identities before capture starts.");
+        Trails?.Register(instanceId);
         if (StagesEnabled && (uint)family < FamilyCount && systemFamilies.Count < 1024) systemFamilies[instanceId] = family;
     }
     internal Metric Family(int family, LabCpuStage stage) => familyTotals[family * StageCount + (int)stage];
@@ -202,6 +207,7 @@ internal sealed class LabCpuMetrics
         lastEnqueue = now; lastEnqueueBytes = allocated;
         prePoll = bridgeStart = bridgeEnd = 0;
         prePollVisits = bridgeVisits = 0;
+        Trails?.CompleteFrame(validWindows[FrameCount]);
         if (!StagesEnabled) { FrameCount++; return; }
         Array.Copy(pending, 0, frames, FrameCount * StageCount, StageCount);
         Array.Copy(reasons, 0, frameReasons, FrameCount * ReasonCount, ReasonCount);

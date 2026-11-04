@@ -11,7 +11,10 @@ internal enum ParticleDetailStage
 {
     Geometry, Attributes, Space, Size, Color, Custom, Atlas, Axes, Projection,
     Mesh, MeshSelect, MeshPose, MeshDirections, MeshVertices, StreamPrepare, StreamPack, VertexWrite, IndexWrite,
-    TrailGeometry, TrailPositions, TrailAppearance, TrailSegments, GeometryNoise, Submit,
+    TrailGeometry, TrailPositions, TrailAppearance, TrailSegments, TrailDirections, TrailUv, TrailReserve, TrailCorners,
+    BatchAttempt, BatchAppend, BatchValidate, BatchPrepare, BatchCopyVertices, BatchCopyIndices, BatchBounds, BatchFlush, BatchDraw,
+    MeshFlush, MeshCpuPackVertices, MeshCpuPackIndices,
+    GeometryNoise, Submit,
     Simulation, Schedule, SystemStep, EmissionSchedule, EmissionTimeline, Spawn,
     AdvanceParticles, Integrate, Forces, Velocity, LimitDrag, Noise, Rotation,
     Physics, PhysicsCandidates, TrailAging, TrailRecord, SubMotion, SubAdvance,
@@ -21,12 +24,12 @@ internal enum ParticleDetailWork
 {
     ParticleVisits, Integrations, Births, SpawnAttempts, Deaths, CapacityVisits, EmissionScheduleVisits, CurveCalls,
     CurveSamples, GradientCalls, GradientSamples, NoiseCalls, NoiseOctaves, SpaceConversions, TrailPointVisits,
-    TrailPointsAdded, Vertices, Indices, BufferGrowths, Count
+    TrailPointsAdded, Vertices, Indices, BufferGrowths, TrailSegments, TrailDistanceSteps, BatchVertices, BatchIndices, Count
 }
 
 // One explicit lab session, main thread only. Numeric buffers and numeric family
 // identities only; no scene objects. Normal builds contain neither this type nor probes.
-internal sealed class LabParticleDetail
+internal sealed class LabParticleDetail : IParticleMeshObserver
 {
     internal const int Stride = 31, Families = 13;
     private const int Stages = (int)ParticleDetailStage.Count, Works = (int)ParticleDetailWork.Count;
@@ -65,9 +68,10 @@ internal sealed class LabParticleDetail
     }
     internal void Start()
     {
-        if (current != null || stopped || Environment.CurrentManagedThreadId != thread)
+        if (current != null || ParticleMeshProbe.Observer != null || stopped || Environment.CurrentManagedThreadId != thread)
             throw new InvalidOperationException("Particle detail session already active or retired.");
         current = this;
+        ParticleMeshProbe.Observer = this;
         // Calibration uses the real entry/exit path, before the lab sample clock starts.
         open = valid = true; domain = ParticleDetailDomain.Geometry;
         for (int i = 0; i < 1000; i++) { using var scope = Measure(ParticleDetailStage.Geometry); }
@@ -122,6 +126,7 @@ internal sealed class LabParticleDetail
     {
         if (Environment.CurrentManagedThreadId != thread) throw new InvalidOperationException("Particle detail stop must run on its owner thread.");
         if (ReferenceEquals(current, this)) current = null;
+        if (ReferenceEquals(ParticleMeshProbe.Observer, this)) ParticleMeshProbe.Observer = null;
         if (depth != 0) invalid++;
         stopped = true; ClearPending(); open = false; domain = ParticleDetailDomain.None;
     }
@@ -154,14 +159,32 @@ internal sealed class LabParticleDetail
         private readonly LabParticleDetail owner;
         private readonly int slot;
         private readonly long serial;
+        internal long Token => serial;
         internal Scope(LabParticleDetail owner, int slot, long serial) { this.owner = owner; this.slot = slot; this.serial = serial; }
         public void Dispose() => owner?.End(slot, serial);
+    }
+    long IParticleMeshObserver.Begin(ParticleMeshStage stage) => Measure(stage switch
+    {
+        ParticleMeshStage.Validate => ParticleDetailStage.BatchValidate,
+        ParticleMeshStage.Prepare => ParticleDetailStage.BatchPrepare,
+        ParticleMeshStage.CopyVertices => ParticleDetailStage.BatchCopyVertices,
+        ParticleMeshStage.CopyIndices => ParticleDetailStage.BatchCopyIndices,
+        ParticleMeshStage.Bounds => ParticleDetailStage.BatchBounds,
+        ParticleMeshStage.Flush => ParticleDetailStage.MeshFlush,
+        ParticleMeshStage.PackVertices => ParticleDetailStage.MeshCpuPackVertices,
+        ParticleMeshStage.PackIndices => ParticleDetailStage.MeshCpuPackIndices,
+        _ => throw new ArgumentOutOfRangeException(nameof(stage))
+    }).Token;
+    void IParticleMeshObserver.End(long token)
+    {
+        if (stopped) return;
+        End(depth - 1, token);
     }
     private void End(int slot, long id)
     {
         if (stopped) return;
         if (Environment.CurrentManagedThreadId != thread) { Interlocked.Increment(ref crossThread); return; }
-        if (depth != slot + 1 || stack[slot].Serial != id) { invalid++; valid = false; return; }
+        if (slot < 0 || depth != slot + 1 || stack[slot].Serial != id) { invalid++; valid = false; return; }
         ref var e = ref stack[slot];
         long ticks = Stopwatch.GetTimestamp() - e.Start, bytes = GC.GetAllocatedBytesForCurrentThread() - e.Bytes;
         var m = new Metric { Calls = 1, Ticks = ticks, SelfTicks = Math.Max(0, ticks - e.Children),
@@ -219,8 +242,8 @@ internal sealed class LabParticleDetail
             { long value = workTotals[(domainId - 1) * Works + i]; counters.Add(new WorkRow(((ParticleDetailWork)i).ToString(), value, value / (double)Math.Max(1, n))); }
             reports.Add(new DomainReport(((ParticleDetailDomain)domainId).ToString(), n, scopes, stages.ToArray(), families.ToArray(), counters.ToArray()));
         }
-        return new Report(1, Stride, 0, 15, OrdinaryFrames, invalid, crossThread, BufferBytes, EmptyScopeNanoseconds,
-            reports.ToArray(), "Analysis build only; CPU main thread, not GPU. Raw probe-inclusive timings, not an optimization baseline. Means/percentiles use completed selected frames of that domain, including zero-call stages. Inclusive contains children; do not sum. Self retains uninstrumented work and probe overhead. Geometry and simulation use different frames. OrdinaryFrames excludes selected/invalid/partial frames. Family 12 means unknown. Empty scope calibration is not subtracted. Sampling can alias periodic work; repeat with a different camera/workload when needed.");
+        return new Report(2, Stride, 0, 15, OrdinaryFrames, invalid, crossThread, BufferBytes, EmptyScopeNanoseconds,
+            reports.ToArray(), "Analysis build only; CPU main thread, not GPU. Raw probe-inclusive timings, not an optimization baseline. Means/percentiles use completed selected frames of that domain, including zero-call stages. Inclusive contains children; do not sum. Self retains uninstrumented work and probe overhead. Geometry and simulation use different frames. OrdinaryFrames excludes selected/invalid/partial frames. Family 12 means unknown. Empty scope calibration is not subtracted. Sampling can alias periodic work; repeat with a different camera/workload when needed. BatchCopyVertices includes bounds reduction when interleaving unpacked input into a packed page; BatchBounds contains only remaining bounds work, never assume these algorithms are independent. BatchDraw includes synchronous CPU mesh preparation/upload entry and draw enqueue, not GPU execution. Batch counters describe input vertices/indices accepted for append, not measured memory traffic. Legacy trail internals retain their frozen reference instrumentation; use current-path trail-detail jobs for this breakdown.");
     }
     private static double Ms(long ticks) => ticks * 1000d / Stopwatch.Frequency;
 }

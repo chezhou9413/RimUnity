@@ -68,6 +68,37 @@ internal sealed partial class PerformanceLab
         }, "GeneratingMap", false, null);
     }
 
+    // The game's debug menu remains a reachable launch path even when a native
+    // tool window has not appeared. The measurement controller rechecks access.
+    [DebugAction("RimUnity", "拖尾旧／新自动对照（测试场内）", allowedGameStates = AllowedGameStates.PlayingOnMap)]
+    private static void StartTrailComparison()
+    {
+        if (Current?.IsCurrent != true)
+        {
+            Messages.Message("请先进入 RimUnity / 特效性能测试场。", MessageTypeDefOf.RejectInput, false);
+            return;
+        }
+        if (!DebugSettings.ShowDevGizmos)
+        {
+            Messages.Message("请同时开启开发者模式和上帝模式。", MessageTypeDefOf.RejectInput, false);
+            return;
+        }
+        Current.StartMeasurementSequence(trailComparison: true);
+    }
+
+#if RIMUNITY_PARTICLE_ANALYSIS
+    [DebugAction("RimUnity", "拖尾细分自动测量（测试场内）", allowedGameStates = AllowedGameStates.PlayingOnMap)]
+    private static void StartTrailBreakdown()
+    {
+        if (Current?.IsCurrent != true || !DebugSettings.ShowDevGizmos)
+        {
+            Messages.Message("请进入特效性能测试场，并开启开发者模式与上帝模式。", MessageTypeDefOf.RejectInput, false);
+            return;
+        }
+        Current.StartMeasurementSequence(trailBreakdown: true);
+    }
+#endif
+
     //地图生成及绘制初始化结束后，才允许相机、窗口和采样访问测试地图。
     private void Activate()
     {

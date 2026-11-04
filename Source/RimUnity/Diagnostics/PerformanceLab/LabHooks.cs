@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Reflection.Emit;
 using HarmonyLib;
 using RimWorld;
 using Verse;
@@ -30,13 +31,37 @@ internal static class LabHooks
         // implementation once at session setup; no replacement type or shim.
         var host = AccessTools.TypeByName("RimWorldWaylith.Imgui.ImGuiHost");
         var snapshot = AccessTools.TypeByName("RimWorldWaylith.Imgui.ImGuiDrawSnapshot");
-        nativeUi = host == null || snapshot == null ? null : AccessTools.Method(host, "EndFrame", new[] { snapshot });
-        if (nativeUi == null) throw new MissingMethodException("宿主缺少原生 ImGui 帧提交入口，自动测量面板不可用。");
-        patcher.Patch(nativeUi, prefix: new HarmonyMethod(typeof(LabHooks), nameof(DrawNativeMeasurementPanel)));
+        var endFrame = host == null || snapshot == null ? null : AccessTools.Method(host, "EndFrame", new[] { snapshot });
+        nativeUi = AccessTools.Method(AccessTools.TypeByName("RimWorldWaylith.Imgui.ImGuiRenderFeature"), "CaptureFrame");
+        if (nativeUi == null || endFrame == null) throw new MissingMethodException("宿主缺少原生 ImGui 帧提交入口，自动测量面板不可用。");
+        // Recompile the caller and inject at the call site. Patching EndFrame
+        // after gameplay starts cannot intercept a copy already inlined by JIT.
+        patcher.Patch(nativeUi, transpiler: new HarmonyMethod(typeof(LabHooks), nameof(InsertMeasurementPanel)));
     }
 
-    // EndFrame starts with ImGui.Render: the prefix is still in the native frame
-    // scope and runs once, unlike compatibility GUI's layout/repaint passes.
+    private static IEnumerable<CodeInstruction> InsertMeasurementPanel(IEnumerable<CodeInstruction> instructions)
+    {
+        var result = new List<CodeInstruction>(instructions);
+        int matches = 0;
+        for (int i = 0; i < result.Count; i++)
+        {
+            var instruction = result[i];
+            if (instruction.operand is not MethodInfo method || method.Name != "EndFrame"
+                || method.DeclaringType?.FullName != "RimWorldWaylith.Imgui.ImGuiHost") continue;
+            var draw = new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(LabHooks), nameof(DrawNativeMeasurementPanel)));
+            draw.labels.AddRange(instruction.labels);
+            instruction.labels.Clear();
+            draw.blocks.AddRange(instruction.blocks);
+            instruction.blocks.Clear();
+            result.Insert(i++, draw);
+            matches++;
+        }
+        if (matches != 1) throw new InvalidOperationException($"原生 UI 提交调用点数量异常：{matches}，自动测量面板未安装。");
+        return result;
+    }
+
+    // EndFrame starts with ImGui.Render. Keep the host/snapshot operands on the
+    // evaluation stack while drawing inside the still active native UI frame.
     private static void DrawNativeMeasurementPanel() => PerformanceLab.Current?.MeasurementPanel.Draw();
 
     // Session-only frame settings. Never take ownership of another mod's layer,
