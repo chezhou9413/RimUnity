@@ -1,4 +1,5 @@
 using RimUnity.Diagnostics;
+using RimUnity;
 using System.Text.Json;
 using System.Threading;
 
@@ -64,6 +65,31 @@ internal static class Program
         for (int i = 0; i < 1000; i++)
         { capture.BeginFrame(); using (LabParticleDetail.Measure(ParticleDetailStage.Geometry)) { LabParticleDetail.Work(ParticleDetailWork.Vertices); } capture.CompleteFrame(); }
         Check(GC.GetAllocatedBytesForCurrentThread() == bytes, "active frame collection allocates zero bytes"); capture.Stop();
+        capture = new LabParticleDetail(10); capture.Start(); capture.BeginFrame();
+        using (LabParticleDetail.Measure(ParticleDetailStage.BatchAppend, 123))
+        {
+            using (ParticleMeshProbe.Measure(ParticleMeshStage.CopyVertices)) { }
+            try { using var core = ParticleMeshProbe.Measure(ParticleMeshStage.CopyIndices); throw new Exception(); } catch (Exception) { }
+        }
+        capture.CompleteFrame(); capture.Stop();
+        var meshRows = capture.Snapshot().Domains[0].Stages;
+        Check(meshRows.Single(s => s.Stage == "BatchCopyVertices").Calls == 1
+            && meshRows.Single(s => s.Stage == "BatchCopyIndices").Calls == 1, "Core probe routes into detail collector, including exception unwind");
+        Check(capture.Snapshot().InvalidFramesOrScopes == 0 && ParticleMeshProbe.Observer == null, "Core observer released after capture");
+        capture = new LabParticleDetail(10); capture.Start(); capture.BeginFrame();
+        var lateCore = ParticleMeshProbe.Measure(ParticleMeshStage.Bounds);
+        capture.Stop(); lateCore.Dispose();
+        Check(capture.Snapshot().InvalidFramesOrScopes == 1 && ParticleMeshProbe.Observer == null, "late Core scope cannot write to stopped capture");
+        bytes = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 10000; i++) { using var core = ParticleMeshProbe.Measure(ParticleMeshStage.Validate); }
+        Check(GC.GetAllocatedBytesForCurrentThread() == bytes, "inactive Core probes allocate nothing");
+        capture = new LabParticleDetail(36000); capture.Start();
+        for (int f = 0; f < 100; f++)
+        { capture.BeginFrame(); using (LabParticleDetail.Measure(ParticleDetailStage.BatchAppend)) { using var core = ParticleMeshProbe.Measure(ParticleMeshStage.Validate); } capture.CompleteFrame(); }
+        bytes = GC.GetAllocatedBytesForCurrentThread();
+        for (int f = 0; f < 1000; f++)
+        { capture.BeginFrame(); using (LabParticleDetail.Measure(ParticleDetailStage.BatchAppend)) { using var core = ParticleMeshProbe.Measure(ParticleMeshStage.Validate); } capture.CompleteFrame(); }
+        Check(GC.GetAllocatedBytesForCurrentThread() == bytes, "active Core probes allocate nothing after warmup"); capture.Stop();
         Console.WriteLine($"PASS {checks} particle detail checks: denominators, nesting, families, numeric work, CSV/JSON, memory bound, thread isolation, invalid/partial frames, exceptions and zero allocations.");
     }
 }

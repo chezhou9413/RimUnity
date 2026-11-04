@@ -11,13 +11,21 @@ namespace RimUnity.Diagnostics;
 internal sealed class LabMeasurementPanel(PerformanceLab lab)
 {
     private bool failed;
+    private int reportedStates;
+    private bool firstWindow = true;
 
     internal void Draw()
     {
-        if (failed || !lab.IsCurrent || !DebugSettings.ShowDevGizmos) return;
-        var context = ImGui.GetCurrentContext();
-        if (context.IsNull() || !context.WithinFrameScope) return;
-        try { DrawWindow(); }
+        if (failed) return;
+        try
+        {
+            if (!lab.IsCurrent) { ReportOnce(1, "测试场不是当前地图"); return; }
+            if (!DebugSettings.ShowDevGizmos) { ReportOnce(2, "等待开发者模式和上帝模式同时开启"); return; }
+            var context = ImGui.GetCurrentContext();
+            if (context.IsNull() || !context.WithinFrameScope) { ReportOnce(4, "原生 UI 帧作用域不可用"); return; }
+            DrawWindow();
+            ReportOnce(8, "已提交原生自动测量面板");
+        }
         catch (Exception ex)
         {
             // Disable this session's panel on failure, rather than throwing or
@@ -29,11 +37,26 @@ internal sealed class LabMeasurementPanel(PerformanceLab lab)
         }
     }
 
+    // At most four messages per lab session, never per-frame logging.
+    private void ReportOnce(int state, string message)
+    {
+        if ((reportedStates & state) != 0) return;
+        reportedStates |= state;
+        Log.Message("[RimUnity] 自动测量面板：" + message);
+    }
+
     private void DrawWindow()
     {
         var viewport = ImGui.GetMainViewport();
         float width = Math.Clamp(560f, 1f, Math.Max(1f, viewport.Size.X - 32f));
-        ImGui.SetNextWindowPos(new float2(viewport.Pos.X + viewport.Size.X - width - 16f, viewport.Pos.Y + 40f), ImGuiCond.FirstUseEver);
+        if (firstWindow)
+        {
+            // A new lab session must be discoverable even if the previous
+            // session's window was moved off-screen or left collapsed.
+            ImGui.SetNextWindowPos(new float2(viewport.Pos.X + viewport.Size.X - width - 16f, viewport.Pos.Y + 40f), ImGuiCond.Always);
+            ImGui.SetNextWindowCollapsed(false, ImGuiCond.Always);
+            firstWindow = false;
+        }
         ImGui.SetNextWindowSize(new float2(width, 0), ImGuiCond.Always);
         bool visible = ImGui.Begin("RimUnity · 自动测量###RimUnity.Measurements", ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoResize);
         try
@@ -46,9 +69,14 @@ internal sealed class LabMeasurementPanel(PerformanceLab lab)
             }
             else
             {
-                if (Button("一键短复测：标准负载＋高拖尾（约 3 分钟）", "##quick")) lab.StartMeasurementSequence(geometryOnly: true);
+#if RIMUNITY_PARTICLE_ANALYSIS
+                if (Button("一键拖尾细分测量（约 3 分钟，分析版）", "##trail-detail")) lab.StartMeasurementSequence(trailBreakdown: true);
+#else
+                if (Button("一键拖尾旧／新对照（约 5 分钟）", "##trail-ab")) lab.StartMeasurementSequence(trailComparison: true);
+                if (!lab.MeasurementRunning && Button("一键短复测：标准负载＋高拖尾（约 3 分钟）", "##quick")) lab.StartMeasurementSequence(geometryOnly: true);
                 // Starting quick measurement changes state in this same frame.
                 if (!lab.MeasurementRunning && Button("一键自动测量：探针对照与规模测试（约 16 分钟）", "##full")) lab.StartMeasurementSequence();
+#endif
             }
             if (!lab.MeasurementRunning && !string.IsNullOrEmpty(lab.MeasurementReport)
                 && Button("复制自动测量汇总路径", "##copy"))

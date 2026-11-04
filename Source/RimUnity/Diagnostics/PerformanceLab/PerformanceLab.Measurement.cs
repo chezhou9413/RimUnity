@@ -28,17 +28,19 @@ internal sealed partial class PerformanceLab
     private sealed record SavedMeasurementSettings(int Concurrency, LabCpuMode Mode, int Seconds, float Warmup,
         bool Bloom, bool Fixed, float Radius, float Scale, float Rotation, float Rate, float Lifetime, int Target, int Family);
 
-    internal void StartMeasurementSequence(bool geometryOnly = false)
+    internal void StartMeasurementSequence(bool geometryOnly = false, bool trailComparison = false, bool trailBreakdown = false)
     {
         if (!IsCurrent || !DebugSettings.ShowDevGizmos || MeasurementRunning) return;
 #if RIMUNITY_PARTICLE_ANALYSIS
-        Status = "请使用普通 Release 执行模式对照，分析构建会改变热路径。"; return;
+        if (!trailBreakdown) { Status = "请使用普通 Release 执行模式对照，分析构建会改变热路径。"; return; }
+#else
+        if (trailBreakdown) { Status = "拖尾细分测量需要专用分析构建；当前普通 Release 不含细探针。"; return; }
 #endif
         if (ParticleSpikeCapture.LabCaptureActive) { Status = "请先结束详细探针，再执行自动模式对照。"; return; }
         Sampler.Stop("开始自动测量", export: true);
         measurementSettings = new(Concurrency, CpuMode, SampleSeconds, WarmupSeconds, StressBloom, FixedInstances,
             Radius, Scale, RotationX, Rate, Lifetime, StressParticleTarget, StressOnlyFamily);
-        measurementJobs = geometryOnly ? LabMeasurementPlan.GeometryJobs() : LabMeasurementPlan.Jobs();
+        measurementJobs = trailBreakdown ? LabMeasurementPlan.TrailDetailJobs() : trailComparison ? LabMeasurementPlan.TrailJobs() : geometryOnly ? LabMeasurementPlan.GeometryJobs() : LabMeasurementPlan.Jobs();
         measurementIndex = 0; measurementRuns.Clear();
         MeasurementReport = null;
         try
@@ -133,6 +135,7 @@ internal sealed partial class PerformanceLab
         var probe = LabMeasurementPlan.Compare(measurementRuns);
         var fit = LabMeasurementPlan.FitMixed(measurementRuns);
         var trailFit = LabMeasurementPlan.FitTrails(measurementRuns);
+        var trailWrites = LabMeasurementPlan.CompareTrailWrites(measurementRuns);
         const string caveats = "CPU main-thread elapsed time, not GPU or whole-module CPU usage. Both enabled modes retain boundary timestamp/allocation/process-GC probes and common workload observers. Inactive source probe calls remain in both modes; comparison measures collection overhead, not a build with all diagnostic call sites removed. GC counter changes can be caused by other threads; not RU trigger attribution or pause duration. Off has no Bridge measurement (ValidBridgeFrames=0). Two repeats provide an observed spread, not a statistical confidence interval. P95/P99 comparisons use per-run quantiles, not pooled quantiles. Regression uses actual mean active systems/particles, not configured caps; coefficients describe this mixed workload, not universal unit costs. Trail regression is whole-Bridge association and also includes particle simulation/rendering. Actual workload variation, host load, frequency, camera and GC can confound fits. No warmup/creation/export time is included in valid Bridge windows. Partial/failed runs are not included.";
         var text = new StringBuilder("RimUnity 自动测量汇总 / schema 1\n状态：" + status + "\n");
         text.AppendLine("name\tmode\tsystems\tparticles\tparticle_stddev\ttrail_points\tvertices\tindices\tbridge_mean_ms\tbridge_stddev_ms\tp95_ms\tp99_ms\tvalid_frames");
@@ -141,10 +144,11 @@ internal sealed partial class PerformanceLab
         text.AppendLine("探针对照：" + JsonSerializer.Serialize(probe));
         text.AppendLine("Bridge ≈ a×实际系统数 + b×实际粒子数 + c：" + JsonSerializer.Serialize(fit));
         text.AppendLine("拖尾点关联：" + JsonSerializer.Serialize(trailFit));
+        text.AppendLine("同进程拖尾旧/新对照（新减旧，含双方共有的系统级探针，不是置信区间）：" + JsonSerializer.Serialize(trailWrites));
         text.AppendLine(caveats);
         foreach (var r in measurementRuns) text.AppendLine(r.Job.Name + ": " + r.Report);
         File.WriteAllText(measurementPrefix + ".txt", text.ToString(), new UTF8Encoding(false));
-        File.WriteAllText(measurementPrefix + ".json", JsonSerializer.Serialize(new { Schema = 1, Status = status, Runs = measurementRuns, ProbeComparison = probe, MixedFit = fit, TrailFit = trailFit, Caveats = caveats }, new JsonSerializerOptions { WriteIndented = true }), new UTF8Encoding(false));
+        File.WriteAllText(measurementPrefix + ".json", JsonSerializer.Serialize(new { Schema = 1, Status = status, Runs = measurementRuns, ProbeComparison = probe, MixedFit = fit, TrailFit = trailFit, TrailWriteComparison = trailWrites, Caveats = caveats }, new JsonSerializerOptions { WriteIndented = true }), new UTF8Encoding(false));
         MeasurementReport = measurementPrefix + ".txt";
     }
 }

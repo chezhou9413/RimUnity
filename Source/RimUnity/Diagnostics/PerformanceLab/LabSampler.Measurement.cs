@@ -22,6 +22,6 @@ internal sealed partial class LabSampler
         return new(job, lastReport, count, bridge?.CompleteFrames ?? 0, bridge?.MeanMs ?? 0, bridge?.StdDevMs ?? 0,
             bridge?.P95Ms ?? 0, bridge?.P99Ms ?? 0, systems / divisor, particleMean, points / divisor,
             vertices / divisor, indices / divisor, pre?.MeanMs ?? 0, Math.Sqrt(variance / divisor),
-            bridge?.Gen0 ?? 0, bridge?.Gen1 ?? 0, bridge?.Gen2 ?? 0);
+            bridge?.Gen0 ?? 0, bridge?.Gen1 ?? 0, bridge?.Gen2 ?? 0, cpu?.Trails?.Snapshot());
     }
 }
