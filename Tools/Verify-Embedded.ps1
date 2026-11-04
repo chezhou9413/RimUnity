@@ -1,4 +1,4 @@
-﻿param([Parameter(Mandatory)][string]$GameRoot, [Parameter(Mandatory)][string]$HarmonyPath, [string]$WorkshopRoot = '')
+param([Parameter(Mandatory)][string]$GameRoot, [Parameter(Mandatory)][string]$HarmonyPath, [string]$WorkshopRoot = '')
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 $fixtures = Join-Path ([IO.Path]::GetTempPath()) ('RimUnity/Embedded-' + [Guid]::NewGuid().ToString('N'))
@@ -7,7 +7,7 @@ foreach ($name in @('A','B')) {
     [IO.Directory]::CreateDirectory($about) | Out-Null
     [IO.File]::WriteAllText((Join-Path $about 'About.xml'), "<ModMetaData><name>$name</name><packageId>test.$name</packageId></ModMetaData>", [Text.UTF8Encoding]::new($false))
 }
-& dotnet build (Join-Path $PSScriptRoot 'EmbeddedTests/Fixtures/Consumer/Consumer.csproj') -c Release --nologo "-p:RimWorldDir=$GameRoot" "-p:FixtureRoot=$fixtures" "-p:EmbeddedPackage=$repo/artifacts/Embedded"
+& dotnet build (Join-Path $PSScriptRoot 'EmbeddedTests/Fixtures/Consumer/Consumer.csproj') -c Release --nologo "-p:RimWorldDir=$GameRoot" "-p:FixtureRoot=$fixtures" "-p:EmbeddedPackage=$repo/artifacts/Embedded" "-p:HarmonyPath=$HarmonyPath"
 if ($LASTEXITCODE -ne 0) { throw '内容程序集接入构建失败。' }
 & dotnet build (Join-Path $PSScriptRoot 'EmbeddedTests/EmbeddedTests.csproj') -c Release --nologo "-p:RimWorldDir=$GameRoot" "-p:HarmonyPath=$HarmonyPath"
 if ($LASTEXITCODE -ne 0) { throw '离线验证程序编译失败。' }
@@ -31,12 +31,15 @@ if ($WorkshopRoot) {
 foreach ($legacy in @(
     @{Revision='1d10c5570219710a8f93b0edb28b8090fb34c404';Name='LegacyBootstrap';Assembly='RimUnity.Embedded.Legacy011';Version='0.1.11.0';Orders=@('legacy-first','legacy-last')},
     @{Revision='c06c6cd3a606b94b258026d6cfc5f078e618e918';Name='DeferredBootstrap';Assembly='RimUnity.Embedded.Deferred013';Version='0.1.13.0';Orders=@('workshop-legacy-first','workshop-legacy-last')},
+    @{Revision='e4b06dc7d9d2a0ca37c07d1f28bf0bc26acddc8e';Name='ScopedBootstrap';Assembly='RimUnity.Embedded.Scoped019';Version='0.1.19.0';Orders=@('scoped-first','scoped-last')},
     @{Revision='b81f612b7f1f19b185d914d03e8523b011b9dee3';Name='CoordinatorBootstrap';Assembly='RimUnity.Embedded.Coordinator017';Version='0.1.17.0';Orders=@('coordinator-first','coordinator-last')}
 )) {
 $legacyRevision = $legacy.Revision
 $legacyRoot = Join-Path $fixtures $legacy.Name
 [IO.Directory]::CreateDirectory($legacyRoot) | Out-Null
-foreach ($name in @('EmbeddedBootstrap.cs','RuntimeSelection.cs','RuntimePayload.cs','DeferredContent.cs')) {
+$legacyFiles = @('EmbeddedBootstrap.cs','RuntimeSelection.cs','RuntimePayload.cs','DeferredContent.cs')
+if ($legacy.Name -eq 'ScopedBootstrap') { $legacyFiles += 'DeferredModInitialization.cs' }
+foreach ($name in $legacyFiles) {
     $source = & git -c "safe.directory=$($repo.Replace('\','/'))" -C $repo show ('{0}:Source/RimUnity.Embedded/{1}' -f $legacyRevision,$name)
     if ($LASTEXITCODE -ne 0) { throw "无法读取固定历史加载器：$legacyRevision/$name" }
     [IO.File]::WriteAllLines((Join-Path $legacyRoot $name), [string[]]$source, [Text.UTF8Encoding]::new($false))

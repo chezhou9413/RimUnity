@@ -3,7 +3,7 @@
   <ItemGroup>
     <Compile Include="Program.cs" /><Compile Include="Harness.cs" /><Compile Include="FailingMod.cs" />
     <Reference Include="Assembly-CSharp" HintPath="$(RimWorldDir)/Assembly-CSharp.dll" Private="false" />
-    <Reference Include="UnityStubs" HintPath="$(RimWorldDir)/UnityStubs.dll" Private="false" />
+    <Reference Include="Waylith" HintPath="$(RimWorldDir)/Waylith.dll" Private="false" />
     <Reference Include="0Harmony" HintPath="$(HarmonyPath)" Private="false" />
   </ItemGroup>
 </Project>

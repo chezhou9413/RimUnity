@@ -1,6 +1,7 @@
 <Project>
   <!--内容 DLL 保留在普通编译输出；只有专用后缀进入游戏扫描目录。-->
   <PropertyGroup>
+    <RimUnityIncludeEmbeddedRuntime Condition="'$(RimUnityIncludeEmbeddedRuntime)' == ''">true</RimUnityIncludeEmbeddedRuntime>
     <RimUnityEmbeddedDirectory>$(MSBuildThisFileDirectory)</RimUnityEmbeddedDirectory>
     <RimUnityMinimumVersion Condition="'$(RimUnityMinimumVersion)' == ''">0.1.9</RimUnityMinimumVersion>
     <RimUnityAssembliesDirectory>$(RimUnityModDirectory)/1.7/Assemblies</RimUnityAssembliesDirectory>
@@ -21,7 +22,7 @@
     <Error Condition="Exists('$(RimUnityAssembliesDirectory)/$(TargetFileName)')" Text="发现旧版内容 DLL，请先从模组 Assemblies 移走，防止提前扫描。" />
     <Error Condition="Exists('$(RimUnityAssembliesDirectory)/RimUnity.dll') Or Exists('$(RimUnityAssembliesDirectory)/RimUnity.Core.dll') Or Exists('$(RimUnityAssembliesDirectory)/RimUnity.Spine.dll')" Text="内容模组不得携带散装 RimUnity References。" />
     <Copy SourceFiles="$(TargetPath)" DestinationFiles="$(RimUnityAssembliesDirectory)/$(TargetName).rimunity" />
-    <Copy SourceFiles="$(RimUnityEmbeddedDirectory)RimUnity.Embedded.dll" DestinationFolder="$(RimUnityAssembliesDirectory)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(RimUnityEmbeddedDirectory)RimUnity.Embedded.dll" DestinationFolder="$(RimUnityAssembliesDirectory)" SkipUnchangedFiles="true" Condition="'$(RimUnityIncludeEmbeddedRuntime)' != 'false'" />
     <WriteLinesToFile File="$(RimUnityAssembliesDirectory)/$(TargetName).rimunity.json" Lines="{ &quot;protocol&quot;: 1, &quot;minimumVersion&quot;: &quot;$(RimUnityMinimumVersion)&quot; }" Overwrite="true" Encoding="UTF-8" />
   </Target>
 </Project>

@@ -10,14 +10,17 @@ internal static class Harness
     private static int runtimeInitializations, mounted, shaderRegistrations;
     private static string cache;
     private static readonly List<string> errors = new();
+    private static readonly List<string> messages = new();
+    private static string scenarioName;
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static void Run(string[] args)
     {
         string repo = args[0], fixtures = args[3], scenario = args[4];
+        scenarioName = scenario;
         cache = Path.Combine(fixtures, "Cache-" + scenario);
         Patch(AccessTools.PropertyGetter(typeof(GenFilePaths), "SaveDataFolderPath"), nameof(CachePath));
-        Patch(AccessTools.Method(typeof(UnityStubs.ContentPacks), "MountLoadFolder"), nameof(Mount));
+        Patch(AccessTools.Method(typeof(Waylith.Assets.ContentPack), "Mount"), nameof(Mount));
         Patch(AccessTools.Method(typeof(ShaderDefRegistry), "RegisterShaderDirectories"), nameof(Shaders));
         Patch(AccessTools.PropertyGetter(typeof(GenTypes), "AllTypes"), nameof(Types));
         Patch(AccessTools.Method(typeof(DeepProfiler), "Start"), nameof(Defer));
@@ -43,11 +46,13 @@ internal static class Harness
         string standaloneId = renamed ? "manager.renamed.provider__custom_suffix" : "Chezhou.RimUnity";
         var independent = Mod(Path.Combine(fixtures, scenario.StartsWith("actual-workshop") ? "Workshop" : "Standalone"),
             standaloneId.ToLowerInvariant() + (workshop ? "_steam" : ""), standaloneId);
+        var c = Mod(Path.Combine(fixtures, "C"), "test.c");
         var ordinary = Mod(Path.Combine(fixtures, "Ordinary"), "test.ordinary");
         var mods = scenario switch
         {
             "legacy-first" => new[] { a, b },
             "legacy-last" => new[] { b, a },
+            "selection-third" => new[] { a, b, c },
             "single" => new[] { a },
             "reverse" => new[] { b, a },
             "workshop-first" or "actual-workshop-first" or "workshop-legacy-first" or "workshop-legacy-last" => new[] { independent, a, b },
@@ -103,17 +108,17 @@ internal static class Harness
             var ordinaryAssembly = ordinary.assemblies.loadedAssemblies.Single(x => x.GetName().Name == "OrdinaryFixture");
             Assert(ordinaryAssembly.GetType("Fixture.OrdinaryScript").BaseType.FullName == "RimUnity.MonoBehaviour", "ordinary DLL inheritance resolves before Mod construction");
         }
-        if (scenario.StartsWith("legacy") || scenario.StartsWith("workshop-legacy") || scenario.StartsWith("coordinator-"))
+        if (scenario.StartsWith("legacy") || scenario.StartsWith("workshop-legacy") || scenario.StartsWith("coordinator-") || scenario.StartsWith("scoped-"))
         {
             var first = scenario.EndsWith("first") ? a : b;
             var bootstrap = first.assemblies.loadedAssemblies.Single(x => x.GetName().Name.StartsWith("RimUnity.Embedded."))
                 .GetType("RimUnity.Embedded.EmbeddedBootstrap", true);
             bootstrap.GetConstructor(new[] { typeof(ModContentPack) }).Invoke(new object[] { first });
             string owner = scenario.EndsWith("first")
-                ? scenario.StartsWith("coordinator-") ? "Chezhou.RimUnity.Embedded.Coordinator"
+                ? scenario.StartsWith("scoped-") ? "Chezhou.RimUnity.Embedded.ScopedCoordinator" : scenario.StartsWith("coordinator-") ? "Chezhou.RimUnity.Embedded.Coordinator"
                     : scenario.StartsWith("workshop-legacy") ? "Chezhou.RimUnity.Embedded.Deferred" : "Chezhou.RimUnity.Embedded"
-                : "Chezhou.RimUnity.Embedded.ScopedCoordinator";
-            Assert(Harmony.GetPatchInfo(AccessTools.Method(typeof(LoadedModManager), "LoadModXML")).Prefixes.Any(p => p.owner == owner), "requested bootstrap really constructs first");
+                : "Chezhou.RimUnity.Embedded.TimestampCoordinator.";
+            Assert(Harmony.GetPatchInfo(AccessTools.Method(typeof(LoadedModManager), "LoadModXML")).Prefixes.Any(p => p.owner.StartsWith(owner, StringComparison.Ordinal)), "requested bootstrap really constructs first");
         }
         LoadedModManager.CreateModClasses();
         if (failedMod)
@@ -136,9 +141,22 @@ internal static class Harness
             Assert(FailingMod.Attempts == 1, "runtime, deferred scripts and repeated XML never retry an unrelated failed Mod");
             Assert(!LoadedModManager.ModHandles.Any(m => m is FailingMod), "failed Mod is not falsely registered as initialized");
         }
-        if (scenario == "incompatible-standalone" || scenario == "conflict" || incomplete || ambiguous || missingResources)
+        string expectationPath = Path.Combine(fixtures, "selection-expectation.json");
+        using var expectation = File.Exists(expectationPath) ? System.Text.Json.JsonDocument.Parse(File.ReadAllText(expectationPath)) : null;
+        if (expectation != null && expectation.RootElement.TryGetProperty("error", out var expectedError))
         {
-            string expected = missingResources ? "runtime resources are missing" : incomplete ? "assembly ownership conflict" : ambiguous ? "runtime owner is ambiguous" : scenario == "conflict" ? "Conflicting embedded payloads" : "Update standalone RimUnity";
+            Assert(errors.Any(e => e.Contains(expectedError.GetString())), "expected selection failure");
+            if (expectation.RootElement.TryGetProperty("errorDetails", out var details))
+                foreach (var detail in details.EnumerateArray())
+                    Assert(errors.Any(e => e.Contains(detail.GetString())), "aggregated rejected candidate: " + detail.GetString());
+            int expectedInitializations = expectation.RootElement.TryGetProperty("initializations", out var init) ? init.GetInt32() : 0;
+            Assert(runtimeInitializations == expectedInitializations, "no fallback runtime initialization");
+            Assert(!AppDomain.CurrentDomain.GetAssemblies().Any(x => x.GetName().Name == "EmbeddedFixture.Library"), "content not loaded after failure");
+            return;
+        }
+        if (scenario == "incompatible-standalone" || incomplete || ambiguous || missingResources)
+        {
+            string expected = missingResources ? "runtime resources are missing" : incomplete ? "assembly ownership conflict" : ambiguous ? "runtime owner is ambiguous" : "Update standalone RimUnity";
             Assert(errors.Count == 1 && errors[0].Contains(expected), "explicit error: " + scenario);
             Assert(mounted == 0 && !Directory.Exists(cache), "failure never mounts or extracts fallback resources");
             Assert(runtimeInitializations == (standalone ? 1 : 0), "no extra runtime on failure");
@@ -151,7 +169,7 @@ internal static class Harness
         if (standalone && scenario != "standalone-only" && scenario != "ordinary-standalone-only")
             Assert((string)selectedRuntime.GetType("RimUnity.RuntimeInfo").GetProperty("ResourceRoot").GetValue(null) == Path.Combine(independent.RootDir, "1.7"), "runtime and resources retain actual standalone owner");
         Assert(runtimeInitializations == 1, "one runtime initialization across repeated XML calls");
-        Assert(mounted == (standalone ? 0 : 1), "only selected payload resources mount");
+        Assert(mounted == 0, "loose runtime resources require no native asset-pack mount");
         Assert(shaderRegistrations == (standalone ? 0 : 1), "shader registration matches selected source");
         Assert(active.Sum(m => m.foldersToLoadDescendingOrder.Count - 1) == (standalone ? 0 : 1), "one Def resource folder, independent content folders preserved");
         Assert(Directory.Exists(cache) == !standalone, "standalone never extracts or mounts an embedded payload");
@@ -159,6 +177,15 @@ internal static class Harness
             Assert(AppDomain.CurrentDomain.GetAssemblies().Count(x => x.GetName().Name == name) == 1, "unique CLR identity: " + name);
         if (scenario == "standalone-only" || scenario == "ordinary-standalone-only") { Console.WriteLine("PASS scenario " + scenario); return; }
         var library = a.assemblies.loadedAssemblies.Single(x => x.GetName().Name == "EmbeddedFixture.Library");
+        if (expectation != null)
+        {
+            string provider = (string)selectedRuntime.GetType("RimUnity.RuntimeInfo").GetProperty("Provider").GetValue(null);
+            Assert(provider == expectation.RootElement.GetProperty("provider").GetString(), "deterministic selected provider");
+            if (expectation.RootElement.TryGetProperty("coordinator", out var coordinator))
+                Assert(messages.Any(m => m.Contains("Embedded coordinator: " + coordinator.GetString() + ";")), "newest coordinator wins independently of runtime payload");
+            if (expectation.RootElement.TryGetProperty("warning", out var warning))
+                Assert(messages.Any(m => m.Contains(warning.GetString())), "selection warning identifies ambiguity or rejected candidate");
+        }
         if (scenario == "newest")
             Assert((string)AppDomain.CurrentDomain.GetAssemblies().Single(x => x.GetName().Name == "RimUnity").GetType("RimUnity.RuntimeInfo").GetProperty("Provider").GetValue(null) == "test.b", "newer compatible payload wins over first-loaded container");
         Assert(library.GetType("Fixture.BaseScript").BaseType.FullName == "RimUnity.MonoBehaviour", "MonoBehaviour inheritance resolves to real Core");
@@ -189,6 +216,7 @@ internal static class Harness
     private static bool RuntimeConstructor(Mod __instance, ModContentPack content)
     {
         runtimeInitializations++;
+        if (scenarioName == "commit-failure") throw new InvalidOperationException("Injected runtime initialization failure after assembly load");
         AccessTools.Field(typeof(Mod), "intContent").SetValue(__instance, content);
         return false;
     }
@@ -197,7 +225,7 @@ internal static class Harness
     private static bool Mount() { mounted++; return false; }
     private static bool Shaders() { shaderRegistrations++; return false; }
     private static bool Types(ref List<Type> __result) { __result = LoadedModManager.RunningMods.SelectMany(m => m.assemblies.loadedAssemblies).Distinct().SelectMany(a => a.GetTypes()).Where(t => t != typeof(FailingMod) || LoadedModManager.RunningMods.Any(m => m.PackageId == "test.failed")).ToList(); return false; }
-    private static bool LogLine(MethodBase __originalMethod, string __0) { if (__originalMethod.Name == "Error") errors.Add(__0); Console.WriteLine(__0); return false; }
+    private static bool LogLine(MethodBase __originalMethod, string __0) { messages.Add(__0); if (__originalMethod.Name == "Error") errors.Add(__0); Console.WriteLine(__0); return false; }
     private static bool Defer() => false;
     private static bool NoXml(ref List<LoadableXmlAsset> __result) { __result = new(); return false; }
     private static void Assert(bool value, string message) { if (!value) throw new Exception("FAIL " + message); Console.WriteLine("PASS " + message); }

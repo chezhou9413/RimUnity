@@ -1,4 +1,4 @@
-﻿param([Parameter(Mandatory)][string]$GameRoot, [Parameter(Mandatory)][string]$FixtureRoot, [string]$LegacyCarrier = '', [string]$WorkshopRoot = '')
+param([Parameter(Mandatory)][string]$GameRoot, [Parameter(Mandatory)][string]$FixtureRoot, [string]$LegacyCarrier = '', [string]$WorkshopRoot = '', [switch]$SharedConsumer)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'ModsSwap.ps1')
 if ($WorkshopRoot -and !(Test-Path -LiteralPath (Join-Path $WorkshopRoot '1.7/Assemblies/RimUnity.dll'))) { throw '工坊运行时目录无效。' }
@@ -45,7 +45,10 @@ try {
         [IO.File]::WriteAllText((Join-Path $target 'LoadFolders.xml'), '<loadFolders><v1.7><li>1.7</li></v1.7></loadFolders>', [Text.UTF8Encoding]::new($false))
         [IO.File]::WriteAllText((Join-Path $target '1.7/Defs/Marker.xml'), "<Defs><Fixture.MarkerDef><defName>EmbeddedTest_$id</defName></Fixture.MarkerDef></Defs>", [Text.UTF8Encoding]::new($false))
         $carrier = if ($letter -eq 'A' -and $LegacyCarrier) { $LegacyCarrier } else { Join-Path $repo 'artifacts/Embedded/RimUnity.Embedded.dll' }
-        Copy-Item -LiteralPath $carrier -Destination (Join-Path $target '1.7/Assemblies/RimUnity.Embedded.dll') -Force
+        $carrierTarget = Join-Path $target '1.7/Assemblies/RimUnity.Embedded.dll'
+        if ($SharedConsumer -and $letter -eq 'B') {
+            if (Test-Path -LiteralPath $carrierTarget) { Remove-Item -LiteralPath $carrierTarget }
+        } else { Copy-Item -LiteralPath $carrier -Destination $carrierTarget -Force }
     }
     $ordinary = $testMods[3]
     Copy-Item -LiteralPath (Join-Path $FixtureRoot 'Ordinary') -Destination $ordinary -Recurse
@@ -72,7 +75,8 @@ try {
         if (!(Test-Path -LiteralPath $reportPath)) { throw "游戏未生成测试报告：$save" }
         $report = Get-Content -LiteralPath $reportPath -Encoding UTF8 -Raw | ConvertFrom-Json
         $expectedSource = if ($mode -eq 'embedded') { 'embedded' } else { 'standalone' }
-        if (!$report.passed -or $report.source -ne $expectedSource -or $report.copies -ne 3) { throw "游戏测试未通过：$reportPath" }
+        $expectedCopies = if ($SharedConsumer) { 2 } else { 3 }
+        if (!$report.passed -or $report.menuDraws -lt 3 -or $report.source -ne $expectedSource -or $report.copies -ne $expectedCopies) { throw "游戏测试未通过：$reportPath" }
         $hasCache = Test-Path -LiteralPath (Join-Path $save 'RimUnity/Embedded')
         if ($hasCache -ne ($mode -eq 'embedded')) { throw '独立版不应释放内置载荷；内置版应创建资源缓存。' }
         if ($mode -ne 'embedded' -and !$report.ordinaryDll) { throw '普通 DLL 未通过真实游戏兼容验证。' }
@@ -82,7 +86,7 @@ try {
                 throw "没有使用指定的工坊副本：$reportPath"
             }
         }
-        Write-Output "PASS 游戏启动：$mode；3 个内置测试模组；报告=$reportPath"
+        Write-Output "PASS 游戏启动：$mode；3 个内容测试模组；菜单已绘制；报告=$reportPath"
     }
 } finally {
     # 先停掉本脚本启动的游戏进程，再按 journal 还原：测试副本、登记的测试模组目录、原模组一起处理。

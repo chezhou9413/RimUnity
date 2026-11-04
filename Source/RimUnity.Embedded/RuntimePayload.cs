@@ -6,6 +6,7 @@ using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Verse;
 
 namespace RimUnity.Embedded;
 
@@ -16,6 +17,7 @@ internal sealed class RuntimePayload
     internal byte[] Bytes;
     internal Version Version;
     internal int Protocol;
+    internal DateTimeOffset BuiltAtUtc = DateTimeOffset.MinValue;
 
     //只读取 PE 资源，不执行候选运行时的代码。
     internal static RuntimePayload Read(string path)
@@ -29,10 +31,52 @@ internal sealed class RuntimePayload
             .GetReader(checked((int)resource.Offset), checked(pe.PEHeaders.CorHeader.ResourcesDirectory.Size - (int)resource.Offset));
         var bytes = block.ReadBytes(block.ReadInt32());
         using var zip = new ZipArchive(new MemoryStream(bytes));
-        using var json = JsonDocument.Parse(zip.GetEntry("runtime.json").Open());
-        return new RuntimePayload { Path = path, Bytes = bytes, Hash = Convert.ToHexString(SHA256.HashData(bytes)),
-            Version = Version.Parse(json.RootElement.GetProperty("version").GetString()),
-            Protocol = json.RootElement.GetProperty("protocol").GetInt32() };
+        using var json = JsonDocument.Parse((zip.GetEntry("runtime.json") ?? throw new InvalidDataException("Missing runtime.json: " + path)).Open());
+        //将载荷清单格式问题统一为候选数据错误，避免缺字段异常越过候选回退边界。
+        var manifest = json.RootElement;
+        if (manifest.ValueKind != JsonValueKind.Object)
+            throw new InvalidDataException("runtime.json must be an object: " + path);
+        if (!manifest.TryGetProperty("version", out var versionField) || versionField.ValueKind != JsonValueKind.String ||
+            !System.Version.TryParse(versionField.GetString(), out var version))
+            throw new InvalidDataException("Missing or invalid runtime version: " + path);
+        if (!manifest.TryGetProperty("protocol", out var protocolField) || protocolField.ValueKind != JsonValueKind.Number ||
+            !protocolField.TryGetInt32(out int protocol))
+            throw new InvalidDataException("Missing or invalid runtime protocol: " + path);
+        var builtAtUtc = DateTimeOffset.MinValue;
+        if (manifest.TryGetProperty("builtAtUtc", out var builtAt) &&
+            (builtAt.ValueKind != JsonValueKind.String || !BuildMetadata.TryTime(builtAt.GetString(), out builtAtUtc)))
+        {
+            builtAtUtc = DateTimeOffset.MinValue;
+            Log.Warning("[RimUnity] Invalid builtAtUtc; treating as unknown: " + path);
+        }
+        return new RuntimePayload { BuiltAtUtc = builtAtUtc, Path = path, Bytes = bytes, Hash = Convert.ToHexString(SHA256.HashData(bytes)),
+            Version = version, Protocol = protocol };
+    }
+
+    //在 CLR 装载和原生挂载之前校验完整的资源契约，不执行候选代码。
+    internal string Prepare(string cache)
+    {
+        using (var zip = new ZipArchive(new MemoryStream(Bytes)))
+        {
+            var paths = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in zip.Entries)
+            {
+                Inside(cache, entry.FullName);
+                if (!paths.Add(entry.FullName.Replace('\\', '/')))
+                    throw new InvalidDataException("Duplicate payload entry: " + entry.FullName);
+            }
+            foreach (string required in new[] { "Assemblies/RimUnity.Core.dll", "Assemblies/RimUnity.dll",
+                "Assemblies/RimUnity.Spine.dll", "Defs/RimUnityShaders.xml" })
+                if (zip.GetEntry(required) is not { Length: > 0 })
+                    throw new InvalidDataException("Missing runtime resource: " + required);
+            if (!zip.Entries.Any(e => e.FullName.StartsWith("Shaders/RimUnity/", StringComparison.Ordinal) && e.Length > 0))
+                throw new InvalidDataException("Missing runtime shaders");
+        }
+        string root = Extract(cache);
+        foreach (string name in new[] { "RimUnity.Core", "RimUnity", "RimUnity.Spine" })
+            if (System.Reflection.AssemblyName.GetAssemblyName(System.IO.Path.Combine(root, "Assemblies", name + ".dll")).Name != name)
+                throw new InvalidDataException("Runtime assembly identity mismatch: " + name);
+        return root;
     }
 
     //哈希目录只容纳一份完整资源；缓存损坏必须明确报错。
