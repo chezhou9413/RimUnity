@@ -1,4 +1,4 @@
-param([Parameter(Mandatory)][string]$GameRoot, [Parameter(Mandatory)][string]$HarmonyPath, [string]$RuntimeDirectory = '', [string]$OutputDirectory = '', [string]$BuiltAtUtc = '')
+﻿param([Parameter(Mandatory)][string]$GameRoot, [Parameter(Mandatory)][string]$HarmonyPath, [string]$RuntimeDirectory = '', [string]$OutputDirectory = '', [string]$BuiltAtUtc = '')
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $repo = Split-Path $PSScriptRoot -Parent

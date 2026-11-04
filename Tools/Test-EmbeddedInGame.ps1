@@ -1,4 +1,4 @@
-param([Parameter(Mandatory)][string]$GameRoot, [Parameter(Mandatory)][string]$FixtureRoot, [string]$LegacyCarrier = '', [string]$WorkshopRoot = '', [switch]$SharedConsumer)
+﻿param([Parameter(Mandatory)][string]$GameRoot, [Parameter(Mandatory)][string]$FixtureRoot, [string]$LegacyCarrier = '', [string]$WorkshopRoot = '', [switch]$SharedConsumer)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'ModsSwap.ps1')
 if ($WorkshopRoot -and !(Test-Path -LiteralPath (Join-Path $WorkshopRoot '1.7/Assemblies/RimUnity.dll'))) { throw '工坊运行时目录无效。' }
