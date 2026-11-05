@@ -42,7 +42,8 @@ public sealed partial class ParticleSystem
                 float rate = Math.Max(0, emission.rateOverTime.Evaluate(normalized, Random(randomSeed, 2)));
                 ScheduleContinuous(ref carry, rate * (to - from), from, to, start, end);
                 float distanceRate = Math.Max(0, emission.rateOverDistance.Evaluate(normalized, Random(randomSeed, 3)));
-                ScheduleContinuous(ref distanceCarry, distanceRate * Vector3.Distance(emitterFrom, emitterTo) * (end - start), from, to, start, end);
+                if (distanceRate != 0)
+                    ScheduleContinuous(ref distanceCarry, distanceRate * Vector3.Distance(emitterFrom, emitterTo) * (end - start), from, to, start, end);
                 int first = (int)(from / main.duration), last = main.loop ? (int)(to / main.duration) : 0;
                 for (int loop = first; loop <= last; loop++) foreach (Burst burst in emission.bursts)
                     for (int cycle = 0; cycle < BurstCycles(burst); cycle++)
@@ -131,7 +132,9 @@ public sealed partial class ParticleSystem
     //分别累计时间与距离余量，在跨过每个整数阈值的位置出生。
     private void ScheduleContinuous(ref float remainder, float amount, float from, float to, float start, float end)
     {
-        if (!float.IsFinite(amount)) throw new InvalidOperationException("发射速率必须生成有限粒子数量。");
+        // Drop only this invalid emission sample, preserving the last valid carry so
+        // later samples can resume without NaN contamination or catch-up emission.
+        if (!float.IsFinite(amount)) return;
         float old = remainder, total = old + amount;
         int number = (int)Math.Min(int.MaxValue, Math.Floor(total));
         remainder = total - (float)Math.Floor(total);
