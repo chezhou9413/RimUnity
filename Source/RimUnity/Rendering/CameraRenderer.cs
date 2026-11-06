@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine.Experimental.Rendering;
 using Waylith.Rendering;
 
 namespace RimUnity.Rendering;
@@ -16,9 +17,12 @@ internal static class CameraRenderer
         if (!target)
         {
             if (camera == Camera.main) throw new InvalidOperationException("地图主相机由宿主渲染。");
-            if (camera.ScreenTarget && (camera.ScreenTarget.width != Screen.width || camera.ScreenTarget.height != Screen.height))
+            //先在浮点附件中叠加 HDR 粒子，再由屏幕合成限制最终显示范围。
+            GraphicsFormat format = camera.allowHDR ? GraphicsFormat.R16G16B16A16_SFloat : GraphicsFormat.R8G8B8A8_UNorm;
+            if (camera.ScreenTarget && (camera.ScreenTarget.width != Screen.width || camera.ScreenTarget.height != Screen.height ||
+                camera.ScreenTarget.Target.graphicsFormat != format))
             { RimUnity.Object.Destroy(camera.ScreenTarget); camera.ScreenTarget = null; }
-            camera.ScreenTarget ??= new RenderTexture(Screen.width, Screen.height, 24, (int)UnityEngine.Experimental.Rendering.GraphicsFormat.R8G8B8A8_UNorm);
+            camera.ScreenTarget ??= new RenderTexture(Screen.width, Screen.height, 24, (int)format);
             target = camera.ScreenTarget;
         }
         if (rendering) throw new InvalidOperationException("不能递归渲染离屏相机。");

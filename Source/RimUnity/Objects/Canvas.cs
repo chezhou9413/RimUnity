@@ -87,9 +87,9 @@ public class Canvas : MonoBehaviour
         }
         else
         {
-            rt.pivot = Vector2.zero;
             rt.sizeDelta = new Vector2(Screen.width / scaleFactor, Screen.height / scaleFactor);
-            rt.anchoredPosition = Vector2.zero;
+            //保留预制体的 pivot，以平移保持画布四边覆盖屏幕，局部坐标不再被强制改成左下原点。
+            rt.anchoredPosition = Vector2.Scale(rt.sizeDelta, rt.pivot);
             rt.localScale = Vector3.one;
         }
     }

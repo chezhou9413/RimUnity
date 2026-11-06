@@ -20,6 +20,9 @@ internal static class SettingsWindow
     //所有绘制路径统一恢复 IMGUI 全局状态。
     internal static void Draw(Rect rect, Rendering.BloomSettings bloom)
     {
+        //仅为承载 RimUnity 设置的原版窗口开启拖动，沿用窗口自身的输入处理。
+        if (Find.WindowStack.currentlyDrawnWindow is RimWorld.Dialog_ModSettings window)
+            window.draggable = true;
         var font = Text.Font;
         var anchor = Text.Anchor;
         var color = GUI.color;

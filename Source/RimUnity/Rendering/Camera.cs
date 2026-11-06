@@ -7,6 +7,8 @@ public sealed class Camera : MonoBehaviour
     public RenderTexture targetTexture { get; set; }
     internal RenderTexture ScreenTarget;
     public Color backgroundColor { get; set; } = Color.black;
+    //HDR 屏幕附件保留透明混合前超出一的特效亮度。
+    public bool allowHDR { get; set; }
     public CameraClearFlags clearFlags { get; set; } = CameraClearFlags.SolidColor;
     public float depth { get; set; }
     public Rect rect { get; set; } = new(0, 0, 1, 1);

@@ -37,10 +37,8 @@ internal static class UguiPointer
         for (Transform t = hit != null ? hit.transform : null; t != null; t = t.parent) data.hovered.Add(t.gameObject);
         if (hit != hovered)
         {
-            Send<IPointerExitHandler>(Find<IPointerExitHandler>(hovered), c => c.OnPointerExit(data));
-            SetButton(hovered, false, false);
+            UpdateHoverHierarchy(hovered, hit, data);
             hovered = hit;
-            Send<IPointerEnterHandler>(Find<IPointerEnterHandler>(hovered), c => c.OnPointerEnter(data));
         }
         SetButton(hovered, true, pressed != null && ClickTarget(hovered) == pressed);
         if ((pressed != null && !pressed.activeInHierarchy) || (dragTarget != null && !dragTarget.activeInHierarchy))
@@ -94,6 +92,39 @@ internal static class UguiPointer
         previous = screen;
     }
 
+    //悬停沿层级派发到公共祖先之前，子按钮之间移动不重复退出和进入父行。
+    private static void UpdateHoverHierarchy(GameObject previousHit, GameObject nextHit, PointerEventData data)
+    {
+        Transform previousTransform = previousHit != null ? previousHit.transform : null;
+        Transform nextTransform = nextHit != null ? nextHit.transform : null;
+        Transform common = FindCommonAncestor(previousTransform, nextTransform);
+        for (Transform node = previousTransform; node != null && node != common;)
+        {
+            Transform parent = node.parent;
+            Selectable selectable = node.GetComponent<Selectable>();
+            if (selectable != null) { selectable.Hovered = false; selectable.Held = false; }
+            Send<IPointerExitHandler>(node.gameObject, c => c.OnPointerExit(data));
+            node = parent;
+        }
+        for (Transform node = nextTransform; node != null && node != common;)
+        {
+            Transform parent = node.parent;
+            Selectable selectable = node.GetComponent<Selectable>();
+            if (selectable != null) selectable.Hovered = true;
+            Send<IPointerEnterHandler>(node.gameObject, c => c.OnPointerEnter(data));
+            node = parent;
+        }
+    }
+
+    //查找两个命中节点共享的最近父级，保留仍在鼠标下的父区域状态。
+    private static Transform FindCommonAncestor(Transform first, Transform second)
+    {
+        for (Transform a = first; a != null; a = a.parent)
+            for (Transform b = second; b != null; b = b.parent)
+                if (a == b) return a;
+        return null;
+    }
+
     //拖动完成或目标失活后释放捕获。
     private static void Release(PointerEventData data)
     {
@@ -132,4 +163,5 @@ internal static class UguiPointer
         Selectable button = target != null ? target.GetComponentInParent<Selectable>() : null;
         if (button != null) { button.Hovered = hover; button.Held = held; }
     }
+
 }
