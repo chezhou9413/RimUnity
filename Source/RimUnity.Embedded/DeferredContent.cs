@@ -18,6 +18,7 @@ internal sealed class DeferredContent
     //扫描启用的加载目录，拒绝未声明版本或重复身份的内容程序集。
     internal DeferredContent(IEnumerable<ModContentPack> mods)
     {
+        var paths = new Dictionary<string, ModContentPack>(StringComparer.OrdinalIgnoreCase);
         foreach (var mod in mods)
         foreach (string folder in mod.foldersToLoadDescendingOrder)
         {
@@ -25,6 +26,13 @@ internal sealed class DeferredContent
             if (!Directory.Exists(directory)) continue;
             foreach (string path in Directory.GetFiles(directory, "*.rimunity", SearchOption.AllDirectories))
             {
+                string fullPath = Path.GetFullPath(path);
+                if (paths.TryGetValue(fullPath, out var previousOwner))
+                {
+                    if (previousOwner != mod) throw new InvalidDataException("内容文件归属冲突 / Content file has multiple owners: " + fullPath);
+                    continue;
+                }
+                paths.Add(fullPath, mod);
                 string name = AssemblyName.GetAssemblyName(path).Name;
                 if (Files.TryGetValue(name, out var previous))
                 {

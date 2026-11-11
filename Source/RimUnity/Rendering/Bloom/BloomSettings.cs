@@ -13,6 +13,10 @@ public sealed partial class BloomSettings : ModSettings
     //内容模组在地图生命周期内接管自己的层，不改写玩家保存的手动选择。
     private int controlledLayers, activeLayers;
 
+    public int ControlledLayers => controlledLayers;
+    public int ActiveLayers => activeLayers;
+    public int EffectiveLayerMask => ((enabled ? layerMask : 0) & ~controlledLayers) | activeLayers;
+
     //主线程调用；同一层由一个内容模组负责，关闭时也覆盖手动勾选。
     public void SetLayerEnabled(int layer, bool active)
     {
@@ -56,12 +60,24 @@ public sealed partial class BloomSettings : ModSettings
     //给渲染线程传递不可变数值，不在渲染线程访问地图、模组设置或 Unity 对象。
     internal BloomFrame Snapshot()
     {
-        int mask = ((enabled ? layerMask : 0) & ~controlledLayers) | activeLayers;
+        int mask = EffectiveLayerMask;
         return new(mask != 0 && Current.ProgramState == ProgramState.Playing && Find.CurrentMap != null,
             Mathf.Clamp(threshold, 0, 4), Mathf.Clamp(intensity, 0, 4), Mathf.Clamp01(softKnee), Mathf.Clamp(scatter, .05f, .95f))
             { LayerMask = mask };
     }
 
+    //设置窗口与调试报告共用；不触碰渲染线程状态。
+    public string Describe()
+        => "manual=" + enabled
+            + "; mapHdr=" + mapHdrEnabled
+            + "; layerMask=0x" + layerMask.ToString("X8")
+            + "; controlled=0x" + controlledLayers.ToString("X8")
+            + "; active=0x" + activeLayers.ToString("X8")
+            + "; effective=0x" + EffectiveLayerMask.ToString("X8")
+            + "; threshold=" + threshold.ToString("F2")
+            + "; intensity=" + intensity.ToString("F2")
+            + "; softKnee=" + softKnee.ToString("F2")
+            + "; scatter=" + scatter.ToString("F2");
 }
 
 //随宿主帧快照传递；替代的原始载荷只用于判断场景是否存在。

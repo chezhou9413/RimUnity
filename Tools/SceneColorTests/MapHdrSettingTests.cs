@@ -53,6 +53,19 @@ internal static partial class Program
                 }
                 settingsType.GetMethod("ResetDefaults", members).Invoke(settings, null);
                 if ((bool)hdrFlag.GetValue(settings)) throw new Exception("Reset must disable map HDR.");
+
+                settingsType.GetMethod("SetLayerEnabled", members).Invoke(settings, new object[] { 29, true });
+                settingsType.GetField("enabled", members).SetValue(settings, false);
+                object controlled = settingsType.GetMethod("Snapshot", members).Invoke(settings, null);
+                using (var dispose = (IDisposable)controlled)
+                {
+                    int mask = (int)controlled.GetType().GetProperty("LayerMask", members).GetValue(controlled);
+                    if (mask != 1 << 29) throw new Exception("Controlled bloom layer must remain when manual switch is off.");
+                }
+                settingsType.GetMethod("ReleaseLayer", members).Invoke(settings, new object[] { 29 });
+                string describe = (string)settingsType.GetMethod("Describe", members).Invoke(settings, null);
+                if (describe == null || !describe.Contains("effective=0x")) throw new Exception("Bloom Describe must expose effective mask.");
+                checks++; Console.WriteLine("PASS controlled bloom layer survives manual switch and Describe is available");
             }
             finally { settingsProperty.SetValue(null, previousSettings); }
         }

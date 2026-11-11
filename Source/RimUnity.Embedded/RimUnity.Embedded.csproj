@@ -5,9 +5,13 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Assembly-CSharp" HintPath="$(RimWorldDir)/Assembly-CSharp.dll" />
-    <Reference Include="UnityStubs" HintPath="$(RimWorldDir)/UnityStubs.dll" />
+    <Reference Include="Waylith" HintPath="$(RimWorldDir)/Waylith.dll" />
     <Reference Include="0Harmony" HintPath="$(HarmonyPath)" />
     <EmbeddedResource Include="$(PayloadPath)" LogicalName="RimUnity.Payload.zip" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="RimUnityCoordinatorRevision" Value="1" />
+    <AssemblyMetadata Include="RimUnityBuiltAtUtc" Value="$(RimUnityBuiltAtUtc)" />
   </ItemGroup>
   <Target Name="RequirePayload" BeforeTargets="PrepareForBuild">
     <Error Condition="!Exists('$(PayloadPath)')" Text="请通过 Tools/Build.ps1 构建内置载荷。" />

@@ -1,45 +1,51 @@
 using System;
+using System.Linq;
+using System.Reflection;
 using HarmonyLib;
 using Verse;
 
 namespace RimUnity.Embedded;
 
-//游戏只提前扫描这个入口；实际运行时与脚本在首次 Mod 实例创建完成后加载。
+//每份新版容器登记入口，在 XML 前按元数据选举唯一协调者；不以 Mod 构造顺序决定加载逻辑。
 public sealed class EmbeddedBootstrap : Mod
 {
-    private const string Installed = "RimUnity.Embedded.Installed";
-    //进程级入口注册状态；与旧包分开，允许在 XML 前接管旧补丁。
-    private const string DeferredInstalled = "RimUnity.Embedded.DeferredInstalled";
-    private const string CoordinatorInstalled = "RimUnity.Embedded.CoordinatorInstalled";
-    private const string ScopedCoordinatorInstalled = "RimUnity.Embedded.ScopedCoordinatorInstalled";
     private const string Finished = "RimUnity.Embedded.Finished";
+    private const string Coordinator = "Chezhou.RimUnity.Embedded.TimestampCoordinator.";
 
-    //首次构造时原 CreateModClasses 已在执行，故拦截紧接着的 XML 读取入口。
     public EmbeddedBootstrap(ModContentPack content) : base(content)
     {
-        if (AppDomain.CurrentDomain.GetData(ScopedCoordinatorInstalled) != null) return;
-        new Harmony("Chezhou.RimUnity.Embedded.ScopedCoordinator").Patch(AccessTools.Method(typeof(LoadedModManager), "LoadModXML"),
-            prefix: new HarmonyMethod(typeof(EmbeddedBootstrap), nameof(Prepare))
-            {
-                priority = Priority.First,
-                before = new[] { "Chezhou.RimUnity.Embedded", "Chezhou.RimUnity.Embedded.Deferred", "Chezhou.RimUnity.Embedded.Coordinator" }
-            });
-        AppDomain.CurrentDomain.SetData(ScopedCoordinatorInstalled, true);
-        //旧包先构造时由排序接管；本入口先构造时阻止旧包安装全局初始化入口。
-        AppDomain.CurrentDomain.SetData(CoordinatorInstalled, true);
-        //同时兼容旧式和 0.1.13 入口；旧入口先安装时仍由新版 Prefix 提前接管。
-        AppDomain.CurrentDomain.SetData(DeferredInstalled, true);
-        //新入口先构造时阻止旧包安装；旧入口先构造时由上面的 before 保证接管。
-        AppDomain.CurrentDomain.SetData(Installed, true);
+        var assembly = typeof(EmbeddedBootstrap).Assembly;
+        string installed = Coordinator + assembly.FullName;
+        if (AppDomain.CurrentDomain.GetData(installed) != null) return;
+        var target = AccessTools.Method(typeof(LoadedModManager), "LoadModXML")
+            ?? throw new MissingMethodException(typeof(LoadedModManager).FullName, "LoadModXML");
+        new Harmony(installed).Patch(target, prefix: new HarmonyMethod(typeof(EmbeddedBootstrap), nameof(Prepare))
+        {
+            priority = Priority.First,
+            before = new[] { "Chezhou.RimUnity.Embedded.ScopedCoordinator", "Chezhou.RimUnity.Embedded.Coordinator",
+                "Chezhou.RimUnity.Embedded.Deferred", "Chezhou.RimUnity.Embedded", "Chezhou.RimUnity.Embedded.TimestampCoordinator" }
+        });
+        AppDomain.CurrentDomain.SetData(installed, true);
+        foreach (string key in new[] { "ScopedCoordinatorInstalled", "CoordinatorInstalled", "DeferredInstalled", "Installed" })
+            AppDomain.CurrentDomain.SetData("RimUnity.Embedded." + key, true);
     }
 
-    //在 Def 解析前完成运行时、资源和内容脚本的唯一一次装载。
     private static void Prepare()
     {
         if (AppDomain.CurrentDomain.GetData(Finished) != null) return;
-        //沿用旧包的完成标记，在任何回调前登记，使旧 Prefix 和重入均跳过。
+        var elected = LoadedModManager.RunningModsListForReading.SelectMany(m => m.assemblies.loadedAssemblies)
+            .Distinct().Where(a => a.GetName().Name.StartsWith("RimUnity.Embedded.", StringComparison.Ordinal) &&
+                BuildMetadata.Revision(a) > 0)
+            .OrderByDescending(BuildMetadata.Revision).ThenByDescending(BuildMetadata.Time)
+            .ThenBy(a => a.FullName, StringComparer.Ordinal).First();
+        if (elected != typeof(EmbeddedBootstrap).Assembly) return;
+        //在首次回调之前登记，阻止旧入口、重入及重复 XML 调用重新初始化。
         AppDomain.CurrentDomain.SetData(Finished, true);
-        try { RuntimeSelection.Initialize(); }
+        try
+        {
+            Log.Message($"[RimUnity] Embedded coordinator: {elected.GetName().Name}; revision: {BuildMetadata.Revision(elected)}; builtAtUtc: {BuildMetadata.Time(elected):O}");
+            RuntimeSelection.Initialize();
+        }
         catch (Exception error)
         {
             string message = "[RimUnity] 内置运行时加载失败；请检查前置版本和模组打包。/ Embedded runtime failed; check dependencies and packaging.\n" + error;

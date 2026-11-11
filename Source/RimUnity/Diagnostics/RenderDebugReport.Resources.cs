@@ -17,6 +17,8 @@ internal static partial class RenderDebugReport
     {
         b.AppendLine("Host frame value metadata mapping=" + Rendering.HdrDrawFrame.MetadataLayout);
         Dump(b, "Bloom player settings", RimUnityMod.Bloom);
+        b.AppendLine("Bloom settings describe=" + RimUnityMod.Bloom?.Describe());
+        b.AppendLine("Bloom hooks=" + Rendering.BloomHooks.Describe());
         Value(b, "Bloom effective", () => typeof(Rendering.BloomSettings).GetMethod("Snapshot", Flags)?.Invoke(RimUnityMod.Bloom, null));
         b.AppendLine("Last particle diagnostic composite state=" + RendererDebugCapture.CompositeState);
         b.AppendLine("Bridge active cameras=" + Camera.Active.Count + "; main=" + Camera.main?.name);
