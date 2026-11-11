@@ -18,6 +18,9 @@ internal sealed unsafe partial class HdrDrawTarget : IDisposable
     private readonly string name;
     private HdrTransferPass transfer, output;
     private int current;
+    private int sceneWidth, sceneHeight;
+    private VkFormat sceneColor, sceneDepth;
+    private GpuTextureAllocation[] boundDepth;
     internal NativeTarget Result { get; private set; }
     internal HdrDrawTarget(string name) => this.name = name;
     internal (MeshBatchRenderer renderer, VkRenderPass pass) PrepareWarmup(in FrameContext ctx, NativeTarget scene)
@@ -29,6 +32,7 @@ internal sealed unsafe partial class HdrDrawTarget : IDisposable
     //地图先保留已清屏的背景；Bloom 从透明黑开始，不把背景计入亮部。
     internal void Begin(in FrameContext ctx, NativeTarget scene, int frame, bool clear)
     {
+        if (colors != null && SceneChanged(in ctx, scene)) ctx.GraphicsDevice.WaitIdleAndRun(Dispose);
         if (colors == null) Initialize(in ctx, scene);
         // Native map/preview shaders produce display-space numeric values. A floating
         // or sRGB attachment does not change that shader contract: sRGB sampling
@@ -38,6 +42,11 @@ internal sealed unsafe partial class HdrDrawTarget : IDisposable
         transfer.Copy(in ctx, frame, scene, colors[ctx.SubmissionFrameIndex][current], 0, clear);
         Result = null;
     }
+
+    private bool SceneChanged(in FrameContext ctx, NativeTarget scene)
+        => scene.Width != sceneWidth || scene.Height != sceneHeight
+            || scene.ColorFormat != sceneColor || scene.DepthFormat != sceneDepth
+            || colors.Length != ctx.RenderContext.FramesInFlight;
 
     //只在颜色语义改变时做全屏转换，绘制仍逐项沿用宿主次序。
     internal void Record(in FrameContext ctx, NativeTarget scene, HdrDrawFrame snapshot, int queueMin = int.MinValue, int queueMax = int.MaxValue)
@@ -111,9 +120,12 @@ internal sealed unsafe partial class HdrDrawTarget : IDisposable
     {
         EnsurePipelineResources(in ctx, scene);
         transfer = new HdrTransferPass(name + ".Transfer"); output = new HdrTransferPass(name + ".Output");
+        sceneWidth = scene.Width; sceneHeight = scene.Height;
+        sceneColor = scene.ColorFormat;
         colors = new NativeTarget[ctx.RenderContext.FramesInFlight][];
         sceneCopies = new NativeTarget[colors.Length];
         framebuffers = new VkFramebuffer[colors.Length][];
+        boundDepth = new GpuTextureAllocation[colors.Length];
         for (int i = 0; i < colors.Length; i++)
         {
             colors[i] = new NativeTarget[2]; framebuffers[i] = new VkFramebuffer[2];
@@ -125,10 +137,14 @@ internal sealed unsafe partial class HdrDrawTarget : IDisposable
     //Prewarming must not allocate full-resolution color targets or discard its warmed renderer later.
     private void EnsurePipelineResources(in FrameContext ctx, NativeTarget scene)
     {
-        if (renderer != null) return;
+        if (renderer != null)
+        {
+            if (sceneDepth == scene.DepthFormat) return;
+            ctx.GraphicsDevice.WaitIdleAndRun(Dispose);
+        }
         device = ctx.Device;
         var created = new MeshBatchRenderer(ctx.GraphicsDevice, ctx.RenderContext);
-        try { pass = CreatePass(device, scene.DepthFormat); renderer = created; }
+        try { pass = CreatePass(device, scene.DepthFormat); sceneDepth = scene.DepthFormat; renderer = created; }
         catch { created.Dispose(); throw; }
     }
 
@@ -137,13 +153,23 @@ internal sealed unsafe partial class HdrDrawTarget : IDisposable
     {
         int frame = ctx.SubmissionFrameIndex;
         VkImageView* views = stackalloc VkImageView[2];
+        var depth = scene.Depth;
+        views[1] = depth?.ImageView ?? default;
+        bool depthChanged = !ReferenceEquals(boundDepth[frame], depth);
         for (int mode = 0; mode < 2; mode++)
         {
-            if (!framebuffers[frame][mode].IsNull()) continue;
-            views[0] = colors[frame][mode].ColorView; views[1] = scene.DepthView;
-            framebuffers[frame][mode] = device.CreateFramebuffer(new VkFramebufferCreateInfo
+            ref var framebuffer = ref framebuffers[frame][mode];
+            if (!framebuffer.IsNull())
+            {
+                if (!depthChanged) continue;
+                device.DestroyFramebuffer(framebuffer, device.VkAllocator);
+                framebuffer = default;
+            }
+            views[0] = colors[frame][mode].ColorView;
+            framebuffer = device.CreateFramebuffer(new VkFramebufferCreateInfo
             { RenderPass = pass, AttachmentCount = scene.HasDepth ? 2 : 1, Attachments = views, Width = scene.Width, Height = scene.Height, Layers = 1 }, device.VkAllocator);
         }
+        boundDepth[frame] = depth;
     }
 
     //宿主等待在途帧后调用，不能在设置窗口或帧快照释放时销毁 GPU 对象。
@@ -156,6 +182,6 @@ internal sealed unsafe partial class HdrDrawTarget : IDisposable
         if (colors != null) foreach (var pair in colors) foreach (var color in pair) color.Dispose();
         if (sceneCopies != null) foreach (var copy in sceneCopies) copy?.Dispose();
         if (!pass.IsNull()) device.DestroyRenderPass(pass, device.VkAllocator);
-        pass = default; colors = null; sceneCopies = null; framebuffers = null; Result = null;
+        pass = default; colors = null; sceneCopies = null; framebuffers = null; boundDepth = null; Result = null;
     }
 }

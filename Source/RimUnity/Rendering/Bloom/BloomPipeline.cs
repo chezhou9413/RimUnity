@@ -13,6 +13,7 @@ namespace RimUnity.Rendering;
 internal sealed class BloomPipeline : IDisposable
 {
     private const int Levels = 5;
+    private static readonly string[] ShaderNames = { "BloomPrefilter", "BloomDown", "BloomUp", "BloomComposite", "HdrComposite", "HdrTransfer" };
     private readonly CompositePass scene;
     private readonly PostEffectPass[] down = new PostEffectPass[Levels], up = new PostEffectPass[Levels - 1];
     private readonly PostEffectPass combine, hdrCombine;
@@ -21,7 +22,14 @@ internal sealed class BloomPipeline : IDisposable
     private NativeRenderTexture[][] targets;
     private bool prepared;
     private int width, height;
+    private VkFormat colorFormat;
+    private int rebuilds;
+    private string lastPrepareMiss;
+    private string shaderError;
+    private bool shadersChecked;
     internal readonly IRenderPass[] Passes;
+    internal int Rebuilds => rebuilds;
+    internal string LastPrepareMiss => lastPrepareMiss;
     internal (MeshBatchRenderer renderer, VkRenderPass pass) PrepareWarmup(in FrameContext ctx, NativeRenderTexture source)
         => layers.PrepareWarmup(in ctx, source);
     internal int PrepareEfxWarmup(in FrameContext ctx, NativeRenderTexture source, ScreenEfx.EfxFrame frame)
@@ -48,13 +56,15 @@ internal sealed class BloomPipeline : IDisposable
     // Native scene samples follow the host display-space shader contract regardless
     // of storage format. Only HdrMapHooks.LinearScene is explicitly linear HDR.
 
-    //按宿主帧槽位分配，窗口尺寸变化由宿主的安全重建点统一释放。
+    //纹理按首次使用分配。未使用的帧槽没有 GPU 图像，仍可正常使用。
     private void Ensure(in FrameContext ctx, NativeRenderTexture source)
     {
-        if (targets != null && width == source.Width && height == source.Height) return;
+        if (targets != null && width == source.Width && height == source.Height
+            && colorFormat == source.ColorFormat && targets.Length == ctx.RenderContext.FramesInFlight) return;
         //The first target allocation must retain the pipeline cache prepared during map loading.
-        if (targets != null) ReleaseTargets();
-        width = source.Width; height = source.Height;
+        if (targets != null) ctx.GraphicsDevice.WaitIdleAndRun(ReleaseTargets);
+        width = source.Width; height = source.Height; colorFormat = source.ColorFormat;
+        rebuilds++;
         targets = new NativeRenderTexture[ctx.RenderContext.FramesInFlight][];
         for (int frame = 0; frame < targets.Length; frame++)
         {
@@ -66,6 +76,35 @@ internal sealed class BloomPipeline : IDisposable
                     VkFormat.R16G16B16A16SFloat, name: $"RimUnity.Bloom.{frame}.{i}");
             }
         }
+    }
+
+    //先让原生编译器验证资源，再让 PostEffectPass 创建 Vulkan 对象及录制命令。
+    private bool ShadersReady()
+    {
+        if (shadersChecked) return shaderError == null;
+        try
+        {
+            foreach (var name in ShaderNames)
+            {
+                string path = PathFor(name);
+                RuntimeShaderCompiler.Compile(ShaderSourceLoader.ReadShaderSource(path), path, "main",
+                    RuntimeShaderLanguage.Glsl, RuntimeShaderStage.Fragment);
+            }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            shaderError = error.Message;
+            Verse.Log.Error("[RimUnity] Bloom shader 验证失败，保留宿主场景合成，渲染目标重建后重试。\n" + error);
+        }
+        shadersChecked = true;
+        return shaderError == null;
+    }
+
+    private void NotePrepareMiss(string reason)
+    {
+        lastPrepareMiss = reason;
+        if (Diagnostics.RenderDebugReport.Collecting)
+            Diagnostics.RenderDebugReport.Stage("BloomPrepare", "skipped=" + reason);
     }
 
     //软阈值保留临界亮度的平滑过渡；只在线性光强上做模糊和合成。
@@ -80,8 +119,18 @@ internal sealed class BloomPipeline : IDisposable
     {
         using var spike = Diagnostics.ParticleSpikeCapture.Measure("Bloom.Prepare");
         prepared = false;
-        if (source == null) return;
-        if (settings.Draws == null || settings.Draws.Frame.Draws.Count == 0) return;
+        if (source == null) { NotePrepareMiss("source-null"); return; }
+        if (!source.IsCreated) { NotePrepareMiss("source-not-created"); return; }
+        if (settings.Draws == null || settings.Draws.Frame.Draws.Count == 0)
+        {
+            NotePrepareMiss(settings.Draws == null ? "draws-null" : "draws-empty");
+            return;
+        }
+        if (scene != null && !ShadersReady())
+        {
+            NotePrepareMiss("shader-validation: " + shaderError);
+            return;
+        }
         Ensure(in ctx, source);
         layers.Begin(in ctx, source, settings.FrameNumber, clear: true);
         layers.BindDepth(in ctx, source);
@@ -103,6 +152,14 @@ internal sealed class BloomPipeline : IDisposable
             up[i].Record(in ctx, settings);
         }
         prepared = true;
+        lastPrepareMiss = null;
+        if (Diagnostics.RenderDebugReport.Collecting)
+            Diagnostics.RenderDebugReport.Stage("BloomPrepare", "frame=" + settings.FrameNumber
+                + "; draws=" + settings.Draws.Frame.Draws.Count
+                + "; source=" + source.Width + "x" + source.Height + "/" + source.ColorFormat
+                + "; created=" + source.IsCreated
+                + "; rebuilds=" + rebuilds
+                + "; mask=" + settings.LayerMask);
     }
 
     //预览已有完整的线性场景与深度，只复用统一 Bloom 并输出显示颜色。
@@ -168,8 +225,11 @@ internal sealed class BloomPipeline : IDisposable
         if (targets != null) foreach (var frame in targets) foreach (var texture in frame) texture.Dispose();
         targets = null;
         prepared = false;
-        foreach (var pass in down) pass.Output = null;
-        foreach (var pass in up) pass.Output = null;
+        lastPrepareMiss = null;
+        shaderError = null;
+        shadersChecked = false;
+        foreach (var pass in down) { pass.Output = null; pass.Invalidate(); }
+        foreach (var pass in up) { pass.Output = null; pass.Invalidate(); }
         combine.Invalidate();
         hdrCombine.Invalidate();
     }
