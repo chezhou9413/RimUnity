@@ -1,6 +1,7 @@
 using System;
 using Brutal.VulkanApi;
 using Brutal.VulkanApi.Abstractions;
+using Waylith.Graphics;
 using Waylith.Rendering;
 using NativeTarget = Waylith.Rendering.RenderTexture;
 
@@ -32,7 +33,11 @@ internal sealed unsafe partial class HdrDrawTarget : IDisposable
     //地图先保留已清屏的背景；Bloom 从透明黑开始，不把背景计入亮部。
     internal void Begin(in FrameContext ctx, NativeTarget scene, int frame, bool clear)
     {
-        if (colors != null && SceneChanged(in ctx, scene)) ctx.GraphicsDevice.WaitIdleAndRun(Dispose);
+        if (colors != null && SceneChanged(in ctx, scene))
+        {
+            var context = ctx.RenderContext;
+            ctx.GraphicsDevice.WaitIdleAndRun(() => RebuildTargets(context));
+        }
         if (colors == null) Initialize(in ctx, scene);
         // Native map/preview shaders produce display-space numeric values. A floating
         // or sRGB attachment does not change that shader contract: sRGB sampling
@@ -137,15 +142,25 @@ internal sealed unsafe partial class HdrDrawTarget : IDisposable
     //Prewarming must not allocate full-resolution color targets or discard its warmed renderer later.
     private void EnsurePipelineResources(in FrameContext ctx, NativeTarget scene)
     {
-        if (renderer != null)
+        if (!pass.IsNull())
         {
             if (sceneDepth == scene.DepthFormat) return;
-            ctx.GraphicsDevice.WaitIdleAndRun(Dispose);
+            var context = ctx.RenderContext;
+            ctx.GraphicsDevice.WaitIdleAndRun(() => RebuildTargets(context));
         }
         device = ctx.Device;
-        var created = new MeshBatchRenderer(ctx.GraphicsDevice, ctx.RenderContext);
-        try { pass = CreatePass(device, scene.DepthFormat); sceneDepth = scene.DepthFormat; renderer = created; }
-        catch { created.Dispose(); throw; }
+        var newPass = CreatePass(device, scene.DepthFormat);
+        try
+        {
+            renderer ??= new MeshBatchRenderer(ctx.GraphicsDevice, ctx.RenderContext);
+        }
+        catch
+        {
+            device.DestroyRenderPass(newPass, device.VkAllocator);
+            throw;
+        }
+        pass = newPass;
+        sceneDepth = scene.DepthFormat;
     }
 
     //各在途帧的深度视图不同，等到实际使用该帧时绑定。
@@ -172,10 +187,21 @@ internal sealed unsafe partial class HdrDrawTarget : IDisposable
         boundDepth[frame] = depth;
     }
 
-    //宿主等待在途帧后调用，不能在设置窗口或帧快照释放时销毁 GPU 对象。
+    //窗口重建沿用宿主的网格渲染器生命周期，附件在 GPU 空闲后单独释放。
+    internal void RebuildTargets(IRenderContext context)
+    {
+        renderer?.OnRenderContextRebuilt(context);
+        ReleaseTargets();
+    }
+
     public void Dispose()
     {
         renderer?.Dispose(); renderer = null;
+        ReleaseTargets();
+    }
+
+    private void ReleaseTargets()
+    {
         transfer?.Dispose(); transfer = null; output?.Dispose(); output = null;
         if (framebuffers != null) foreach (var frame in framebuffers) foreach (var framebuffer in frame)
             if (!framebuffer.IsNull()) device.DestroyFramebuffer(framebuffer, device.VkAllocator);

@@ -110,7 +110,8 @@ internal sealed class BloomPreviewRenderer : IDisposable
     private void EnsureTargets(UnityEngine.RenderTexture target)
     {
         if (scene != null && scene.Width == target.width && scene.Height == target.height && scene.ColorFormat == target.GpuTexture.Format) return;
-        bloom.ReleaseTargets(); sceneDraw.Dispose();
+        bloom.RebuildTargets(context);
+        sceneDraw.RebuildTargets(context);
         scene?.Dispose(); result?.Dispose();
         if (!scenePass.IsNull()) device.DestroyRenderPass(scenePass, device.VkAllocator);
         scenePass = PostFxPassHelpers.CreateColorRenderPass(device, target.GpuTexture.Format, VkFormat.D32SFloatS8UInt, VkAttachmentLoadOp.Clear);

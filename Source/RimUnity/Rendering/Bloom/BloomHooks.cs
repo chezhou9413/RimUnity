@@ -7,6 +7,7 @@ using HarmonyLib;
 using RimWorld.Planet;
 using RimWorldWaylith.Rendering;
 using Verse;
+using Waylith.Graphics;
 using Waylith.Rendering;
 using Waylith.Rendering.PostFx;
 
@@ -178,10 +179,11 @@ internal static class BloomHooks
     [HarmonyPatch(typeof(PostFxFeature), nameof(PostFxFeature.OnRenderTargetRebuilt))]
     private static class Rebuild
     {
-        private static void Prefix(CompositePass ___composite)
+        private static void Prefix(CompositePass ___composite, IRenderTarget __0)
         {
             FailedComposites.Remove(___composite);
-            if (Pipelines.TryGetValue(___composite, out var pipeline)) pipeline.ReleaseTargets();
+            if (__0 is IRenderContext context && Pipelines.TryGetValue(___composite, out var pipeline))
+                pipeline.RebuildTargets(context);
         }
     }
 

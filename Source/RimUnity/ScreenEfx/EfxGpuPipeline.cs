@@ -199,7 +199,21 @@ internal sealed class EfxGpuPipeline : IDisposable
         output.RecordInline(in ctx, ctx.RenderPass, ctx.SampleCount);
     }
 
-    internal void ReleaseTargets()
+    //Each renderer uses per-frame material descriptors. The host has retired those
+    //frames before resize; the next draw binds the slot to the replacement images.
+    internal void RebuildTargets()
+    {
+        if (renderers != null)
+        {
+            for (int i = 0; i < renderers.Length; i++)
+                renderers[i]?.OnRenderContextRebuilt(contexts[i]);
+        }
+        ReleaseImages();
+        scene.Invalidate();
+        output.Invalidate();
+    }
+
+    private void ReleaseTargets()
     {
         Result = null;
         //Renderer descriptors must be retired before releasing sampled views/framebuffers.

@@ -62,7 +62,11 @@ internal sealed class BloomPipeline : IDisposable
         if (targets != null && width == source.Width && height == source.Height
             && colorFormat == source.ColorFormat && targets.Length == ctx.RenderContext.FramesInFlight) return;
         //The first target allocation must retain the pipeline cache prepared during map loading.
-        if (targets != null) ctx.GraphicsDevice.WaitIdleAndRun(ReleaseTargets);
+        if (targets != null)
+        {
+            var context = ctx.RenderContext;
+            ctx.GraphicsDevice.WaitIdleAndRun(() => RebuildTargets(context));
+        }
         width = source.Width; height = source.Height; colorFormat = source.ColorFormat;
         rebuilds++;
         targets = new NativeRenderTexture[ctx.RenderContext.FramesInFlight][];
@@ -218,10 +222,15 @@ internal sealed class BloomPipeline : IDisposable
     }
 
     //宿主在等待在途帧后调用重建／释放入口，不能由设置窗口直接销毁 GPU 对象。
-    internal void ReleaseTargets()
+    internal void RebuildTargets(IRenderContext context)
     {
-        effects.ReleaseTargets();
-        layers.Dispose();
+        effects.RebuildTargets();
+        layers.RebuildTargets(context);
+        ReleaseBloomTargets();
+    }
+
+    private void ReleaseBloomTargets()
+    {
         if (targets != null) foreach (var frame in targets) foreach (var texture in frame) texture.Dispose();
         targets = null;
         prepared = false;
@@ -237,7 +246,13 @@ internal sealed class BloomPipeline : IDisposable
     //后处理实例结束时释放缓存及所有管线对象。
     public void Dispose()
     {
-        ReleaseTargets(); effects.Dispose(); foreach (var pass in down) pass.Dispose(); foreach (var pass in up) pass.Dispose(); combine.Dispose(); hdrCombine.Dispose();
+        effects.Dispose();
+        layers.Dispose();
+        ReleaseBloomTargets();
+        foreach (var pass in down) pass.Dispose();
+        foreach (var pass in up) pass.Dispose();
+        combine.Dispose();
+        hdrCombine.Dispose();
     }
 
     //拆分在屏幕渲染之前和之内的两段，避免在一个 Vulkan RenderPass 中嵌套另一个。

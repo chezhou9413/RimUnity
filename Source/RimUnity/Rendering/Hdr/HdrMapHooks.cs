@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using Brutal.Numerics;
 using Brutal.VulkanApi;
 using HarmonyLib;
+using Waylith.Graphics;
 using Waylith.Rendering;
 using NativeTarget = Waylith.Rendering.RenderTexture;
 
@@ -108,7 +109,11 @@ internal static class HdrMapHooks
     private static class Rebuild
     {
         private static MethodBase TargetMethod() => AccessTools.Method(MapPassType, "OnRenderTargetRebuilt");
-        private static void Prefix(object __instance) => Release(__instance);
+        private static void Prefix(object __instance, IRenderTarget __0)
+        {
+            if (__0 is IRenderContext context && Targets.TryGetValue(__instance, out var target))
+                target.RebuildTargets(context);
+        }
     }
     [HarmonyPatch]
     private static class Dispose
@@ -116,7 +121,7 @@ internal static class HdrMapHooks
         private static MethodBase TargetMethod() => AccessTools.Method(MapPassType, "Dispose");
         private static void Prefix(object __instance) => Release(__instance);
     }
-    //与宿主同步释放附件和渲染器，重建之后按新尺寸分配。
+    //地图绘制通道退出时释放其渲染器和附件。
     private static void Release(object owner)
     {
         if (!Targets.TryGetValue(owner, out var target)) return;
