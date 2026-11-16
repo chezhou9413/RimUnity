@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
+using Brutal.VulkanApi;
 using RimUnity.ScreenEfx;
 using Waylith.Rendering;
 
@@ -112,12 +113,20 @@ internal static class Program
         var renderers = new MeshBatchRenderer[2]; Set("renderers", renderers); Set("warmed", true);
         var scene = (Waylith.Rendering.PostFx.PostEffectPass)Get("scene");
         var output = (Waylith.Rendering.PostFx.PostEffectPass)Get("output");
-        var allocation = (GpuTextureAllocation)RuntimeHelpers.GetUninitializedObject(typeof(GpuTextureAllocation));
-        scene.SetInput(0, allocation, default); scene.SetInput(1, allocation, default); output.SetInput(0, allocation, default);
+        var view = new VkImageView((IntPtr)0x11);
+        scene.SetInput(0, view, default, VkImageLayout.ShaderReadOnlyOptimal);
+        scene.SetInput(1, view, default, VkImageLayout.ShaderReadOnlyOptimal);
+        output.SetInput(0, view, default, VkImageLayout.ShaderReadOnlyOptimal);
         pipeline.ReleaseIfIdle(); pipeline.ReleaseIfIdle();
-        var inputs = HarmonyLib.AccessTools.Field(typeof(Waylith.Rendering.PostFx.PostEffectPass), "inputTextures");
-        Check(((Array)inputs.GetValue(scene)).GetValue(0) == null && ((Array)inputs.GetValue(scene)).GetValue(1) == null
-            && ((Array)inputs.GetValue(output)).GetValue(0) == null, "idle cleanup clears native input bindings without dereferencing a null RenderTexture");
+        var views = HarmonyLib.AccessTools.Field(typeof(Waylith.Rendering.PostFx.PostEffectPass), "inputViews");
+        var samplers = HarmonyLib.AccessTools.Field(typeof(Waylith.Rendering.PostFx.PostEffectPass), "inputSamplers");
+        var layouts = HarmonyLib.AccessTools.Field(typeof(Waylith.Rendering.PostFx.PostEffectPass), "inputLayouts");
+        bool Cleared(Waylith.Rendering.PostFx.PostEffectPass pass, int binding) =>
+            Equals(((Array)views.GetValue(pass)).GetValue(binding), default(VkImageView))
+            && Equals(((Array)samplers.GetValue(pass)).GetValue(binding), default(VkSampler))
+            && Equals(((Array)layouts.GetValue(pass)).GetValue(binding), default(VkImageLayout));
+        Check(Cleared(scene, 0) && Cleared(scene, 1) && Cleared(output, 0),
+            "idle cleanup clears native input bindings without dereferencing a null RenderTexture");
         Check(ReferenceEquals(Get("renderers"), renderers), "hidden warmed clips keep pipeline caches after image cleanup");
 
         var frame = EfxFrame.Rent(); handle.Lease.Retain(); frame.Leases.Add(handle.Lease);

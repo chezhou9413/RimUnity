@@ -237,10 +237,11 @@ internal sealed class EfxGpuPipeline : IDisposable
         if (targets != null) foreach (var pair in targets) if (pair != null) foreach (var target in pair) target?.Dispose();
         targets = null;
         scene.Output = null;
-        //纹理和分配对象重载都会解引用；帧槽位退役后用空图像视图清除借用绑定。
-        scene.SetInput(0, default(VkImageView), default);
-        scene.SetInput(1, default(VkImageView), default);
-        output.SetInput(0, default(VkImageView), default);
+        //纹理和分配对象重载都会解引用。帧槽位退役后用空视图、采样器和布局清掉借用绑定；
+        //1.7.5011 起图像视图重载必须带 VkImageLayout，省略会在录制帧时找不到旧方法。
+        scene.SetInput(0, default(VkImageView), default, default);
+        scene.SetInput(1, default(VkImageView), default, default);
+        output.SetInput(0, default(VkImageView), default, default);
     }
     public void Dispose() { ReleaseTargets(); scene.Dispose(); output.Dispose(); }
 
