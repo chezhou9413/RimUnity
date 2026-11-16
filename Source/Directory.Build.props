@@ -3,7 +3,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ParticleAnalysisRoot Condition="'$(ParticleAnalysisRoot)' == ''">$(MSBuildThisFileDirectory)../Artifacts/ParticleAnalysis</ParticleAnalysisRoot>
     <DefineConstants Condition="'$(RimUnityParticleAnalysis)' == 'true'">$(DefineConstants);RIMUNITY_PARTICLE_ANALYSIS</DefineConstants>
-    <BaseIntermediateOutputPath Condition="'$(RimUnityParticleAnalysis)' == 'true'">$(TEMP)/RimUnity/ParticleAnalysis/$(MSBuildProjectName)/obj/</BaseIntermediateOutputPath>
+    <BaseIntermediateOutputPath Condition="'$(RimUnityParticleAnalysis)' == 'true'">$(MSBuildThisFileDirectory).build/ParticleAnalysis/$(MSBuildProjectName)/obj/</BaseIntermediateOutputPath>
     <Version>0.1.24</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>0.1.24.0</FileVersion>
@@ -11,7 +11,7 @@
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
-    <BaseIntermediateOutputPath Condition="'$(BaseIntermediateOutputPath)' == ''">$(TEMP)/RimUnity/Build/$(MSBuildProjectName)/obj/</BaseIntermediateOutputPath>
+    <BaseIntermediateOutputPath Condition="'$(BaseIntermediateOutputPath)' == ''">$(MSBuildThisFileDirectory).build/$(MSBuildProjectName)/obj/</BaseIntermediateOutputPath>
     <DefaultItemExcludes>$(DefaultItemExcludes);**/obj/**;**/bin/**</DefaultItemExcludes>
     <RimWorldDir Condition="'$(RimWorldDir)' == ''">$(RIMWORLD_DIR)</RimWorldDir>
     <HarmonyPath Condition="'$(HarmonyPath)' == ''">$(HARMONY_PATH)</HarmonyPath>

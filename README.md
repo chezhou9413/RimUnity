@@ -42,19 +42,18 @@ instance.transform.position = new RimUnity.Vector3(x, y, z);
 
 只使用框架或安装发行版时无需编译。修改框架源码则需要 RimWorld 1.7 安装目录、Harmony 的 `0Harmony.dll` 和 .NET 10 SDK。
 
-```powershell
-$env:HARMONY_PATH = 'C:\Mods\Harmony\1.7\Assemblies\0Harmony.dll'
-.\Tools\Verify.ps1 -GameRoot 'C:\Games\RimWorld' -Embedded
-# 修改文档后显式更新离线镜像，再打包：
-pwsh -File .\Tools\Sync-Manual.ps1
-.\Tools\Pack.ps1 -Output 'C:\out'
-```
+| 操作 | Windows（CMD / PowerShell） | Linux / macOS（终端） |
+| --- | --- | --- |
+| 构建全部产物 | `.\build.cmd` | `sh ./build.sh` |
+| 同步修改过的文档 | `.\build.cmd docs` | `sh ./build.sh docs` |
+| 打包已有产物 | `.\build.cmd pack` | `sh ./build.sh pack` |
+| 查看参数 | `.\build.cmd --help` | `sh ./build.sh --help` |
 
-使用 PowerShell 7 运行这些入口。`Build.ps1` 一次构建运行时、内置接入包与 ShaderTool；`Verify.ps1` 默认调用一次构建，再检查着色器，`-Embedded` 加跑内置运行时离线测试。已有本次构建产物时可用 `-SkipBuild`，无需先 Build 再重复构建。`Pack.ps1` 只检查并打包已有产物，文档镜像不同步时失败，不会自动改写。部署单独运行 `Deploy.ps1`，游戏内测试单独运行 `Test-EmbeddedInGame.ps1`。
+常用构建和打包只依赖 **.NET 10 SDK**，不需要 PowerShell、Python 或全局环境变量。入口读取 Steam 的安装位置与库清单，查找 RimWorld 1.7 和 Harmony。构建输出位于 `1.7/Assemblies`、`artifacts/Embedded`、`Tools/bin/ShaderTool`；打包输出位于 `artifacts`，不部署或启动游戏。
 
-脚本在入口统一解析路径：显式参数优先，其次环境变量 `RIMWORLD_DIR` / `HARMONY_PATH` / `UNITY_EDITOR_DIR` / `UNITY_PROJECT` / `RIMUNITY_BACKUP_DIR`，最后是脚本默认值。目录存在之外还会核对必需文件（游戏目录要含 `Assembly-CSharp.dll` 与 `Waylith.dll`；Unity Editor/Data 要含 `Managed/Newtonsoft.Json.dll` 与 UnityEngine 程序集；Unity 工程要含 UGUI/TMP 程序集），路径指错时在入口直接说明缺什么，而不是等到编译或运行时才报错。部署与升级备份默认放在游戏安装目录下的 `.rimunity-backups`（在 `Mods` 之外，不会被模组扫描读到）。
+非 Steam 安装或同时存在多个副本时，传 `--game "游戏程序集目录" --harmony "0Harmony.dll 路径"`。也可把 `build.example.json` 复制成 `build.local.json`，填入 `game` / `harmony` 后一直使用；该文件已被 Git 忽略。路径优先级为：命令参数 → 本地配置 → 已有 `RIMWORLD_DIR` / `HARMONY_PATH` → Steam 自动发现。配置文件中的相对路径以仓库为基准，命令参数以当前终端目录为基准。找不到或有多个候选时会明确报错，不会选用某位开发者的私有目录。
 
-直接调用 `dotnet build` 时需自行传入 `-p:RimWorldDir=`、`-p:HarmonyPath=`，或先设置同名环境变量（`Directory.Build.props` 不再提供默认值）。路径缺失时引用会解析不到，先给 `warning MSB3245`（只指出找不到哪个程序集），再在用到这些类型的编译步骤报 `CS0246`。完整步骤见[制作、导出、接入与发布工作流](Docs/zh-CN/Workflow.md)。
+`Tools/` 中的 PowerShell 脚本保留给已有 CI、专项验证和部署流程，日常构建无需逐个寻找或运行。构建入口支持三种桌面系统；游戏渲染和 Unity 导出工具的原生依赖仍需在对应平台单独验证。详细入口、可选工具和直接使用 `dotnet build` 的方式见[工作流](Docs/zh-CN/Workflow.md)与 [Tools 索引](Tools/README.md)。
 
 ## 使用文档
 

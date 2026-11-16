@@ -17,6 +17,26 @@ permissions:
   contents: read
 
 jobs:
+  build-entry:
+    name: 构建入口（${{ matrix.os }}）
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      #入口自身的编译不需要游戏、Unity 或 PowerShell 脚本。
+      - name: Windows 入口编译与参数检查
+        if: runner.os == 'Windows'
+        run: .\build.cmd --help
+      - name: POSIX 入口编译与参数检查
+        if: runner.os != 'Windows'
+        run: sh ./build.sh --help
+
   static:
     name: 静态与一致性检查
     runs-on: windows-latest

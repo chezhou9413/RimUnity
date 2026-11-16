@@ -8,16 +8,18 @@
 
 通过 Package Manager 的 **Add package from disk** 选择 `UnityPackage/package.json`，或安装发布的 TGZ。从源码安装时需先构建运行时与 ShaderTool。
 
-从源码安装可在仓库根目录构建（替换自己的路径）：
+从源码安装只需 .NET 10 SDK，在仓库根目录运行：
 
-```powershell
-$env:RIMWORLD_DIR = 'C:/Games/RimWorld'
-$env:HARMONY_PATH = 'C:/Mods/Harmony/1.7/Assemblies/0Harmony.dll'
-./Tools/Build.ps1
-./Tools/Verify.ps1 -SkipBuild -Embedded
+```text
+Windows:       .\build.cmd
+Linux / macOS: sh ./build.sh
 ```
 
-使用 PowerShell 7 和 .NET 10 SDK。四个入口的职责如下：
+默认构建 Core、Runtime、Spine、内置接入包与 ShaderTool；`--skip-embedded` 仅跳过内置包。根入口会读取 Steam 的库清单并自动寻找游戏与 Harmony。非标准安装使用 `--game` / `--harmony`，或把 `build.example.json` 复制成 Git 忽略的 `build.local.json` 并填写 `game` / `harmony`。无需全局环境变量。配置文件路径相对仓库，命令参数相对终端当前目录；多个候选会提示选择。
+
+根入口也提供 `docs` 和 `pack`，全程使用 .NET，不调用 PowerShell 或外部 tar。`docs` 同步 `UnityPackage/Documentation~/sources.json` 已登记的原文；新增文档应先登记索引。构建中间文件位于 `Source/.build`，不依赖 Windows 的 `TEMP`。跨平台构建不代表游戏渲染或 Unity 导出器的全部原生依赖已经完成跨平台验收。
+
+以下是需要 PowerShell 7 的**可选维护入口**，日常构建不需要运行它们：
 
 - `Build.ps1`：构建 Core、Runtime、Spine、内置接入包和 ShaderTool。只构建独立版和工具时可用 `-SkipEmbedded`；完整发版还需构建内置包。
 - `Verify.ps1`：默认先调用一次 Build，再校验着色器。`-SkipBuild` 检查已有产物；`-Embedded` 加跑内置运行时离线测试；`-DataRoot` 加跑指定资源目录的 Prefab 检查。`-SkipBuild` 不会重建发布运行时和 ShaderTool，但内置测试仍会编译临时夹具和测试程序。
@@ -31,13 +33,10 @@ $env:HARMONY_PATH = 'C:/Mods/Harmony/1.7/Assemblies/0Harmony.dll'
 产物位置：运行时在 `1.7/Assemblies`，ShaderTool 在 `Tools/bin/ShaderTool`，内置接入包在 `artifacts/Embedded`，默认发布包在 `artifacts`。编译会改写仓库跟踪的 Runtime/Core DLL，提交源码时应排除无意的二进制变更。
 
 
-`Directory.Build.props` 不再提供任何默认路径。除上面的 `-p:` 参数外，也可以先设置环境变量，之后直接调用 `dotnet build`：
+希望直接构建单个 csproj 时，仍可明确传入 MSBuild 属性；该模式不读取根入口的本地配置或 Steam 自动发现结果：
 
-```powershell
-$env:RIMWORLD_DIR = 'C:/Games/RimWorld'                       # $(RimWorldDir)
-$env:HARMONY_PATH  = 'C:/Mods/Harmony/1.7/Assemblies/0Harmony.dll'   # $(HarmonyPath)
-$env:UNITY_EDITOR_DIR = 'C:/Program Files/Unity/2022.3.35f1/Editor/Data'
-$env:UNITY_PROJECT = 'C:/Projects/RimUnityBuiltIn'
+```text
+dotnet build Source/RimUnity.Spine/RimUnity.Spine.csproj -c Release -p:RimWorldDir="<游戏程序集目录>" -p:HarmonyPath="<0Harmony.dll 路径>"
 ```
 
 两个值都不提供时，引用会解析不到（`warning MSB3245` 指出找不到哪个程序集，但不写出缺失的路径），随后在用到这些类型的编译步骤报 `CS0246`；无论哪种方式都不会静默使用某台机器的私有目录。
@@ -123,10 +122,14 @@ PrefabExporter.Export(modDirectory,
 
 框架在构建运行时及 ShaderTool 后执行：
 
-```powershell
-pwsh -File ./Tools/Sync-Manual.ps1
-./Tools/Pack.ps1 -Output 'C:/Builds/RimUnity' -TempRoot 'C:/BuildTemp/RimUnity'
+```text
+Windows:       .\build.cmd docs
+               .\build.cmd pack
+Linux / macOS: sh ./build.sh docs
+               sh ./build.sh pack
 ```
+
+`pack --output "<输出目录>"` 可选择目录；已有同名归档时会要求改用新目录，避免覆盖。`pack` 只检查和打包已有产物，不自动重编译或修改文档。ShaderTool 的启动文件按当前构建系统打包，运行时所需的原生库仍来自相应游戏安装。
 
 输出为框架 Mod ZIP 和 UPM TGZ，携带 MIT 及第三方许可。框架包不包含内容资源、Unity 工程、缓存、游戏程序集或测试素材。TGZ 包中 `Tools~/ShaderTool` 附带本项目工具，仍需配置本机游戏安装目录。
 
