@@ -38,11 +38,13 @@ Time-based animation can use `_Time`, `_SinTime`, `_CosTime` and `unity_DeltaTim
 
 ShaderLab and command-line HLSL conversion share a pass over Slang-generated GLSL:
 
-- Constant positive integer powers from 2 through 64 use multiplication, evaluating the base once. Scalars and vectors with a uniform exponent are supported. Negative bases follow integer-power arithmetic as an explicit compatibility extension; HLSL itself does not guarantee valid negative-base `pow` results. The converter records this in `approximations` and console diagnostics.
-- `smoothstep` uses the HLSL saturated Hermite formula, including reversed edges, for float scalars and vectors. Equal edges still require the author to avoid division by zero.
+- Constant positive integer powers from 2 through 64 use multiplication, evaluating the base once. Scalars and vectors with a uniform exponent are supported. Negative bases follow integer-power arithmetic as an explicit compatibility extension; HLSL itself does not guarantee valid negative-base `pow` results. The converter reports this in console diagnostics. Legacy manifest notices appear as informational game logs.
+- `smoothstep` uses the HLSL saturated Hermite formula, including reversed edges, for float scalars and vectors. Equal edges use `step(low, x)` independently for each component without dividing by zero.
 - Other powers remain unchanged. Fractional, dynamic or differing vector exponents require valid inputs; the converter does not silently add absolute values or clamps.
 
 Re-export existing GLSL with the updated tool. Updating the runtime DLL alone does not rewrite previously exported shaders.
+
+Shadow passes output depth and do not report color blending differences. Screen UI uses the host's Gamma blending; its Linear computation and output encoding notice remains informational. This does not provide linear HDR UI compositing. Unknown approximations and the division-by-zero risk in older `smoothstep` exports still produce warnings.
 
 ## Command line
 

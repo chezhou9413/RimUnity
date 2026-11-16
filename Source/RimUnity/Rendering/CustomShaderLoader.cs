@@ -111,7 +111,13 @@ internal static class CustomShaderLoader
                     _ => null
                 };
                 if (!reportedApproximations.Add(data.sourceName + "\n" + approximation)) continue;
-                Verse.Log.Warning("[RimUnity] " + data.sourceName + "：" + (message ?? approximation));
+                //旧导出的整数幂已完成兼容处理；屏幕 UI 的颜色合成约定保留为普通说明。
+                //其余未解决的渲染限制仍输出警告，尤其保留旧 smoothstep 的除零提示。
+                bool informational = approximation == "常量正整数幂 2～64 使用乘法展开；负底数按整数幂计算，属于旧 Shader 写法的兼容处理，并非 HLSL pow 的负底数语义保证。"
+                    || (data.profile == "ui" && approximation == "程序按 Linear 计算后编码到宿主 UNorm 场景；透明叠加沿用宿主的 Gamma 混合，HDR 超出场景格式范围的部分仍会截断。");
+                string diagnostic = "[RimUnity] " + data.sourceName + "：" + (message ?? approximation);
+                if (informational) Verse.Log.Message(diagnostic);
+                else Verse.Log.Warning(diagnostic);
             }
         return RestorePasses(catalog, data, Wrap(data, shader));
     }

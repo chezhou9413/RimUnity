@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
+using Brutal.VulkanApi;
 using HarmonyLib;
 using RimWorld.Planet;
 using RimWorldWaylith.Rendering;
@@ -30,7 +31,7 @@ internal static class BloomHooks
     internal static string LastHandshakeMiss => lastHandshakeMiss;
     internal static string LastPipelineError => lastPipelineError;
 
-    //宿主升级给构造追加参数后旧绑定会失效，启动时先确认当前引擎仍有编译期签名。
+    //构造和图像绑定的签名必须与编译期一致，启动时检查，避免清理资源时才在渲染线程抛错。
     internal static bool Initialize()
     {
         var harmony = new Harmony("Chezhou.RimUnity.Bloom");
@@ -45,6 +46,9 @@ internal static class BloomHooks
                 typeof(int), typeof(int), typeof(int), typeof(bool) });
             if (constructor == null)
                 throw new MissingMethodException("Waylith.Rendering.PostFx.PostEffectPass", ".ctor");
+            if (pass.GetMethod(nameof(PostEffectPass.SetInput), new[] {
+                typeof(int), typeof(VkImageView), typeof(VkSampler), typeof(VkImageLayout) }) == null)
+                throw new MissingMethodException(pass.FullName, "SetInput(Int32, VkImageView, VkSampler, VkImageLayout)");
             capture = AccessTools.Method(typeof(FrameRenderer), nameof(FrameRenderer.CaptureFrame))
                 ?? throw new MissingMethodException(typeof(FrameRenderer).FullName, nameof(FrameRenderer.CaptureFrame));
             record = AccessTools.Method(typeof(FrameRenderer), nameof(FrameRenderer.RecordFrame))
