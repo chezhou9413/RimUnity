@@ -46,7 +46,8 @@ internal static class UiMeshSubmission
             resolveMaterial(engine, out var uniforms, out var resources, out _);
             var draws = NativeGuiHost.MaterialDraws;
             int index = draws.Count;
-            draws.Add(drawConstructor.Invoke(new object[] { engine, texture.NativeTexture, tex._TexID.Value, uniforms, resources, engine.StorageArrays }));
+            //1.7.5011 起绘制记录保存着色器，不再保存整份材质。Prepare 已把带顶点阶段的着色器写回材质。
+            draws.Add(drawConstructor.Invoke(new object[] { engine.Shader, texture.NativeTexture, tex._TexID.Value, uniforms, resources, engine.StorageArrays }));
             tex = new ImTextureRef { _TexID = (ImTextureID)(-index - 1) };
         }
         list.PushTexture(tex);
