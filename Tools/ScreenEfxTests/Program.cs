@@ -127,6 +127,8 @@ internal static class Program
             && Equals(((Array)layouts.GetValue(pass)).GetValue(binding), default(VkImageLayout));
         Check(Cleared(scene, 0) && Cleared(scene, 1) && Cleared(output, 0),
             "idle cleanup clears native input bindings without dereferencing a null RenderTexture");
+
+
         Check(ReferenceEquals(Get("renderers"), renderers), "hidden warmed clips keep pipeline caches after image cleanup");
 
         var frame = EfxFrame.Rent(); handle.Lease.Retain(); frame.Leases.Add(handle.Lease);
