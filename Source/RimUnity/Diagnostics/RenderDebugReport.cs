@@ -26,7 +26,7 @@ internal static partial class RenderDebugReport
     private static StringBuilder initial;
     private static int captureSeconds;
     private static bool hdrCapture;
-    private static readonly RenderTraceBuffer HdrTrace = new();
+    private static readonly RenderTraceBuffer HdrTrace = new(sampleBursts: true);
     internal static bool HdrTracing => Collecting && HdrTrace.Active;
     internal static volatile bool Collecting;
     private const BindingFlags Flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
@@ -49,7 +49,7 @@ internal static partial class RenderDebugReport
         initial = new StringBuilder(32768);
         initial.AppendLine("RimUnity 场景与显存诊断 / report schema 1");
         initial.AppendLine("UTC: " + DateTime.UtcNow.ToString("O"));
-        initial.AppendLine("HDR trace build=hdr-light-trace-v1; order=interleaved-light-runs; runtime MVID=" + typeof(RenderDebugReport).Assembly.ManifestModule.ModuleVersionId);
+        initial.AppendLine("HDR trace build=hdr-light-trace-v2; order=interleaved-light-runs; depth=preserved-host-layout; runtime MVID=" + typeof(RenderDebugReport).Assembly.ManifestModule.ModuleVersionId);
         initial.AppendLine("Compatibility SystemInfo values may be placeholders; prefer native Vulkan GPU descriptions and VMA heap budgets below.");
         initial.AppendLine("Evidence: CPU state, engine allocation accounting and observed render calls. Not a GPU pixel/descriptor readback. No forced GC, device idle, texture upload, eviction or render-setting changes.");
         initial.AppendLine("Paths are redacted for the current user profile. Save contents, account tokens and full environment are not collected.");
@@ -64,7 +64,7 @@ internal static partial class RenderDebugReport
         application.OnUpdate += Tick;
         application.BeforeGraphicsShutdown += Cancel;
         Messages.Message("正在采集 " + seconds + " 秒渲染诊断。" + (hdr ? "请先保持未开火，再触发曳光弹，最后等待消失。" : "") + "完成后自动复制并保存报告。", MessageTypeDefOf.NeutralEvent, false);
-        if (hdr) Log.Message("[RimUnity] HDR 明暗诊断开始（20秒），build=hdr-light-trace-v1，MVID=" + typeof(RenderDebugReport).Assembly.ManifestModule.ModuleVersionId);
+        if (hdr) Log.Message("[RimUnity] HDR 明暗诊断开始（20秒），build=hdr-light-trace-v2，MVID=" + typeof(RenderDebugReport).Assembly.ManifestModule.ModuleVersionId);
     }
     private static void Tick()
     {

@@ -32,7 +32,7 @@ namespace Brutal.VulkanApi
     [Flags] public enum VkAccessFlags { None=0, DepthStencilAttachmentReadBit=1, DepthStencilAttachmentWriteBit=2, ShaderReadBit=4, ColorAttachmentWriteBit=8, TransferWriteBit=16, ColorAttachmentReadBit=32 }
     [Flags] public enum VkPipelineStageFlags { EarlyFragmentTestsBit=1, LateFragmentTestsBit=2, FragmentShaderBit=4, ColorAttachmentOutputBit=8, TransferBit=16 }
     [Flags] public enum VkImageAspectFlags { ColorBit=1, DepthBit=2, StencilBit=4 }
-    public record struct VkImageView(int Id);
+    public record struct VkImageView(int Id) { public IntPtr VkHandle => new(Id); }
     public record struct VkFramebuffer(int Id) { public bool IsNull() => Id == 0; }
     public record struct VkRenderPass(int Id) { public bool IsNull() => Id == 0; }
     public struct VkExtent2D(int width, int height) { public int Width = width, Height = height; }
@@ -49,7 +49,7 @@ namespace Brutal.VulkanApi
     public unsafe struct VkFramebufferCreateInfo { public VkRenderPass RenderPass; public int AttachmentCount, Width, Height, Layers; public VkImageView* Attachments; }
     public struct VkAttachmentDescription { public VkFormat Format; public VkSampleCountFlags Samples; public VkAttachmentLoadOp LoadOp, StencilLoadOp; public VkAttachmentStoreOp StoreOp, StencilStoreOp; public VkImageLayout InitialLayout, FinalLayout; }
     public struct VkAttachmentReference { public int Attachment; public VkImageLayout Layout; }
-    public unsafe struct VkSubpassDescription { public VkPipelineBindPoint PipelineBindPoint; public int ColorAttachmentCount; public VkAttachmentReference* ColorAttachments; }
+    public unsafe struct VkSubpassDescription { public VkPipelineBindPoint PipelineBindPoint; public int ColorAttachmentCount; public VkAttachmentReference* ColorAttachments; public VkAttachmentReference* DepthStencilAttachment; }
     public struct VkSubpassDependency { public int SrcSubpass, DstSubpass; public VkPipelineStageFlags SrcStageMask, DstStageMask; public VkAccessFlags SrcAccessMask, DstAccessMask; }
     public unsafe struct VkRenderPassCreateInfo { public int AttachmentCount, SubpassCount, DependencyCount; public VkAttachmentDescription* Attachments; public VkSubpassDescription* Subpasses; public VkSubpassDependency* Dependencies; }
     public struct VkImageSubresourceRange { public VkImageAspectFlags AspectMask; public int LevelCount, LayerCount; }
@@ -62,6 +62,7 @@ namespace Brutal.VulkanApi
         internal int Clears;
         internal readonly List<VkFramebuffer> CompositeFramebuffers = new();
         internal readonly List<FinalDrawItem> DrawOrder = new();
+        internal readonly List<VkImageMemoryBarrier> ImageBarriers = new();
         public unsafe void BeginRenderPass(in VkRenderPassBeginInfo begin, VkSubpassContents contents)
         {
             Destination = RenderTexture.Views[device.Views[begin.Framebuffer]];
@@ -76,7 +77,8 @@ namespace Brutal.VulkanApi
         public void EndRenderPass() { }
         public void SetViewport(int index, ReadOnlySpan<VkViewport> values) { }
         public void SetScissor(int index, ReadOnlySpan<VkRect2D> values) { }
-        public void PipelineBarrier(VkPipelineStageFlags src, VkPipelineStageFlags dst, VkDependencyFlags flags, ReadOnlySpan<VkMemoryBarrier> memory, ReadOnlySpan<VkBufferMemoryBarrier> buffers, ReadOnlySpan<VkImageMemoryBarrier> images) { }
+        public void PipelineBarrier(VkPipelineStageFlags src, VkPipelineStageFlags dst, VkDependencyFlags flags, ReadOnlySpan<VkMemoryBarrier> memory, ReadOnlySpan<VkBufferMemoryBarrier> buffers, ReadOnlySpan<VkImageMemoryBarrier> images)
+        { foreach (var barrier in images) ImageBarriers.Add(barrier); }
     }
 }
 namespace Brutal.VulkanApi.Abstractions
@@ -88,12 +90,18 @@ namespace Brutal.VulkanApi.Abstractions
         internal readonly Dictionary<VkFramebuffer, VkImageView> Views = new();
         internal readonly Dictionary<VkRenderPass, VkAttachmentLoadOp> Loads = new();
         internal readonly HashSet<VkRenderPass> CompositePasses = new();
+        internal readonly List<VkAttachmentDescription> DepthAttachments = new();
         internal readonly HashSet<VkFramebuffer> Created = new(), Destroyed = new(), Referenced = new();
         internal VkRenderPass Pass(VkAttachmentLoadOp load) { var pass = new VkRenderPass(++serial); Loads.Add(pass, load); return pass; }
         internal VkFramebuffer Framebuffer(VkImageView view, bool owned = false)
         { var fb = new VkFramebuffer(++serial); Views.Add(fb, view); if (owned) Created.Add(fb); return fb; }
         public unsafe VkRenderPass CreateRenderPass(VkRenderPassCreateInfo info, object allocator)
-        { var pass = Pass(info.Attachments[0].LoadOp); CompositePasses.Add(pass); return pass; }
+        {
+            var pass = Pass(info.Attachments[0].LoadOp);
+            if (info.Attachments[0].Format != VkFormat.R16G16B16A16SFloat) CompositePasses.Add(pass);
+            if (info.AttachmentCount > 1) DepthAttachments.Add(info.Attachments[1]);
+            return pass;
+        }
         public unsafe VkFramebuffer CreateFramebuffer(VkFramebufferCreateInfo info, object allocator) => Framebuffer(info.Attachments[0], true);
         public void DestroyFramebuffer(VkFramebuffer fb, object allocator)
         {
@@ -293,11 +301,10 @@ namespace RimUnity.Rendering
             => new(source.FrameNumber) { Draws=draws, PersistentDraws=persistent, BackgroundColor=source.BackgroundColor };
         public void Dispose() { }
     }
-    internal sealed class HdrDrawTarget : IDisposable
+    internal sealed partial class HdrDrawTarget : IDisposable
     {
         internal HdrDrawTarget(string name) { }
         internal RenderTexture Result => null;
-        internal static VkRenderPass CreatePass(DeviceEx device, VkFormat depth) => device.Pass(VkAttachmentLoadOp.Load);
         internal void Begin(in FrameContext ctx, RenderTexture scene, int frame, bool clear) { }
         internal void BindDepth(in FrameContext ctx, RenderTexture scene) { }
         internal void Record(in FrameContext ctx, RenderTexture scene, HdrDrawFrame snapshot, int min, int max) { }

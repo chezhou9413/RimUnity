@@ -11,11 +11,9 @@ namespace RimUnity.Diagnostics;
 internal static partial class RenderDebugReport
 {
     // Main-thread capture metadata only. Reset for every explicit capture.
-    private static int lastHdrSignature;
     private static long nextHdrDetail;
-    private static int lastPlanSignature;
-    private static long nextPlanDetail, earliestPlanDetail;
-    private static void ResetHdrSampling() { lastHdrSignature = lastPlanSignature = 0; nextHdrDetail = nextPlanDetail = earliestPlanDetail = 0; }
+    private static long nextPlanDetail;
+    private static void ResetHdrSampling() { nextHdrDetail = nextPlanDetail = 0; }
 
     internal static void HdrFrame(MeshDrawFrame frame, MapHdrMode requested, string route, int captured)
     {
@@ -43,8 +41,8 @@ internal static partial class RenderDebugReport
                 + "; linear=" + linear + "; eligible=" + eligible + "; examined<=8192; signature=" + signature
                 + "; preserve=" + frame.PreserveSceneColor + "; background=" + frame.BackgroundColor);
             long now = Stopwatch.GetTimestamp();
-            if (signature == lastHdrSignature && now < nextHdrDetail) return;
-            lastHdrSignature = signature; nextHdrDetail = now + Stopwatch.Frequency / 2;
+            if (now < nextHdrDetail) return;
+            nextHdrDetail = now + Stopwatch.Frequency / 2;
             var text = new StringBuilder("frame=" + frame.FrameNumber + "; source-list indices, not final GPU order\n");
             int linearRows = 0, nativeRows = 0, omitted = 0;
             void Describe(IReadOnlyList<FinalDrawItem> draws, string origin)
@@ -84,15 +82,9 @@ internal static partial class RenderDebugReport
         if (!HdrTracing) return;
         try
         {
-            var hash = new HashCode(); hash.Add(runs.Count);
-            foreach (var run in runs)
-            {
-                hash.Add(run.Light); hash.Add(run.Draws.Count);
-                if (run.Draws.Count > 0) { hash.Add(run.Draws[0].Binding.MaterialId); hash.Add(run.Draws[^1].Binding.MaterialId); }
-            }
-            int signature = hash.ToHashCode(); long now = Stopwatch.GetTimestamp();
-            if (now < earliestPlanDetail || signature == lastPlanSignature && now < nextPlanDetail) return;
-            lastPlanSignature = signature; earliestPlanDetail = now + Stopwatch.Frequency / 20; nextPlanDetail = now + Stopwatch.Frequency / 2;
+            long now = Stopwatch.GetTimestamp();
+            if (now < nextPlanDetail) return;
+            nextPlanDetail = now + Stopwatch.Frequency / 2;
             var text = new StringBuilder("frame=" + frame + "; runs=" + runs.Count + "\n");
             for (int i = 0; i < Math.Min(runs.Count, 64); i++)
             {
@@ -122,5 +114,5 @@ internal static partial class RenderDebugReport
         catch (Exception error) { Stage("HdrTraceError", "light-pass: " + Error(error)); }
     }
     private static string Target(NativeTarget target) => target.Width + "x" + target.Height + "/" + target.ColorFormat
-        + "/view=" + target.ColorView + "/layout=" + target.Color.CurrentLayout;
+        + "/view=0x" + target.ColorView.VkHandle.ToInt64().ToString("X") + "/layout=" + target.Color.CurrentLayout;
 }

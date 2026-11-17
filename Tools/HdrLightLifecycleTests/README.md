@@ -25,12 +25,18 @@ light-first slices; a base scene followed by additive light and one night overla
 an empty post-light tail followed by a native-only slice; two light slices in
 one command buffer; color-view changes and frame-slot isolation; target rebuild;
 fallback when the host has no load attachment; and cleanup after a draw failure.
+Depth regressions reproduce the host's stale `Undefined` allocation metadata after
+its scene pass. They reject destructive/invalid depth barriers across light-first,
+shell-first and repeated slices, and check the production render pass's depth and
+stencil load/store/layout contract.
 The scalar scene values only detect ordering/clearing, not color-space correctness.
 
 Also links the HDR diagnostic formatter and bounded text recorder. Checks inactive
 and stopped logging, concurrent recording, baseline retention, explicit truncation,
 capture/run/target details, native fallback visibility and unchanged draw results
 with tracing enabled. The game debug-menu/export integration needs a game build.
+Simulated 140 fps particle-heavy captures verify that stage sampling retains the
+full 20-second span, reports suppressed events and keeps errors unsampled.
 
 This complements `Tools/SceneColorTests`: it does not replace real Vulkan pixel
-tests, validation layers, depth/stencil tests or in-game night-map verification.
+tests, validation layers, depth/stencil pixel tests or in-game night-map verification.

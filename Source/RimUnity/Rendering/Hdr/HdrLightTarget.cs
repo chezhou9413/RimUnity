@@ -47,6 +47,11 @@ internal sealed unsafe class HdrLightTarget : IDisposable
         if (lights == null) Initialize(in ctx, scene);
         BindDepth(in ctx, scene);
         int slot = ctx.SubmissionFrameIndex;
+        // RecordLights runs after the host's clear/load scene pass. Both host passes
+        // leave depth/stencil in AttachmentOptimal, but do not update CurrentLayout.
+        // Adopt that known final layout; an Undefined -> attachment barrier would
+        // discard the map's depth/stencil. Our light pass loads and preserves both.
+        scene.Depth?.SetMipLayout(0, VkImageLayout.DepthStencilAttachmentOptimal);
         Diagnostics.RenderDebugReport.HdrLightPass("begin", frame.FrameNumber, in ctx, scene, lights[slot], snapshots[slot], draws.Count);
         SnapshotScene(ctx.CommandBuffer, scene, snapshots[slot]);
         HdrSceneCopy.Clear(ctx.CommandBuffer, lights[slot]);
@@ -99,14 +104,6 @@ internal sealed unsafe class HdrLightTarget : IDisposable
 
         int slot = ctx.SubmissionFrameIndex;
         var light = lights[slot];
-        var depth = scene.Depth;
-        VkImageLayout depthRestore = default;
-        if (depth != null)
-        {
-            depthRestore = depth.CurrentLayout;
-            if (depthRestore != VkImageLayout.DepthStencilAttachmentOptimal)
-                TransitionDepth(ctx.CommandBuffer, depth, depthRestore, VkImageLayout.DepthStencilAttachmentOptimal);
-        }
         try
         {
             var beginInfo = new VkRenderPassBeginInfo
@@ -127,8 +124,6 @@ internal sealed unsafe class HdrLightTarget : IDisposable
         }
         finally
         {
-            if (depth != null && depthRestore != VkImageLayout.DepthStencilAttachmentOptimal)
-                TransitionDepth(ctx.CommandBuffer, depth, VkImageLayout.DepthStencilAttachmentOptimal, depthRestore);
             group.PersistentDraws.Clear();
         }
     }
@@ -234,33 +229,6 @@ internal sealed unsafe class HdrLightTarget : IDisposable
         }, device.VkAllocator);
         boundDepth[frame] = depth;
     }
-
-    private static void TransitionDepth(CommandBuffer command, GpuTextureAllocation depth,
-        VkImageLayout from, VkImageLayout to)
-    {
-        var aspect = DepthAspect(depth.Format);
-        var barrier = new VkImageMemoryBarrier
-        {
-            Image = depth.Image, OldLayout = from, NewLayout = to,
-            SrcAccessMask = VkAccessFlags.DepthStencilAttachmentReadBit | VkAccessFlags.DepthStencilAttachmentWriteBit
-                | VkAccessFlags.ShaderReadBit,
-            DstAccessMask = VkAccessFlags.DepthStencilAttachmentReadBit | VkAccessFlags.DepthStencilAttachmentWriteBit
-                | VkAccessFlags.ShaderReadBit,
-            SrcQueueFamilyIndex = -1, DstQueueFamilyIndex = -1,
-            SubresourceRange = new VkImageSubresourceRange { AspectMask = aspect, LevelCount = 1, LayerCount = 1 }
-        };
-        command.PipelineBarrier(
-            VkPipelineStageFlags.EarlyFragmentTestsBit | VkPipelineStageFlags.LateFragmentTestsBit | VkPipelineStageFlags.FragmentShaderBit,
-            VkPipelineStageFlags.EarlyFragmentTestsBit | VkPipelineStageFlags.LateFragmentTestsBit | VkPipelineStageFlags.FragmentShaderBit,
-            VkDependencyFlags.None, default, default, new ReadOnlySpan<VkImageMemoryBarrier>(in barrier));
-        depth.SetMipLayout(0, to);
-    }
-
-    private static VkImageAspectFlags DepthAspect(VkFormat format) => format switch
-    {
-        VkFormat.D24UNormS8UInt or VkFormat.D32SFloatS8UInt => VkImageAspectFlags.DepthBit | VkImageAspectFlags.StencilBit,
-        _ => VkImageAspectFlags.DepthBit,
-    };
 
     private static VkRenderPass CreateCompositePass(DeviceEx device, VkFormat colorFormat)
     {

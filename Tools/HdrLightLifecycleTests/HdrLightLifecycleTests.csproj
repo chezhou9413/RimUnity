@@ -8,6 +8,7 @@
   <ItemGroup>
     <Compile Include="$(HdrSourceRoot)/HdrMapHooks.cs" Link="Runtime/HdrMapHooks.cs" />
     <Compile Include="$(HdrSourceRoot)/HdrLightTarget.cs" Link="Runtime/HdrLightTarget.cs" />
+    <Compile Include="$(HdrSourceRoot)/HdrDrawTarget.Pass.cs" Link="Runtime/HdrDrawTarget.Pass.cs" />
     <Compile Include="$(HdrSourceRoot)/HdrLightFrame.cs" Link="Runtime/HdrLightFrame.cs" />
     <Compile Include="$(HdrSourceRoot)/HdrLightBlend.cs" Link="Runtime/HdrLightBlend.cs" />
     <Compile Include="../../Source/RimUnity/Diagnostics/RenderTraceBuffer.cs" Link="Runtime/RenderTraceBuffer.cs" />

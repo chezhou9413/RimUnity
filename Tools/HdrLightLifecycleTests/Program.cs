@@ -20,8 +20,42 @@ internal static class Program
     {
         NightOverlay(); TrailDoesNotDimWall(); InterleavedLayers(); EqualKeysKeepHostOrder(); LightFirst();
         NextSliceAfterEmptyTail(); MultipleLightsAndSlots(); MissingLoadAttachment(); BorrowedDrawCleanup();
+        HostDepthLayout();
         TraceChecks();
         Console.WriteLine($"PASS {checks} HDR light lifecycle checks (recording boundary; no GPU/game).");
+    }
+
+    private static void HostDepthLayout()
+    {
+        // Host render passes leave depth/stencil in AttachmentOptimal without updating
+        // GpuTextureAllocation.CurrentLayout. Reproduce the stale metadata from the field report.
+        foreach (var tracked in new[] { VkImageLayout.Undefined, VkImageLayout.DepthStencilAttachmentOptimal })
+        foreach (bool lightFirst in new[] { false, true })
+        {
+            using var f = new Fixture();
+            var scene = f.Scenes.Current(0);
+            scene.DepthFormat = VkFormat.D32SFloatS8UInt;
+            scene.Depth = new Waylith.Graphics.GpuTextureAllocation(scene)
+                { Format = scene.DepthFormat, CurrentLayout = tracked };
+            if (!lightFirst) f.Add(1000, .6f);
+            f.Add(2000, 0, light: true);
+            f.Add(3000, .5f, multiply: true);
+            f.Add(4000, .1f, light: true);
+            f.Capture(); var ctx = f.Ctx;
+            f.Slice(ctx, true, int.MinValue, 3500);
+            f.Slice(ctx, false, 3500, int.MaxValue);
+            Check(!ctx.CommandBuffer.ImageBarriers.Any(b =>
+                b.OldLayout == VkImageLayout.Undefined || b.NewLayout == VkImageLayout.Undefined),
+                $"{tracked}, lightFirst={lightFirst}: light runs must neither discard host depth nor restore Undefined");
+            Check(scene.Depth.CurrentLayout == VkImageLayout.DepthStencilAttachmentOptimal,
+                "depth tracking reflects the host render pass final layout after all light/shell slices");
+            Check(ctx.Device.DepthAttachments.Count > 0 && ctx.Device.DepthAttachments.All(a =>
+                a.LoadOp == VkAttachmentLoadOp.Load && a.StoreOp == VkAttachmentStoreOp.Store &&
+                a.StencilLoadOp == VkAttachmentLoadOp.Load && a.StencilStoreOp == VkAttachmentStoreOp.Store &&
+                a.InitialLayout == VkImageLayout.DepthStencilAttachmentOptimal &&
+                a.FinalLayout == VkImageLayout.DepthStencilAttachmentOptimal),
+                "production light render pass loads/stores both depth and stencil in the host layout");
+        }
     }
 
     private static void TraceChecks()
@@ -44,6 +78,34 @@ internal static class Program
         Check(Report(bounded).Contains("events=200; retained=3; droppedOldest=197"), "main/render thread events serialize without exceeding capacity");
         bounded.Clear(); Check(Report(bounded).Contains("events=0") && !Report(bounded).Contains("event-199"), "new capture cannot retain previous scene text");
 
+        long tick = 0;
+        var sampled = new RimUnity.Diagnostics.RenderTraceBuffer(sampleBursts: true, timestamp: () => tick);
+        sampled.Start();
+        for (int frame = 0; frame < 2800; frame++)
+        {
+            tick = frame * System.Diagnostics.Stopwatch.Frequency / 140;
+            string detail = "frame=" + frame + "; " + new string('x', 350);
+            for (int n = 0; n < 20; n++) sampled.Record("ParticleSubmit", detail);
+            for (int n = 0; n < 16; n++) sampled.Record("HdrRun", detail);
+            for (int n = 0; n < 8; n++) sampled.Record("HdrLightPass", detail);
+            for (int n = 0; n < 14; n++) sampled.Record("stage" + n, detail);
+            if (frame % 70 == 0)
+            {
+                sampled.Record("HdrMaterials", detail + new string('m', 15000));
+                sampled.Record("HdrPlan", detail + new string('p', 15000));
+            }
+        }
+        sampled.Record("HdrRunError", "first-error"); sampled.Record("HdrRunError", "second-error");
+        sampled.Record("HdrRunError", "third-error"); sampled.Stop();
+        string sustained = Report(sampled);
+        Check(sustained.Contains("frame=0;") && sustained.Contains("frame=2730;") && sustained.Contains("droppedOldest=0"),
+            "140 fps particle-heavy capture retains observations throughout all 20 seconds");
+        Check(sustained.Contains("sampledOut=") && !sustained.Contains("sampledOut=0") && sustained.Contains("third-error") && sustained.Contains("clippedDetails=0"),
+            "sampling is explicit, leaves complete detail rows and does not suppress errors");
+        sampled.Start(); sampled.Record("ParticleSubmit", "new-capture"); sampled.Stop();
+        Check(Report(sampled).Contains("new-capture") && Report(sampled).Contains("sampledOut=0"),
+            "sampling budgets and counters reset between captures");
+
         var trace = RimUnity.Diagnostics.RenderDebugReport.Trace;
         trace.Start(); RimUnity.Diagnostics.RenderDebugReport.Collecting = true;
         try
@@ -54,7 +116,7 @@ internal static class Program
             string report = Report(trace);
             Check(report.Contains("requested=Experiment; route=Experiment") && report.Contains("captured=2"), "trace identifies actual frame takeover and capture counts");
             Check(report.Contains("classification=light") && report.Contains("run=1 LIGHT") && report.Contains("run=2 SHELL"), "trace includes material classification and interleaved boundaries");
-            Check(report.Contains("HdrLightPass") && report.Contains("phase=completed") && report.Contains("scene=") && report.Contains("hostBindingsInvalidated=True"), "trace covers target identities, completion and binding recovery");
+            Check(report.Contains("HdrLightPass") && report.Contains("phase=completed") && report.Contains("/view=0x") && report.Contains("hostBindingsInvalidated=True"), "trace covers target handles, completion and binding recovery");
             Check(Math.Abs(f.Scenes.Current(0).Value - .4f) < .0001f, "enabling diagnostics does not change recorded rendering result");
             trace.Clear(); trace.Start();
             using var fallback = new Fixture(); fallback.Add(1000, .2f, light: true); fallback.Frame.PreserveSceneColor = true;
