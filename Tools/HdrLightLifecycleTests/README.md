@@ -18,7 +18,10 @@ dotnet build C:/RimUnity/Tools/HdrLightLifecycleTests -c Release -p:TestTargetFr
 dotnet C:/RimUnity/Tools/HdrLightLifecycleTests/bin/Release/net9.0/HdrLightLifecycleTests.dll
 ```
 
-Cases cover a base scene followed by additive light and one night overlay;
+Cases cover a distant zero-contribution tracer that must not darken existing light;
+multiple light runs interleaved with night/fog multiplication, alpha transparency
+and opaque layers; same-queue ordering and persistent-before-dynamic equal keys;
+light-first slices; a base scene followed by additive light and one night overlay;
 an empty post-light tail followed by a native-only slice; two light slices in
 one command buffer; color-view changes and frame-slot isolation; target rebuild;
 fallback when the host has no load attachment; and cleanup after a draw failure.

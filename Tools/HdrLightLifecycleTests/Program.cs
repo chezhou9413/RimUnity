@@ -18,7 +18,8 @@ internal static class Program
     }
     private static void Main()
     {
-        NightOverlay(); NextSliceAfterEmptyTail(); MultipleLightsAndSlots(); MissingLoadAttachment(); BorrowedDrawCleanup();
+        NightOverlay(); TrailDoesNotDimWall(); InterleavedLayers(); EqualKeysKeepHostOrder(); LightFirst();
+        NextSliceAfterEmptyTail(); MultipleLightsAndSlots(); MissingLoadAttachment(); BorrowedDrawCleanup();
         Console.WriteLine($"PASS {checks} HDR light lifecycle checks (recording boundary; no GPU/game).");
     }
 
@@ -66,6 +67,86 @@ internal static class Program
         Check(f.Pass.renderer.Invalidations > 0, "host bindings invalidated after external rendering");
     }
 
+    private static void TrailDoesNotDimWall()
+    {
+        float WallPixel(bool trail)
+        {
+            using var f = new Fixture();
+            f.Add(1000, .6f);
+            // The tracer is elsewhere on the map: zero contribution at this wall pixel.
+            if (trail) f.Add(2000, 0, light: true);
+            var night = f.Add(3000, .5f, multiply: true);
+            var wall = f.Add(4000, .1f, light: true);
+            f.Capture(); f.Slice(f.Ctx, true, int.MinValue, int.MaxValue);
+            Check(night.DrawCount == 1 && wall.DrawCount == 1, "interleaved night and wall light draw once");
+            return f.Scenes.Current(0).Value;
+        }
+        float withoutTrail = WallPixel(false), withTrail = WallPixel(true);
+        Check(Math.Abs(withoutTrail - .4f) < .0001f, "wall light follows night without a tracer");
+        Check(Math.Abs(withTrail - withoutTrail) < .0001f,
+            $"a distant tracer must not dim wall light: without={withoutTrail}, with={withTrail}");
+    }
+
+    private static void InterleavedLayers()
+    {
+        // Compare all three native layer behaviors, including draws in the same render queue.
+        foreach (string layer in new[] { "night/fog multiply", "transparent", "opaque" })
+        foreach (bool sameQueue in new[] { false, true })
+        {
+            float Render(bool capture)
+            {
+                using var f = new Fixture();
+                var ground = f.Add(1000, .6f);
+                var first = f.Add(2000, .1f, light: true);
+                var middle = f.Add(3000, .4f, multiply: layer == "night/fog multiply");
+                if (layer == "transparent") middle.Alpha = .3f;
+                var second = f.Add(4000, .2f, light: true);
+                var fog = f.Add(5000, .7f, multiply: true);
+                var third = f.Add(6000, .05f, light: true);
+                var tail = f.Add(7000, .9f, multiply: true);
+                if (sameQueue) foreach (var draw in f.Frame.Draws) draw.RenderQueue = 3000;
+                if (capture) f.Capture();
+                var ctx = f.Ctx;
+                f.Slice(ctx, true, int.MinValue, int.MaxValue);
+                Check(ctx.CommandBuffer.DrawOrder.SequenceEqual(new[] { ground, first, middle, second, fog, third, tail }),
+                    $"{layer}, sameQueue={sameQueue}: preserve every draw's native position");
+                Check(f.Frame.Draws.All(d => d.DrawCount == 1 && !d.Disposed), "all interleaved draws execute once and remain owned by source");
+                if (capture)
+                    Check(ctx.CommandBuffer.CompositeFramebuffers.Count == 3 && ctx.CommandBuffer.CompositeFramebuffers.Distinct().Count() == 1,
+                        "three separated light runs safely reuse one scene framebuffer");
+                return f.Scenes.Current(0).Value;
+            }
+            Check(Math.Abs(Render(true) - Render(false)) < .0001f, $"{layer}, sameQueue={sameQueue}: HDR preserves native layer ordering");
+        }
+    }
+
+    private static void EqualKeysKeepHostOrder()
+    {
+        using var f = new Fixture();
+        var ground = f.Add(1000, .6f);
+        var first = new FinalDrawItem(2000, .1f, true, false);
+        f.Frame.PersistentDraws.Add(first);
+        var night = f.Add(2000, .5f, multiply: true);
+        var last = f.Add(3000, .2f, light: true);
+        f.Capture(); var ctx = f.Ctx;
+        f.Slice(ctx, true, int.MinValue, int.MaxValue);
+        Check(ctx.CommandBuffer.DrawOrder.SequenceEqual(new[] { ground, first, night, last }), "equal sort keys keep persistent draw before dynamic draw");
+        Check(Math.Abs(f.Scenes.Current(0).Value - .55f) < .0001f, "equal-key shell cannot move across a captured light");
+    }
+
+    private static void LightFirst()
+    {
+        using var f = new Fixture();
+        var first = f.Add(1000, .2f, light: true);
+        var night = f.Add(2000, .5f, multiply: true);
+        var last = f.Add(3000, .1f, light: true);
+        f.Capture(); var ctx = f.Ctx;
+        f.Slice(ctx, true, int.MinValue, int.MaxValue);
+        Check(ctx.CommandBuffer.Clears == 1 && Math.Abs(f.Scenes.Current(0).Value - .2f) < .0001f,
+            "light-first slice clears once then alternates light and shell");
+        Check(ctx.CommandBuffer.DrawOrder.SequenceEqual(new[] { first, night, last }), "empty leading shell does not skip or reorder later draws");
+    }
+
     private static void NextSliceAfterEmptyTail()
     {
         using var f = new Fixture();
@@ -92,19 +173,20 @@ internal static class Program
         Check(ctx.Device.Destroyed.Count == 0, "no framebuffer is destroyed while recording slices");
         var target = HdrMapHooks.WarmupLightTarget(f.Pass);
         using var light = new HdrLightFrame(f.Frame);
+        var lightRun = light.Lights.Frame.Draws.Where(d => d.RenderQueue == 2000).ToList();
         var other = new RenderTexture(8, 8, VkFormat.B8G8R8A8UNorm);
-        target.RecordLights(ctx, other, light, 2000, 2500);
+        target.RecordLights(ctx, other, light.Lights.Frame, lightRun);
         var changed = ctx.CommandBuffer.CompositeFramebuffers.Last();
         Check(!changed.Equals(first) && ctx.Device.Destroyed.Count == 0, "changed color view gets a new live framebuffer");
-        target.RecordLights(ctx, f.Scenes.Current(0), light, 2000, 2500);
+        target.RecordLights(ctx, f.Scenes.Current(0), light.Lights.Frame, lightRun);
         Check(ctx.CommandBuffer.CompositeFramebuffers.Last().Equals(first), "returning to a view reuses its live framebuffer");
         f.Context.SubmissionFrameIndex = 1;
-        target.RecordLights(f.Ctx, f.Scenes.Current(1), light, 2000, 2500);
+        target.RecordLights(f.Ctx, f.Scenes.Current(1), light.Lights.Frame, lightRun);
         Check(ctx.Device.Destroyed.Count == 0, "another frame slot does not retire existing framebuffers");
         int created = ctx.Device.Created.Count;
         ctx.Device.FinishRecording(); target.RebuildTargets(f.Context);
         Check(ctx.Device.Destroyed.Count == created, "rebuild releases every cached framebuffer once");
-        target.RecordLights(f.Ctx, f.Scenes.Current(1), light, 2000, 2500);
+        target.RecordLights(f.Ctx, f.Scenes.Current(1), light.Lights.Frame, lightRun);
         Check(ctx.Device.Created.Count > created, "rendering recreates targets after rebuild");
         ctx.Device.FinishRecording();
     }

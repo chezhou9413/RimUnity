@@ -35,10 +35,10 @@ internal sealed unsafe class HdrLightTarget : IDisposable
         return (renderer, lightPass);
     }
 
-    //宿主已画完外壳后：只画光并合成。
-    internal void RecordLights(in FrameContext ctx, NativeTarget scene, HdrLightFrame frame, int queueMin, int queueMax)
+    //只合成一个连续光段；中间的宿主绘制必须先完成，再处理下一光段。
+    internal void RecordLights(in FrameContext ctx, NativeTarget scene, MeshDrawFrame frame, List<FinalDrawItem> draws)
     {
-        if (!frame.HasLights(queueMin, queueMax)) return;
+        if (draws.Count == 0) return;
         if (lights != null && SceneChanged(in ctx, scene))
         {
             var context = ctx.RenderContext;
@@ -49,7 +49,7 @@ internal sealed unsafe class HdrLightTarget : IDisposable
         int slot = ctx.SubmissionFrameIndex;
         SnapshotScene(ctx.CommandBuffer, scene, snapshots[slot]);
         HdrSceneCopy.Clear(ctx.CommandBuffer, lights[slot]);
-        DrawLights(in ctx, scene, frame, queueMin, queueMax);
+        DrawLights(in ctx, scene, frame, draws);
         Composite(in ctx, scene, slot);
     }
 
@@ -89,12 +89,10 @@ internal sealed unsafe class HdrLightTarget : IDisposable
     private void SnapshotScene(CommandBuffer command, NativeTarget scene, NativeTarget snapshot)
         => BloomPreviewTransfer.Copy(command, scene.Color, snapshot.Color, scene.Width, scene.Height);
 
-    private void DrawLights(in FrameContext ctx, NativeTarget scene, HdrLightFrame frame, int queueMin, int queueMax)
+    private void DrawLights(in FrameContext ctx, NativeTarget scene, MeshDrawFrame frame, List<FinalDrawItem> draws)
     {
-        using var group = HdrDrawFrame.Shell(frame.Lights.Frame, MeshDrawFrame.RentList(), MeshDrawFrame.RentList());
-        foreach (var draw in frame.Lights.Frame.Draws)
-            if (draw.RenderQueue >= queueMin && draw.RenderQueue < queueMax)
-                group.PersistentDraws.Add(draw);
+        using var group = HdrDrawFrame.Shell(frame, MeshDrawFrame.RentList(), MeshDrawFrame.RentList());
+        group.PersistentDraws.AddRange(draws);
         if (group.PersistentDraws.Count == 0) return;
 
         int slot = ctx.SubmissionFrameIndex;

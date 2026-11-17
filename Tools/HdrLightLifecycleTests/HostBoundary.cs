@@ -61,6 +61,7 @@ namespace Brutal.VulkanApi
         internal object BoundOwner;
         internal int Clears;
         internal readonly List<VkFramebuffer> CompositeFramebuffers = new();
+        internal readonly List<FinalDrawItem> DrawOrder = new();
         public unsafe void BeginRenderPass(in VkRenderPassBeginInfo begin, VkSubpassContents contents)
         {
             Destination = RenderTexture.Views[device.Views[begin.Framebuffer]];
@@ -166,11 +167,12 @@ namespace Waylith.Rendering
     public sealed class MaterialBinding { public Shader Shader = new(); public PipelineState PipelineState; }
     public sealed class FinalDrawItem
     {
-        public byte PassId = 1; public int RenderQueue; public int SortKey => RenderQueue;
+        public byte PassId = 1; public int RenderQueue; public int SortKey;
         public MaterialBinding Binding = new(); internal float Value; internal bool Multiply, Disposed; internal int DrawCount;
+        internal float Alpha = -1;
         public FinalDrawItem(int queue, float value, bool light, bool multiply)
         {
-            RenderQueue=queue; Value=value; Multiply=multiply; Binding.Shader.Linear=light;
+            RenderQueue=SortKey=queue; Value=value; Multiply=multiply; Binding.Shader.Linear=light;
             Binding.PipelineState=new(new(light, BlendFactor.One, BlendFactor.One, BlendOp.Add, BlendFactor.Zero, BlendFactor.One, BlendOp.Add), default, default);
         }
     }
@@ -197,7 +199,9 @@ namespace Waylith.Rendering
                 if (draw.RenderQueue >= queueMin && draw.RenderQueue < queueMax)
                 {
                     draw.DrawCount++;
+                    ctx.CommandBuffer.DrawOrder.Add(draw);
                     if (draw.Multiply) ctx.CommandBuffer.Destination.Value *= draw.Value;
+                    else if (draw.Alpha >= 0) ctx.CommandBuffer.Destination.Value = draw.Value * draw.Alpha + ctx.CommandBuffer.Destination.Value * (1 - draw.Alpha);
                     else if (draw.Binding.Shader.Linear) ctx.CommandBuffer.Destination.Value += draw.Value;
                     else ctx.CommandBuffer.Destination.Value = draw.Value;
                 }
@@ -263,11 +267,13 @@ namespace RimUnity.Rendering
     internal sealed class HdrDrawFrame : IDisposable
     {
         internal const byte MapPass=1; internal readonly MeshDrawFrame Frame;
+        internal readonly Dictionary<FinalDrawItem, FinalDrawItem> LightDraws = new();
         internal static bool Needed(MeshDrawFrame source) => false;
         internal HdrDrawFrame(MeshDrawFrame source, bool lightBuffer=false)
         {
             Frame=Shell(source,MeshDrawFrame.RentList(),MeshDrawFrame.RentList());
             Frame.Draws.AddRange(source.Draws.Concat(source.PersistentDraws).Where(HdrLightBlend.ShouldCapture).OrderBy(d => d.SortKey));
+            foreach (var draw in Frame.Draws) LightDraws.Add(draw, draw);
         }
         internal static MeshDrawFrame Shell(MeshDrawFrame source, List<FinalDrawItem> draws, List<FinalDrawItem> persistent)
             => new(source.FrameNumber) { Draws=draws, PersistentDraws=persistent, BackgroundColor=source.BackgroundColor };

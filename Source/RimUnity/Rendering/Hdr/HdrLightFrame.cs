@@ -10,6 +10,12 @@ internal sealed class HdrLightFrame : IDisposable
 {
     internal readonly HdrDrawFrame Lights;
     internal readonly MeshDrawFrame Shell;
+    private readonly List<(FinalDrawItem Draw, bool Light)> ordered = new();
+    internal sealed class DrawRun(bool light)
+    {
+        internal readonly bool Light = light;
+        internal readonly List<FinalDrawItem> Draws = new();
+    }
     private int disposed;
 
     internal static bool Needed(MeshDrawFrame frame)
@@ -42,11 +48,12 @@ internal sealed class HdrLightFrame : IDisposable
         int p = 0, d = 0;
         while (p < persistent.Count || d < dynamic.Count)
         {
-            if (p < persistent.Count && HdrLightBlend.ShouldCapture(persistent[p])) { p++; continue; }
-            if (d < dynamic.Count && HdrLightBlend.ShouldCapture(dynamic[d])) { d++; continue; }
             var item = p < persistent.Count && (d == dynamic.Count || persistent[p].SortKey.CompareTo(dynamic[d].SortKey) <= 0)
                 ? persistent[p++] : dynamic[d++];
-            Shell.PersistentDraws.Add(item);
+            //按源对象找快照，不能用两次过滤排序后的下标配对（相同键排序不稳定）。
+            bool light = HdrLightBlend.ShouldCapture(item);
+            if (light) ordered.Add((Lights.LightDraws[item], true));
+            else { Shell.PersistentDraws.Add(item); ordered.Add((item, false)); }
         }
     }
 
@@ -57,28 +64,17 @@ internal sealed class HdrLightFrame : IDisposable
         return false;
     }
 
-    //本段内：排在第一盏光之前的外壳由宿主先画；之后的外壳（夜晚/迷雾）等光合成后再画一次。
-    internal void Partition(int queueMin, int queueMax, List<FinalDrawItem> beforeLights, List<FinalDrawItem> afterLights)
+    //只合并相邻的同类绘制。光不能越过夜晚/透明/不透明层，否则新增曳光会改变远处已有光的亮度。
+    internal List<DrawRun> Partition(int queueMin, int queueMax)
     {
-        beforeLights.Clear(); afterLights.Clear();
-        var shell = new List<FinalDrawItem>();
-        var lights = new List<FinalDrawItem>();
-        foreach (var draw in Shell.PersistentDraws)
-            if (draw.RenderQueue >= queueMin && draw.RenderQueue < queueMax) shell.Add(draw);
-        foreach (var draw in Lights.Frame.Draws)
-            if (draw.RenderQueue >= queueMin && draw.RenderQueue < queueMax) lights.Add(draw);
-        if (lights.Count == 0) { beforeLights.AddRange(shell); return; }
-        var merged = new List<(FinalDrawItem draw, bool light)>(shell.Count + lights.Count);
-        foreach (var draw in shell) merged.Add((draw, false));
-        foreach (var draw in lights) merged.Add((draw, true));
-        merged.Sort((a, b) => a.draw.SortKey.CompareTo(b.draw.SortKey));
-        bool seenLight = false;
-        foreach (var item in merged)
+        var runs = new List<DrawRun>();
+        foreach (var item in ordered)
         {
-            if (item.light) { seenLight = true; continue; }
-            if (seenLight) afterLights.Add(item.draw);
-            else beforeLights.Add(item.draw);
+            if (item.Draw.RenderQueue < queueMin || item.Draw.RenderQueue >= queueMax) continue;
+            if (runs.Count == 0 || runs[^1].Light != item.Light) runs.Add(new DrawRun(item.Light));
+            runs[^1].Draws.Add(item.Draw);
         }
+        return runs;
     }
 
     public void Dispose()
@@ -86,6 +82,7 @@ internal sealed class HdrLightFrame : IDisposable
         if (Interlocked.Exchange(ref disposed, 1) != 0) return;
         try
         {
+            ordered.Clear();
             Shell.PersistentDraws.Clear();
             Shell.Dispose();
         }

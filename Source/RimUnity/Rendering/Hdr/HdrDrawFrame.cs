@@ -14,6 +14,8 @@ internal sealed class HdrDrawFrame : IDisposable
     internal static readonly string MetadataLayout;
     private static readonly Action<MeshDrawFrame, MeshDrawFrame> CopyMetadata = FrameMetadataCopier.Build<MeshDrawFrame>(out MetadataLayout);
     internal readonly MeshDrawFrame Frame;
+    //Only the light-buffer snapshot needs to place each copied command back among native draws.
+    internal readonly Dictionary<FinalDrawItem, FinalDrawItem> LightDraws;
     internal static string CommandBufferMode => SnapshotDrawBuffers.Status;
     private Workspace workspace;
     private int disposed;
@@ -164,6 +166,7 @@ internal sealed class HdrDrawFrame : IDisposable
         using var cpu = Diagnostics.LabCpuMetrics.Measure(readOnlyDepth || lightBuffer
             ? Diagnostics.LabCpuStage.BloomSnapshot : Diagnostics.LabCpuStage.HdrSnapshot);
         ArgumentNullException.ThrowIfNull(source);
+        if (lightBuffer) LightDraws = new();
         var trace = new Diagnostics.DpaDiagnostics.HdrCapture(readOnlyDepth || lightBuffer,
             System.Runtime.CompilerServices.Unsafe.SizeOf<MaterialUniformBytes>());
         bool complete = false;
@@ -224,6 +227,7 @@ internal sealed class HdrDrawFrame : IDisposable
                 //If list growth fails, the rented item has not acquired a frame owner yet.
                 try { Frame.Draws.Add(copy); }
                 catch { if (!SnapshotDrawBuffers.Available) FinalDrawItem.Return(copy); throw; }
+                LightDraws?.Add(item, copy);
                 workspace.Linear.Add(captured.Linear ? (byte)1 : (byte)0); trace.Commands++;
                 trace.End(stage, token); stage = Diagnostics.DpaDiagnostics.HdrStage.MergeAndLookup; token = trace.Begin();
             }
@@ -248,6 +252,7 @@ internal sealed class HdrDrawFrame : IDisposable
         workspace = null;
         try
         {
+            LightDraws?.Clear();
             //Owned command buffers stay with this lease; the host must not enqueue them.
             if (SnapshotDrawBuffers.Available) Frame?.Draws.Clear();
             Frame?.Dispose();

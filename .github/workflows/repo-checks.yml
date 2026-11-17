@@ -1,7 +1,7 @@
 # 第一层 CI：托管 runner 上就能跑，不需要游戏安装。
 #   Tools/Verify-Static.ps1        文本与脚本的一致性检查（不需要 .NET SDK）
 #   Tools/Test-BuildWorkflow.ps1   构建/验证/打包入口的离线回归（不需要 .NET SDK）
-#   Tools/Test-OfflineProjects.ps1 5 个离线测试工程（需要 .NET 10 SDK）
+#   Tools/Test-OfflineProjects.ps1 离线测试工程（需要 .NET 10 SDK）
 #
 # 已知缺口允许清单在 Tools/Verify-Static.ps1 的 $KnownDebt 里：那些位置只提示、不判失败；
 # 修完删条目后，对应规则立刻变成硬失败。
@@ -101,7 +101,7 @@ jobs:
         shell: powershell
         run: ./Tools/Test-VerifyStatic.ps1
 
-      # 5 个不需要游戏、不需要 Unity 的测试工程。RenderDiagnosticsTests 需要
+      # 不需要游戏、不需要 Unity 的测试工程，包含 HDR 绘制顺序回归。RenderDiagnosticsTests 需要
       # <RimUnity.dll> <游戏目录> <0Harmony.dll> 三个参数，只能在第二层跑。
       - name: 离线测试工程
         shell: pwsh

@@ -29,8 +29,8 @@ internal static class HdrMapHooks
     {
         internal HdrLightFrame Light;
         internal NativeTarget Scene;
-        internal int QueueMin, QueueMax;
-        internal List<FinalDrawItem> AfterLights;
+        internal List<HdrLightFrame.DrawRun> Runs;
+        internal int NextRun;
         internal MeshDrawFrame Under;
         internal PassAttachment LoadAttachment;
     }
@@ -124,28 +124,27 @@ internal static class HdrMapHooks
                 return false;
             }
             if (!experiment) return true;
+            if (!light.HasLights(queueMin, queueMax)) return true;
             //补画必须保留颜色和深度；宿主尚未提供 Load 附件时沿用完整原生帧。
             var loadAttachment = LoadAttachment(___sceneTargets);
             if (loadAttachment == null) return true;
-            var before = new List<FinalDrawItem>();
-            var after = new List<FinalDrawItem>();
-            light.Partition(queueMin, queueMax, before, after);
-            //先画光之前的外壳；夜晚等上层外壳留给 Postfix，避免遮罩画两次导致极暗。
+            var runs = light.Partition(queueMin, queueMax);
+            bool startsWithShell = !runs[0].Light;
+            //宿主先画首段外壳，其余光与外壳由 Postfix 按原顺序交替记录。
             var under = HdrDrawFrame.Shell(light.Shell, MeshDrawFrame.RentList(), MeshDrawFrame.RentList());
-            foreach (var draw in before) under.PersistentDraws.Add(draw);
+            if (startsWithShell) under.PersistentDraws.AddRange(runs[0].Draws);
             __state = new SliceState
             {
                 Light = light,
                 Scene = Current(___sceneTargets, ctx.SubmissionFrameIndex),
-                QueueMin = queueMin,
-                QueueMax = queueMax,
-                AfterLights = after,
+                Runs = runs,
+                NextRun = startsWithShell ? 1 : 0,
                 Under = under,
                 LoadAttachment = loadAttachment
             };
             meshFrame = under;
             //空 under 不能交给宿主 RecordPass：会把 MeshBatchRenderer 标成 sceneReady=false，整帧不再画。
-            if (before.Count == 0)
+            if (!startsWithShell)
             {
                 if (clear) ClearScene(in ctx, light.Shell, attachment);
                 return false;
@@ -161,10 +160,17 @@ internal static class HdrMapHooks
                 var target = LightTargets.GetValue(__instance, _ => new HdrLightTarget("RimUnity.HdrLight"));
                 var hostRenderer = (MeshBatchRenderer)MapRendererField.GetValue(__instance);
                 byte hostPassId = (byte)AccessTools.Property(MapPassType, "PassId").GetValue(__instance);
-                try { target.RecordLights(in ctx, __state.Scene, __state.Light, __state.QueueMin, __state.QueueMax); }
-                //光缓冲和全屏合成共享命令缓冲；即使本段无需补画，也要让下段重新绑定宿主状态。
-                finally { hostRenderer.InvalidateCommandBufferBindings(); }
-                target.DrawShellItems(in ctx, __state.LoadAttachment, hostRenderer, hostPassId, __state.Light.Shell, __state.AfterLights);
+                for (int i = __state.NextRun; i < __state.Runs.Count; i++)
+                {
+                    var run = __state.Runs[i];
+                    if (run.Light)
+                    {
+                        try { target.RecordLights(in ctx, __state.Scene, __state.Light.Lights.Frame, run.Draws); }
+                        //每段合成后都恢复宿主绑定，包括光为最后一段的情况。
+                        finally { hostRenderer.InvalidateCommandBufferBindings(); }
+                    }
+                    else target.DrawShellItems(in ctx, __state.LoadAttachment, hostRenderer, hostPassId, __state.Light.Shell, run.Draws);
+                }
             }
             finally
             {
