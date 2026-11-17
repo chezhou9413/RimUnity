@@ -30,8 +30,6 @@ SSRBlackHole 的运行时适配位于 Mod 的 Source/SSR.RimUnity，生成 SSR.R
 
 当前 Def 另有 8 个界面没有同名源预制体，gulimSDF 源字体也缺失。55/55 只覆盖实际取得的业务资源，不能据此宣称当前发布版 SSR 全部功能已恢复。
 
-- [完整结果与缺失清单](E:/RimModDev/SSR_SolarSystemRepublicCore/Docs/RimUnityCompatibility.md)
-- [逐项导出结果](E:/ModdevMics/Outputs/SSR_Core_RimUnity/20261015-145723-All/prefab-export-report.json)
-- [静态检查结果](E:/ModdevMics/Outputs/SSR_Core_RimUnity/20261015-145723-All/static-inspection.json)
+完整结果、逐项导出报告和静态检查报告属于当时的本地 SSR 工程资料，未随本仓库分发。本页仅保留结论与覆盖范围，不能作为可重复下载的验收附件。
 
-修改框架后构建 Release 的 RimUnity.csproj 与 RimUnity.ShaderTool.csproj，再运行 E:/ModdevMics/Assets/SSR/Unity/SSR/Export-RimUnity.ps1。导出脚本自动编译 SSR 适配组件；检查脚本会加载其程序集核对预制体字段。
+复验需要自行准备 SSR 源工程及对应适配组件，先按[工作流](Workflow.md)构建 RimUnity，再从该 Unity 工程导出资源并核对预制体字段。本仓库不包含 SSR 的专用导出脚本。

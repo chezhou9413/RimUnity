@@ -31,7 +31,9 @@ internal static class ShaderLabConverter
         if (colorSpace is not ("Gamma" or "Linear")) throw new ArgumentException("颜色空间必须为 Gamma 或 Linear。");
         shader.Manifest.colorSpace = colorSpace;
         if (generatedGraph != null) shader.Manifest.approximations.Add("BuiltIn Lit 使用地图太阳、月光与天空环境色；不使用 Unity 烘焙光照、局部灯光和反射探针。");
-        if (colorSpace == "Linear") shader.Manifest.approximations.Add("程序按 Linear 计算后编码到宿主 UNorm 场景；透明叠加沿用宿主的 Gamma 混合，HDR 超出场景格式范围的部分仍会截断。");
+        //阴影 Pass 写出深度，不参与颜色混合，不能沿用场景颜色的兼容警告。
+        if (colorSpace == "Linear" && shader.Manifest.tags.GetValueOrDefault("LightMode") != "ShadowCaster")
+            shader.Manifest.approximations.Add("程序按 Linear 计算后编码到宿主 UNorm 场景；透明叠加沿用宿主的 Gamma 混合，HDR 超出场景格式范围的部分仍会截断。");
         string adapted = ShaderLabBindings.Adapt(shader);
         Directory.CreateDirectory(directory);
         string descriptor = Path.Combine(directory, "shader.json");

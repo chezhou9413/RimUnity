@@ -14,7 +14,7 @@
     <AssemblyMetadata Include="RimUnityBuiltAtUtc" Value="$(RimUnityBuiltAtUtc)" />
   </ItemGroup>
   <Target Name="RequirePayload" BeforeTargets="PrepareForBuild">
-    <Error Condition="!Exists('$(PayloadPath)')" Text="请通过 Tools/Build.ps1 构建内置载荷。" />
+    <Error Condition="!Exists('$(PayloadPath)')" Text="请通过根目录 build.cmd 或 sh build.sh 构建内置载荷。" />
     <Error Condition="'$(ContainerId)' == ''" Text="内置容器必须声明构建身份。" />
   </Target>
   <Target Name="CopyEmbeddedContainer" AfterTargets="Build">

@@ -1,6 +1,14 @@
 # Tools 使用索引
 
-## 构建、检查与发布
+## 日常构建只用根入口
+
+安装 .NET 10 SDK 后，在仓库根目录运行 Windows 的 `.\build.cmd`，或 Linux/macOS 的 `sh ./build.sh`。这会构建运行时、内置接入包和 ShaderTool；自动查找 Steam 与 Harmony，不要求设置环境变量。
+
+`build.cmd docs` / `sh build.sh docs` 同步已登记的文档，`build.cmd pack` / `sh build.sh pack` 打包已有产物。非标准安装可使用 `--game`、`--harmony`，或将 `build.example.json` 复制为不提交的 `build.local.json`。详见根目录 README。`Build/` 是这些命令共用的 C# 实现。
+
+下面的脚本和测试工程供维护者按需使用，均不是日常构建前置步骤。保留其路径以兼容已有 CI 和源码引用。
+
+## 可选 PowerShell 维护入口
 
 - `Build.ps1`：构建运行时、延迟载荷和 ShaderTool，不执行部署。`-SkipEmbedded` 仅构建独立版和工具，不生成内置载荷。
 - `Build-Embedded.ps1`：生成内置载荷和编译引用；由运行时构建调用。
@@ -53,4 +61,4 @@
 - 测试工程的 `bin`、`obj` 可重新构建，不需要进入版本控制。
 - 临时诊断构建与旧备份应放在仓库 `artifacts/`，不要继续堆放在 Tools 下。
 
-本次整理将旧诊断构建、测试编译缓存及 Tools/obj 的空备份目录移至 `artifacts/ToolsCleanup/`。每次归档的 `manifest.json` 记录原位置和归档位置，可按需恢复。源码工具和当前 ShaderTool 保留。
+`Source/.build`、`Tools/**/bin`、`Tools/**/obj` 和 `artifacts` 均为本地生成目录，已被 Git 忽略；其中的机器绝对路径不会进入源码仓库。

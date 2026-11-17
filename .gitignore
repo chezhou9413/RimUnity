@@ -1,6 +1,7 @@
 Source/**/obj/
 Source/**/bin/
 Source/.build/
+build.local.json
 1.7/Assemblies/*.dll
 !1.7/Assemblies/RimUnity.dll
 !1.7/Assemblies/RimUnity.Core.dll

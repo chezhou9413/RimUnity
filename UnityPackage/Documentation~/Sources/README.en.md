@@ -40,17 +40,20 @@ instance.transform.position = new RimUnity.Vector3(x, y, z);
 
 ## Build from source
 
-Use PowerShell 7, the .NET 10 SDK, a RimWorld 1.7 installation and Harmony:
+Use the .NET 10 SDK, a RimWorld 1.7 installation and Harmony:
 
-```powershell
-$env:HARMONY_PATH = 'C:/Mods/Harmony/1.7/Assemblies/0Harmony.dll'
-./Tools/Verify.ps1 -GameRoot 'C:/Games/RimWorld' -Embedded
-# After changing documentation, update the offline mirror explicitly before packaging:
-pwsh -File ./Tools/Sync-Manual.ps1
-./Tools/Pack.ps1 -Output 'C:/out'
-```
+| Task | Windows (CMD / PowerShell) | Linux / macOS (terminal) |
+| --- | --- | --- |
+| Build all outputs | `.\build.cmd` | `sh ./build.sh` |
+| Synchronize edited documentation | `.\build.cmd docs` | `sh ./build.sh docs` |
+| Package existing outputs | `.\build.cmd pack` | `sh ./build.sh pack` |
+| Show options | `.\build.cmd --help` | `sh ./build.sh --help` |
 
-`Build.ps1` builds the runtime, embedded integration package and ShaderTool. `Verify.ps1` builds once by default, then checks shaders; `-Embedded` adds offline runtime tests. Use `-SkipBuild` to verify existing outputs from this checkout. `Pack.ps1` validates and packages existing outputs without rebuilding or rewriting documentation. Deployment and in-game testing remain explicit, separate commands. See [the workflow](Docs/en/Workflow.md) for options and output locations.
+Normal builds and packaging require only **.NET 10 SDK**, without PowerShell, Python or global environment variables. The entry point discovers RimWorld and Harmony from Steam and its library list. Outputs are `1.7/Assemblies`, `artifacts/Embedded` and `Tools/bin/ShaderTool`; archives go to `artifacts`. No game deployment or launch is performed.
+
+For non-Steam or multiple installations, pass `--game "game assembly directory" --harmony "path to 0Harmony.dll"`. Alternatively copy `build.example.json` to the Git-ignored `build.local.json` and fill in `game` / `harmony` once. Precedence: CLI → local configuration → existing `RIMWORLD_DIR` / `HARMONY_PATH` → Steam discovery. Configuration paths are relative to the repository; CLI paths to your working directory. Missing or ambiguous installations produce an explicit error.
+
+PowerShell scripts in `Tools/` remain optional for existing CI, specialized checks and deployment. The build entry supports Windows, Linux and macOS; native game rendering and Unity exporter dependencies still require platform-specific validation. See [the workflow](Docs/en/Workflow.md) and [Tools index](Tools/README.md).
 
 ## Documentation
 

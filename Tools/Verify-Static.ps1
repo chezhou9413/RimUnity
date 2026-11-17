@@ -207,12 +207,20 @@ if ($bomViolations -eq 0) { Add-Pass 'ps1-bom' ('{0} 个含非 ASCII 的 .ps1 �
 # ---------------------------------------------------------------------------
 # 7. 被跟踪文件里的盘符绝对路径
 # ---------------------------------------------------------------------------
-$scanExtensions = @('.cs', '.ps1', '.psm1', '.json', '.xml', '.props', '.targets', '.csproj', '.sln', '.yml', '.yaml', '.txt', '.glsl', '.shader', '.editorconfig', '.gitattributes', '.gitignore')
+$scanExtensions = @('.cs', '.ps1', '.psm1', '.sh', '.cmd', '.json', '.xml', '.props', '.targets', '.csproj', '.sln', '.yml', '.yaml', '.txt', '.glsl', '.shader', '.editorconfig', '.gitattributes', '.gitignore')
 $pathViolations = 0
 $pathChecked = 0
 foreach ($file in (Get-TrackedFiles @('*'))) {
-    # 文档/说明类文件允许写路径示例（README、Docs、Documentation~ 镜像、Steam 商店文案等）
-    if ($file -like '*.md' -or $file -like 'Docs/*' -or $file -like 'UnityPackage/Documentation~/*' -or
+    #文档允许路径示例，但不能把某台机器的本地文件当作公开下载或参考链接。
+    if ($file -like '*.md') {
+        $pathChecked++
+        if ((Get-RepoText $file) -match '\]\((?:[A-Za-z]:[\\/]|/(?:Users|home)/)') {
+            $pathViolations++
+            Report-Violation 'absolute-path' $file 'Markdown 链接指向机器本地文件，请使用仓库相对路径或公开网址'
+        }
+        continue
+    }
+    if ($file -like 'Docs/*' -or $file -like 'UnityPackage/Documentation~/*' -or
         $file -like '1.6/*' -or $file -like 'Tools/Steam/*' -or $file -like 'README*') { continue }
     $extension = [IO.Path]::GetExtension($file).ToLowerInvariant()
     if ($scanExtensions -notcontains $extension) { continue }
@@ -226,7 +234,7 @@ foreach ($file in (Get-TrackedFiles @('*'))) {
     $pathViolations++
     Report-Violation 'absolute-path' $file ('{0}:{1} 出现盘符绝对路径' -f $file, ($hits -join ','))
 }
-if ($pathViolations -eq 0) { Add-Pass 'absolute-path' ('{0} 个被跟踪的脚本/工程/配置里没有盘符绝对路径' -f $pathChecked) }
+if ($pathViolations -eq 0) { Add-Pass 'absolute-path' ('{0} 个被跟踪文件没有机器路径或本地文档链接' -f $pathChecked) }
 
 # ---------------------------------------------------------------------------
 # 8. XML / JSON 能被解析
@@ -247,7 +255,7 @@ if ($parseViolations -eq 0) { Add-Pass 'parse-config' ('{0} 个 XML / JSON 都�
 # 9. 冲突标记残留
 # ---------------------------------------------------------------------------
 $markerViolations = 0
-foreach ($file in (Get-TrackedFiles @('*.cs', '*.ps1', '*.psm1', '*.md', '*.json', '*.xml', '*.props', '*.targets', '*.csproj', '*.yml', '*.yaml', '*.txt'))) {
+foreach ($file in (Get-TrackedFiles @('*.cs', '*.ps1', '*.psm1', '*.sh', '*.cmd', '*.md', '*.json', '*.xml', '*.props', '*.targets', '*.csproj', '*.yml', '*.yaml', '*.txt'))) {
     $lines = Get-RepoLines $file
     $hits = New-Object System.Collections.ArrayList
     for ($i = 0; $i -lt $lines.Count; $i++) {

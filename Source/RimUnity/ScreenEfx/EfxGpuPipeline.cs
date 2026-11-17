@@ -10,7 +10,7 @@ using NativeTarget = Waylith.Rendering.RenderTexture;
 
 namespace RimUnity.ScreenEfx;
 
-//Owned by the existing PostFx feature. Frame slots are reused only after their GPU fences.
+//由宿主后处理持有，帧槽位只在对应 GPU 栅栏完成后复用。
 internal sealed class EfxGpuPipeline : IDisposable
 {
     private readonly WarmablePass scene = new("RimUnity.ScreenEfx.Scene",
@@ -199,8 +199,7 @@ internal sealed class EfxGpuPipeline : IDisposable
         output.RecordInline(in ctx, ctx.RenderPass, ctx.SampleCount);
     }
 
-    //Each renderer uses per-frame material descriptors. The host has retired those
-    //frames before resize; the next draw binds the slot to the replacement images.
+    //宿主在调整尺寸前已退役各帧的材质描述符，下次绘制再把槽位绑定到新图像。
     internal void RebuildTargets()
     {
         if (renderers != null)
@@ -225,6 +224,7 @@ internal sealed class EfxGpuPipeline : IDisposable
         scene.Output = null; scene.Invalidate(); output.Invalidate();
     }
 
+    //帧槽位退役后释放图像，并清除后处理借用的图像绑定。
     private void ReleaseImages()
     {
         Result = null;
@@ -237,8 +237,7 @@ internal sealed class EfxGpuPipeline : IDisposable
         if (targets != null) foreach (var pair in targets) if (pair != null) foreach (var target in pair) target?.Dispose();
         targets = null;
         scene.Output = null;
-        //纹理和分配对象重载都会解引用。帧槽位退役后用空视图、采样器和布局清掉借用绑定；
-        //1.7.5011 起图像视图重载必须带 VkImageLayout，省略会在录制帧时找不到旧方法。
+        //纹理和分配对象重载都会解引用；帧槽位退役后显式清空视图、采样器和布局。
         scene.SetInput(0, default(VkImageView), default, default);
         scene.SetInput(1, default(VkImageView), default, default);
         output.SetInput(0, default(VkImageView), default, default);

@@ -8,16 +8,18 @@ Author assets in Unity 2022.3 LTS, using supported features of Built-in or URP 1
 
 In Package Manager, choose **Add package from disk** and select `UnityPackage/package.json`, or install a released TGZ. When installing from source, build the runtime and ShaderTool first.
 
-Build from the repository root, substituting your own paths:
+Install .NET 10 SDK and build from the repository root:
 
-```powershell
-$env:RIMWORLD_DIR = 'C:/Games/RimWorld'
-$env:HARMONY_PATH = 'C:/Mods/Harmony/1.7/Assemblies/0Harmony.dll'
-./Tools/Build.ps1
-./Tools/Verify.ps1 -SkipBuild -Embedded
+```text
+Windows:       .\build.cmd
+Linux / macOS: sh ./build.sh
 ```
 
-Use PowerShell 7 and the .NET 10 SDK. The entry points have separate responsibilities:
+This builds Core, Runtime, Spine, the embedded integration package and ShaderTool; `--skip-embedded` omits the embedded package. Steam and its libraries are searched for the game and Harmony. For nonstandard installations, use `--game` / `--harmony`, or copy `build.example.json` to the Git-ignored `build.local.json` and set `game` / `harmony`. Global environment variables are optional. Configuration paths are relative to the repository; CLI paths to your working directory. Multiple installations require an explicit choice.
+
+The root entry also provides `docs` and `pack`, using .NET without PowerShell or external tar. `docs` synchronizes sources registered in `UnityPackage/Documentation~/sources.json`; register new documents there first. Intermediate files use `Source/.build` rather than the Windows `TEMP` variable. Cross-platform builds do not establish cross-platform validation of native rendering or Unity exporter dependencies.
+
+The following **optional maintenance commands** require PowerShell 7 and are not prerequisites for normal builds:
 
 - `Build.ps1`: build Core, Runtime, Spine, the embedded integration package and ShaderTool. `-SkipEmbedded` builds standalone runtime and tools without embedded payloads; a complete release also requires the embedded package.
 - `Verify.ps1`: build once by default, then validate shaders. `-SkipBuild` checks existing outputs; `-Embedded` adds offline embedded runtime tests; `-DataRoot` adds prefab inspection. With `-SkipBuild`, embedded tests still compile temporary fixtures and test programs, but do not rebuild the release runtime or ShaderTool.
@@ -31,13 +33,10 @@ Run `pwsh -File ./Tools/Test-BuildWorkflow.ps1` for orchestration regressions wi
 Outputs: runtime assemblies in `1.7/Assemblies`, ShaderTool in `Tools/bin/ShaderTool`, embedded integration package in `artifacts/Embedded`, and release archives in `artifacts` by default. Builds overwrite the tracked Runtime/Core DLLs; exclude unintended binary changes from source commits.
 
 
-`Directory.Build.props` ships no default paths. Besides the `-p:` properties above, you can set environment variables and then call `dotnet build` directly:
+To build a specific csproj directly, provide MSBuild properties. This mode does not read the root entry's local configuration or perform Steam discovery:
 
-```powershell
-$env:RIMWORLD_DIR = 'C:/Games/RimWorld'                       # $(RimWorldDir)
-$env:HARMONY_PATH  = 'C:/Mods/Harmony/1.7/Assemblies/0Harmony.dll'   # $(HarmonyPath)
-$env:UNITY_EDITOR_DIR = 'C:/Program Files/Unity/2022.3.35f1/Editor/Data'
-$env:UNITY_PROJECT = 'C:/Projects/RimUnityBuiltIn'
+```text
+dotnet build Source/RimUnity.Spine/RimUnity.Spine.csproj -c Release -p:RimWorldDir="<game assembly directory>" -p:HarmonyPath="<path to 0Harmony.dll>"
 ```
 
 When neither value is provided, the references cannot be resolved (a `warning MSB3245` names the missing assembly but not the missing path), and the real failure surfaces later as a `CS0246` at the compile step that uses those types. Neither mode silently falls back to one machine's private directory.
@@ -123,10 +122,14 @@ Exit the game before replacing game-side resources. Copy your mod DLLs, the cata
 
 After building the runtime and ShaderTool, package the framework with:
 
-```powershell
-pwsh -File ./Tools/Sync-Manual.ps1
-./Tools/Pack.ps1 -Output 'C:/Builds/RimUnity' -TempRoot 'C:/BuildTemp/RimUnity'
+```text
+Windows:       .\build.cmd docs
+               .\build.cmd pack
+Linux / macOS: sh ./build.sh docs
+               sh ./build.sh pack
 ```
+
+Use `pack --output "<output directory>"` for another destination. Existing archives are not overwritten; choose a new directory. Packaging checks existing outputs without rebuilding or modifying documentation. The ShaderTool launcher matches the build host; its native dependencies still come from the corresponding game installation.
 
 This produces a framework Mod ZIP, an embedded runtime ZIP, a UPM TGZ and SHA256SUMS.txt, including MIT and third-party license files. The framework package excludes content assets, Unity projects, caches, game assemblies and test assets. The TGZ includes the project's tool under `Tools~/ShaderTool`; it still requires a local game installation path.
 

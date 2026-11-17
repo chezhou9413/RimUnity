@@ -14,7 +14,7 @@ internal static class ShaderMathCompat
     private static readonly Regex Calls = new("//[^\\r\\n]*|/\\*[\\s\\S]*?\\*/|\"(?:\\\\.|[^\"\\\\])*\"|\\b(?<function>pow|smoothstep)\\s*\\(");
 
     //只改写编译器生成的内建调用，保留用户函数名、注释、布局及参数的单次求值。
-    internal static string Rewrite(string source, ShaderLabManifest manifest)
+    internal static string Rewrite(string source)
     {
         var powers = new SortedSet<int>();
         bool smooth = false;
@@ -58,7 +58,7 @@ internal static class ShaderMathCompat
         Match header = Regex.Match(rewritten, @"\A\s*#version[^\r\n]*(?:\r?\n)(?:\s*#extension[^\r\n]*(?:\r?\n))*");
         if (!header.Success) throw new InvalidDataException("数学兼容转换需要 GLSL #version 声明。");
         if (powers.Count > 0)
-            Record(manifest, "常量正整数幂 2～64 使用乘法展开；负底数按整数幂计算，属于旧 Shader 写法的兼容处理，并非 HLSL pow 的负底数语义保证。");
+            Console.WriteLine("[数学兼容] 常量正整数幂使用乘法展开，负底数按整数幂求值；不依赖 HLSL pow 的未定义负底数行为。");
         if (smooth)
             Console.WriteLine("[数学兼容] smoothstep 支持反向边界，相等边界逐分量按 step 硬切，不再执行零除。");
         return rewritten.Insert(header.Length, helpers.ToString());
@@ -132,11 +132,4 @@ internal static class ShaderMathCompat
         return true;
     }
 
-    //转换清单与命令行均可追踪兼容处理，不把数学改写隐藏为普通编译成功。
-    private static void Record(ShaderLabManifest manifest, string message)
-    {
-        if (manifest != null && manifest.approximations.Contains(message)) return;
-        manifest?.approximations.Add(message);
-        Console.WriteLine("[数学兼容] " + message);
-    }
 }
