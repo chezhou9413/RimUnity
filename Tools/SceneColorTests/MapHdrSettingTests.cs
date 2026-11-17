@@ -31,7 +31,7 @@ internal static partial class Program
                 settingsProperty.SetValue(null, settings);
                 settingsType.GetField("enabled", members).SetValue(settings, true);
                 settingsType.GetField("layerMask", members).SetValue(settings, 1 << 29);
-                if (!Equals(modeField.GetValue(settings), Mode("None"))) throw new Exception("Map HDR must default to None.");
+                if (!Equals(modeField.GetValue(settings), Mode("Experiment"))) throw new Exception("Map HDR must default to Experiment.");
                 foreach (var (modeName, expectLegacy, expectLight) in new[] {
                     ("None", false, false),
                     ("Legacy", true, false),
@@ -67,7 +67,7 @@ internal static partial class Program
                     finally { release.Invoke(null, new object[] { map }); }
                 }
                 settingsType.GetMethod("ResetDefaults", members).Invoke(settings, null);
-                if (!Equals(modeField.GetValue(settings), Mode("None"))) throw new Exception("Reset must set map HDR to None.");
+                if (!Equals(modeField.GetValue(settings), Mode("Experiment"))) throw new Exception("Reset must set map HDR to Experiment.");
 
                 settingsType.GetMethod("SetLayerEnabled", members).Invoke(settings, new object[] { 29, true });
                 settingsType.GetField("enabled", members).SetValue(settings, false);
@@ -79,7 +79,7 @@ internal static partial class Program
                 }
                 settingsType.GetMethod("ReleaseLayer", members).Invoke(settings, new object[] { 29 });
                 string describe = (string)settingsType.GetMethod("Describe", members).Invoke(settings, null);
-                if (describe == null || !describe.Contains("mapHdr=None") || !describe.Contains("effective=0x"))
+                if (describe == null || !describe.Contains("mapHdr=Experiment") || !describe.Contains("effective=0x"))
                     throw new Exception("Bloom Describe must expose mapHdr mode and effective mask.");
                 checks++; Console.WriteLine("PASS controlled bloom layer survives manual switch and Describe exposes mapHdr mode");
             }

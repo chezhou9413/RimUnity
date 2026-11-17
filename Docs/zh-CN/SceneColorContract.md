@@ -31,7 +31,7 @@
 
 这些规则适用于所有遵守导出颜色空间声明的资源，不包含资源名白名单或特判。新 Shader 仍需正确声明颜色空间，且应避免输出无穷或 NaN。
 
-设置入口：`BloomSettings.mapHdrMode`（`None` / `Legacy` / `Experiment`），默认 `None`。
+设置入口：`BloomSettings.mapHdrMode`（`None` / `Legacy` / `Experiment`），默认 `Experiment`。新建设置、缺少该配置项及恢复默认设置时均采用 Experiment；配置中显式保存的模式仍按原值读取。
 
 验证入口：`Tools/SceneColorTests` 的隐藏窗口 Vulkan 像素回归，以及 `Tools/ScreenEfxTests` 的帧与生命周期回归。前者覆盖 8 位、sRGB、10 位及浮点附件，旧逻辑额外编码负例，以及 Experiment 加法光合成、空光像素稳定性，和 Alpha 覆盖回落宿主。
 

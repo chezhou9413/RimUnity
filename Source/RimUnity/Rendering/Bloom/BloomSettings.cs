@@ -9,8 +9,8 @@ public enum MapHdrMode { None, Legacy, Experiment }
 public sealed partial class BloomSettings : ModSettings
 {
     public bool enabled;
-    // Map HDR is independent of Bloom; absent settings keys intentionally default off.
-    public MapHdrMode mapHdrMode;
+    // Map HDR is independent of Bloom; new or missing settings use the light-buffer path.
+    public MapHdrMode mapHdrMode = MapHdrMode.Experiment;
     public int layerMask;
     public float threshold = .8f, intensity = .6f, softKnee = .5f, scatter = .65f;
     //内容模组在地图生命周期内接管自己的层，不改写玩家保存的手动选择。
@@ -41,7 +41,7 @@ public sealed partial class BloomSettings : ModSettings
     public void ResetDefaults()
     {
         enabled = false;
-        mapHdrMode = MapHdrMode.None;
+        mapHdrMode = MapHdrMode.Experiment;
         layerMask = 0;
         threshold = .8f;
         intensity = .6f;
@@ -52,7 +52,7 @@ public sealed partial class BloomSettings : ModSettings
     public override void ExposeData()
     {
         Scribe_Values.Look(ref enabled, "bloomEnabled", false);
-        Scribe_Values.Look(ref mapHdrMode, "mapHdrMode", MapHdrMode.None);
+        Scribe_Values.Look(ref mapHdrMode, "mapHdrMode", MapHdrMode.Experiment);
         Scribe_Values.Look(ref layerMask, "bloomLayerMask", 0);
         Scribe_Values.Look(ref threshold, "bloomThreshold", .8f);
         Scribe_Values.Look(ref intensity, "bloomIntensity", .6f);

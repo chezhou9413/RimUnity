@@ -36,5 +36,5 @@ They submit actual Linear shader draws and verify that capture follows
 None/Legacy/Experiment/None while independent Bloom layer selection stays intact.
 `HdrLightBlend` classification and Experiment light-composite pixels (additive,
 coverage, empty-light stability) are covered as well. Reset defaults must leave
-map HDR at `None`. Older supplied runtime builds without this setting explicitly
+map HDR at `Experiment`. Older supplied runtime builds without this setting explicitly
 skip this regression.
