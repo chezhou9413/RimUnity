@@ -20,7 +20,7 @@ internal static class Program
     {
         NightOverlay(); TrailDoesNotDimWall(); InterleavedLayers(); EqualKeysKeepHostOrder(); LightFirst();
         NextSliceAfterEmptyTail(); MultipleLightsAndSlots(); MissingLoadAttachment(); BorrowedDrawCleanup();
-        CompositeDescriptorLifetime(); WriteSideEffectsStayNative();
+        CompositeDescriptorLifetime(); SharedDepthWrites(); SharedStencilWrites(); WriteSideEffectsStayCaptured();
         HostDepthLayout();
         TraceChecks();
         Console.WriteLine($"PASS {checks} HDR light lifecycle checks (recording boundary; no GPU/game).");
@@ -340,35 +340,36 @@ internal static class Program
         Check(ctx.Device.DisposedEffects.SetEquals(ctx.Device.CreatedEffects), "target disposal releases all recreated effects");
     }
 
-    private static void WriteSideEffectsStayNative()
+    private static void WriteSideEffectsStayCaptured()
     {
         var additive = new FinalDrawItem(1000, .1f, true, false).Binding.PipelineState;
         var writes = new[]
         {
-            additive with { Depth = new DepthState(true) },
+            additive with { Depth = new DepthState(true, true) },
             additive with { Stencil = new StencilState(255, StencilOp.Replace, StencilOp.Keep, StencilOp.Keep) },
             additive with { Stencil = new StencilState(255, StencilOp.Keep, StencilOp.Replace, StencilOp.Keep) },
             additive with { Stencil = new StencilState(255, StencilOp.Keep, StencilOp.Keep, StencilOp.Replace) }
         };
         foreach (var state in writes)
         {
-            Check(!HdrLightBlend.TryAdapt(state, out var rejected) && rejected == state,
-                "depth, stencil-pass, stencil-fail and depth-fail writes must fall back with their original state");
+            Check(HdrLightBlend.TryAdapt(state, out var adapted) && adapted.Depth == state.Depth && adapted.Stencil == state.Stencil,
+                "additive lights must retain depth, stencil-pass, stencil-fail and depth-fail writes while capturing");
             using var f = new Fixture();
             var writer = f.Add(3000, .3f, light: true);
             writer.Binding.PipelineState = state;
-            Check(!HdrLightFrame.Needed(f.Frame), "a side-effect-only frame stays entirely native");
+            Check(HdrLightFrame.Needed(f.Frame), "a depth/stencil-writing additive light still activates Experiment");
             var before = f.Add(2000, .1f, light: true);
             var after = f.Add(4000, .2f, light: true);
             using (var snapshot = new HdrLightFrame(f.Frame))
-                Check(snapshot.Shell.PersistentDraws.Contains(writer) && !snapshot.Lights.Frame.Draws.Contains(writer),
-                    "side-effect draw remains in the host shell when other lights are captured");
+                Check(!snapshot.Shell.PersistentDraws.Contains(writer) && snapshot.Lights.LightDraws.TryGetValue(writer, out var copy)
+                    && copy.Binding.PipelineState.Depth == state.Depth && copy.Binding.PipelineState.Stencil == state.Stencil,
+                    "captured light retains the source depth/stencil state in its adapted binding");
             f.Capture(); var ctx = f.Ctx;
             f.Slice(ctx, true, int.MinValue, int.MaxValue);
             Check(ctx.CommandBuffer.DrawOrder.SequenceEqual(new[] { before, writer, after })
-                && ReferenceEquals(ctx.CommandBuffer.DrawOwners[1], f.Pass.renderer)
+                && !ReferenceEquals(ctx.CommandBuffer.DrawOwners[1], f.Pass.renderer)
                 && writer.Binding.PipelineState == state && writer.DrawCount == 1,
-                "host executes the side-effect draw once at its original position and with unmodified state");
+                "light renderer executes the writing light once at its original position without mutating the source");
         }
         foreach (var stencil in new[]
         {
@@ -385,6 +386,85 @@ internal static class Program
             && alphaAdapted.Blend.SrcColor == BlendFactor.SrcAlpha
             && alphaAdapted.Blend.SrcAlpha == BlendFactor.Zero && alphaAdapted.Blend.DstAlpha == BlendFactor.One,
             "read-only alpha-weighted additive lights still capture without alpha coverage");
+    }
+
+    private static void SharedDepthWrites()
+    {
+        foreach (bool capture in new[] { false, true })
+        {
+            using var f = new Fixture();
+            var scene = AttachDepth(f);
+            var ground = f.Add(1000, .6f); ground.Depth = .2f;
+            ground.Binding.PipelineState = ground.Binding.PipelineState with { Depth = new DepthState(true, true) };
+            var writer = f.Add(2000, .1f, light: true); writer.Depth = .7f;
+            writer.Binding.PipelineState = writer.Binding.PipelineState with { Depth = new DepthState(true, true) };
+            var hiddenShell = f.Add(3000, .9f); hiddenShell.Depth = .4f;
+            hiddenShell.Binding.PipelineState = hiddenShell.Binding.PipelineState with { Depth = new DepthState(true, false) };
+            var hiddenLight = f.Add(4000, .2f, light: true); hiddenLight.Depth = .5f;
+            hiddenLight.Binding.PipelineState = hiddenLight.Binding.PipelineState with { Depth = new DepthState(true, false) };
+            var night = f.Add(5000, .5f, multiply: true); night.Depth = .8f;
+            night.Binding.PipelineState = night.Binding.PipelineState with { Depth = new DepthState(true, false) };
+            if (capture) f.Capture();
+            var ctx = f.Ctx;
+            f.Slice(ctx, true, int.MinValue, 2500);
+            f.Slice(ctx, false, 2500, int.MaxValue);
+            Check(Math.Abs(scene.Value - .35f) < .0001f && Math.Abs(scene.DepthValue - .7f) < .0001f,
+                $"capture={capture}: light depth write survives compositing and subsequent slices");
+            Check(ctx.CommandBuffer.VisibleDraws.SequenceEqual(new[] { ground, writer, night }),
+                $"capture={capture}: a light's depth write occludes later native and light fragments");
+            Check(ReferenceEquals(ctx.CommandBuffer.DrawOwners[1], f.Pass.renderer) == !capture,
+                "Experiment retains the depth-writing light in the light renderer instead of falling back to native");
+        }
+    }
+
+    private static void SharedStencilWrites()
+    {
+        foreach (bool capture in new[] { false, true })
+        foreach (string operation in new[] { "pass", "stencil-fail", "depth-fail" })
+        {
+            using var f = new Fixture();
+            var scene = AttachDepth(f);
+            var ground = f.Add(1000, .6f); ground.Depth = .6f;
+            ground.Binding.PipelineState = ground.Binding.PipelineState with { Depth = new DepthState(true, true) };
+            var writer = f.Add(2000, .1f, light: true); writer.Depth = operation == "depth-fail" ? .4f : .8f;
+            writer.Binding.PipelineState = writer.Binding.PipelineState with
+            {
+                Depth = new DepthState(true, false),
+                Stencil = new StencilState(255,
+                    operation == "pass" ? StencilOp.Replace : StencilOp.Keep,
+                    operation == "stencil-fail" ? StencilOp.Replace : StencilOp.Keep,
+                    operation == "depth-fail" ? StencilOp.Replace : StencilOp.Keep,
+                    Test: true, Reference: 1, CompareEqual: operation == "stencil-fail")
+            };
+            var reader = new StencilState(0, StencilOp.Keep, StencilOp.Keep, StencilOp.Keep, Test: true, Reference: 1, CompareEqual: true);
+            var night = f.Add(3000, .5f, multiply: true);
+            night.Binding.PipelineState = night.Binding.PipelineState with { Stencil = reader };
+            var laterLight = f.Add(4000, 0, light: true);
+            laterLight.Binding.PipelineState = laterLight.Binding.PipelineState with { Stencil = reader };
+            var hidden = f.Add(5000, .9f);
+            hidden.Binding.PipelineState = hidden.Binding.PipelineState with { Stencil = reader with { Reference = 0 } };
+            if (capture) f.Capture();
+            var ctx = f.Ctx;
+            f.Slice(ctx, true, int.MinValue, 3500);
+            f.Slice(ctx, false, 3500, int.MaxValue);
+            float expected = operation == "pass" ? .35f : .3f;
+            Check(Math.Abs(scene.Value - expected) < .0001f && scene.StencilValue == 1,
+                $"capture={capture}, op={operation}: light stencil writes remain visible to later shell and light runs");
+            Check(ctx.CommandBuffer.VisibleDraws.Contains(writer) == (operation == "pass")
+                && ctx.CommandBuffer.VisibleDraws.Contains(night) && ctx.CommandBuffer.VisibleDraws.Contains(laterLight)
+                && !ctx.CommandBuffer.VisibleDraws.Contains(hidden),
+                $"capture={capture}, op={operation}: failed fragments still apply the correct stencil operation");
+            Check(ReferenceEquals(ctx.CommandBuffer.DrawOwners[1], f.Pass.renderer) == !capture,
+                "Experiment captures stencil-writing light even when its color fragment fails");
+        }
+    }
+
+    private static RenderTexture AttachDepth(Fixture f)
+    {
+        var scene = f.Scenes.Current(0);
+        scene.DepthFormat = VkFormat.D32SFloatS8UInt;
+        scene.Depth = new Waylith.Graphics.GpuTextureAllocation(scene) { Format = scene.DepthFormat };
+        return scene;
     }
 
     private static void MissingLoadAttachment()

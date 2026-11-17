@@ -30,14 +30,20 @@ Depth regressions reproduce the host's stale `Undefined` allocation metadata aft
 its scene pass. They reject destructive/invalid depth barriers across light-first,
 shell-first and repeated slices, and check the production render pass's depth and
 stencil load/store/layout contract.
-The scalar scene values only detect ordering/clearing, not color-space correctness.
+The single-sample model checks ordering, clearing and depth/stencil visibility,
+not color-space correctness or real GPU execution.
 
 The post-effect boundary models the host's `RecordInline` pool reset. Regressions
 cover separate descriptors for interleaved light runs and slices, independent
 in-flight slots, reuse after slot retirement, and effect disposal/recreation on
-target rebuild. Depth-writing and stencil-writing additive materials must remain
-on the host, retaining their state and position among captured lights; read-only
-stencil operations and alpha-weighted additive blends remain eligible.
+target rebuild. Depth-writing and stencil-writing additive materials must still
+enter Experiment with their original depth/stencil state. The recording boundary
+uses adapted draw copies and the framebuffer's shared depth/stencil attachment:
+light depth writes must occlude later shell and light fragments, and stencil pass,
+fail and depth-fail writes must affect later tests across runs and slices, even
+when the writing fragment produces no color. Native and Experiment sequences are
+compared against expected visibility; read-only and alpha-weighted additive blends
+remain eligible.
 
 Also links the HDR diagnostic formatter and bounded text recorder. Checks inactive
 and stopped logging, concurrent recording, baseline retention, explicit truncation,

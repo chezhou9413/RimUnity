@@ -58,22 +58,25 @@ namespace Brutal.VulkanApi
     public struct VkMemoryBarrier { } public struct VkBufferMemoryBarrier { }
     public sealed class CommandBuffer(DeviceEx device)
     {
-        internal RenderTexture Destination;
+        internal RenderTexture Destination, DepthDestination;
         internal object BoundOwner;
         internal int Clears;
         internal readonly List<VkFramebuffer> CompositeFramebuffers = new();
         internal readonly List<FinalDrawItem> DrawOrder = new();
+        internal readonly List<FinalDrawItem> VisibleDraws = new();
         internal readonly List<MeshBatchRenderer> DrawOwners = new();
         internal readonly List<PostEffectPass> CompositeEffects = new();
         internal readonly List<VkImageMemoryBarrier> ImageBarriers = new();
         public unsafe void BeginRenderPass(in VkRenderPassBeginInfo begin, VkSubpassContents contents)
         {
             Destination = RenderTexture.Views[device.Views[begin.Framebuffer]];
+            DepthDestination = device.DepthViews.TryGetValue(begin.Framebuffer, out var depthView) ? RenderTexture.Views[depthView] : null;
             device.Referenced.Add(begin.Framebuffer);
             if (device.Loads[begin.RenderPass] == VkAttachmentLoadOp.Clear)
             {
                 if (begin.ClearValueCount == 0) throw new InvalidOperationException("Clear attachment reopened without clear values");
                 Destination.Value = 0; Clears++;
+                if (DepthDestination != null) { DepthDestination.DepthValue = 0; DepthDestination.StencilValue = 0; }
             }
             if (device.CompositePasses.Contains(begin.RenderPass)) CompositeFramebuffers.Add(begin.Framebuffer);
         }
@@ -91,6 +94,7 @@ namespace Brutal.VulkanApi.Abstractions
         private int serial;
         public object VkAllocator => null;
         internal readonly Dictionary<VkFramebuffer, VkImageView> Views = new();
+        internal readonly Dictionary<VkFramebuffer, VkImageView> DepthViews = new();
         internal readonly Dictionary<VkRenderPass, VkAttachmentLoadOp> Loads = new();
         internal readonly HashSet<VkRenderPass> CompositePasses = new();
         internal readonly List<VkAttachmentDescription> DepthAttachments = new();
@@ -98,8 +102,12 @@ namespace Brutal.VulkanApi.Abstractions
         internal readonly HashSet<(PostEffectPass Effect, int Slot)> ReferencedDescriptorPools = new();
         internal readonly HashSet<PostEffectPass> CreatedEffects = new(), DisposedEffects = new();
         internal VkRenderPass Pass(VkAttachmentLoadOp load) { var pass = new VkRenderPass(++serial); Loads.Add(pass, load); return pass; }
-        internal VkFramebuffer Framebuffer(VkImageView view, bool owned = false)
-        { var fb = new VkFramebuffer(++serial); Views.Add(fb, view); if (owned) Created.Add(fb); return fb; }
+        internal VkFramebuffer Framebuffer(VkImageView view, bool owned = false, VkImageView? depthView = null)
+        {
+            var fb = new VkFramebuffer(++serial); Views.Add(fb, view);
+            if (depthView.HasValue) DepthViews.Add(fb, depthView.Value);
+            if (owned) Created.Add(fb); return fb;
+        }
         public unsafe VkRenderPass CreateRenderPass(VkRenderPassCreateInfo info, object allocator)
         {
             var pass = Pass(info.Attachments[0].LoadOp);
@@ -107,7 +115,8 @@ namespace Brutal.VulkanApi.Abstractions
             if (info.AttachmentCount > 1) DepthAttachments.Add(info.Attachments[1]);
             return pass;
         }
-        public unsafe VkFramebuffer CreateFramebuffer(VkFramebufferCreateInfo info, object allocator) => Framebuffer(info.Attachments[0], true);
+        public unsafe VkFramebuffer CreateFramebuffer(VkFramebufferCreateInfo info, object allocator)
+            => Framebuffer(info.Attachments[0], true, info.AttachmentCount > 1 ? info.Attachments[1] : null);
         public void DestroyFramebuffer(VkFramebuffer fb, object allocator)
         {
             if (Referenced.Contains(fb)) throw new InvalidOperationException("Destroyed framebuffer referenced by recorded commands");
@@ -157,6 +166,8 @@ namespace Waylith.Rendering
         public Waylith.Graphics.GpuTextureAllocation Color, Depth;
         public bool HasDepth => Depth != null; public VkExtent2D Extent => new(Width, Height);
         internal float Value;
+        internal float DepthValue;
+        internal int StencilValue;
         public RenderTexture(int width, int height, VkFormat color, string name = null)
         { Width=width; Height=height; ColorFormat=color; Color=new(this); Views.Add(ColorView, this); }
         public void Dispose() { }
@@ -167,15 +178,16 @@ namespace Waylith.Rendering
         {
             var scene = current(ctx.SubmissionFrameIndex);
             return new(ctx.RenderContext, null, ctx.CommandBuffer, ctx.Device.Pass(clear ? VkAttachmentLoadOp.Clear : VkAttachmentLoadOp.Load),
-                ctx.Device.Framebuffer(scene.ColorView), scene.Extent, VkSampleCountFlags._1Bit, scene.ColorFormat, scene.DepthFormat);
+                ctx.Device.Framebuffer(scene.ColorView, depthView: scene.Depth?.ImageView), scene.Extent, VkSampleCountFlags._1Bit, scene.ColorFormat, scene.DepthFormat);
         }
     }
     public enum BlendOp { Add }
     public enum BlendFactor { Zero, One, SrcAlpha }
     public enum StencilOp { Keep, Replace }
     public record struct BlendState(bool Enabled, BlendFactor SrcColor, BlendFactor DstColor, BlendOp ColorOp, BlendFactor SrcAlpha, BlendFactor DstAlpha, BlendOp AlphaOp);
-    public record struct DepthState(bool Write);
-    public record struct StencilState(int WriteMask, StencilOp PassOp, StencilOp FailOp, StencilOp DepthFailOp);
+    public record struct DepthState(bool Test, bool Write);
+    public record struct StencilState(int WriteMask, StencilOp PassOp, StencilOp FailOp, StencilOp DepthFailOp,
+        bool Test = false, int Reference = 0, bool CompareEqual = false, int ReadMask = 255);
     public record struct PipelineState(BlendState Blend, DepthState Depth, StencilState Stencil);
     public sealed class Shader { internal bool Linear; public string Key = "TestShader"; public bool HasErrors; public SceneGrabPoint SceneGrab; }
     public sealed class SceneGrabPoint { public int Queue; }
@@ -190,6 +202,8 @@ namespace Waylith.Rendering
         public int Layer; public bool HasOverride;
         public MaterialBinding Binding = new(); internal float Value; internal bool Multiply, Disposed; internal int DrawCount;
         internal float Alpha = -1;
+        internal float Depth = .5f;
+        internal FinalDrawItem Source;
         public FinalDrawItem(int queue, float value, bool light, bool multiply)
         {
             RenderQueue=SortKey=queue; Value=value; Multiply=multiply; Binding.Shader.Linear=light;
@@ -218,9 +232,25 @@ namespace Waylith.Rendering
             foreach (var draw in frame.Draws.Concat(frame.PersistentDraws).OrderBy(d => d.SortKey))
                 if (draw.RenderQueue >= queueMin && draw.RenderQueue < queueMax)
                 {
-                    draw.DrawCount++;
-                    ctx.CommandBuffer.DrawOrder.Add(draw);
+                    var source = draw.Source ?? draw;
+                    source.DrawCount++;
+                    ctx.CommandBuffer.DrawOrder.Add(source);
                     ctx.CommandBuffer.DrawOwners.Add(this);
+                    var state = draw.Binding.PipelineState;
+                    var depth = ctx.CommandBuffer.DepthDestination;
+                    var stencil = state.Stencil;
+                    bool stencilPass = depth == null || !stencil.Test || !stencil.CompareEqual
+                        || (depth.StencilValue & stencil.ReadMask) == (stencil.Reference & stencil.ReadMask);
+                    bool depthPass = depth == null || !state.Depth.Test || draw.Depth >= depth.DepthValue;
+                    if (depth != null && stencil.Test)
+                    {
+                        var op = !stencilPass ? stencil.FailOp : !depthPass ? stencil.DepthFailOp : stencil.PassOp;
+                        if (op == StencilOp.Replace)
+                            depth.StencilValue = (depth.StencilValue & ~stencil.WriteMask) | (stencil.Reference & stencil.WriteMask);
+                    }
+                    if (!stencilPass || !depthPass) continue;
+                    if (depth != null && state.Depth.Test && state.Depth.Write) depth.DepthValue = draw.Depth;
+                    ctx.CommandBuffer.VisibleDraws.Add(source);
                     if (draw.Multiply) ctx.CommandBuffer.Destination.Value *= draw.Value;
                     else if (draw.Alpha >= 0) ctx.CommandBuffer.Destination.Value = draw.Value * draw.Alpha + ctx.CommandBuffer.Destination.Value * (1 - draw.Alpha);
                     else if (draw.Binding.Shader.Linear) ctx.CommandBuffer.Destination.Value += draw.Value;
@@ -319,8 +349,17 @@ namespace RimUnity.Rendering
         internal HdrDrawFrame(MeshDrawFrame source, bool lightBuffer=false)
         {
             Frame=Shell(source,MeshDrawFrame.RentList(),MeshDrawFrame.RentList());
-            Frame.Draws.AddRange(source.Draws.Concat(source.PersistentDraws).Where(HdrLightBlend.ShouldCapture).OrderBy(d => d.SortKey));
-            foreach (var draw in Frame.Draws) LightDraws.Add(draw, draw);
+            foreach (var draw in source.Draws.Concat(source.PersistentDraws).Where(HdrLightBlend.ShouldCapture).OrderBy(d => d.SortKey))
+            {
+                HdrLightBlend.TryAdapt(draw.Binding.PipelineState, out var state);
+                var copy = new FinalDrawItem(draw.RenderQueue, draw.Value, draw.Binding.Shader.Linear, draw.Multiply)
+                {
+                    Source = draw, SortKey = draw.SortKey, PassId = draw.PassId, Layer = draw.Layer,
+                    Alpha = draw.Alpha, Depth = draw.Depth,
+                    Binding = new MaterialBinding { Shader = draw.Binding.Shader, PipelineState = state }
+                };
+                Frame.Draws.Add(copy); LightDraws.Add(draw, copy);
+            }
         }
         internal static MeshDrawFrame Shell(MeshDrawFrame source, List<FinalDrawItem> draws, List<FinalDrawItem> persistent)
             => new(source.FrameNumber) { Draws=draws, PersistentDraws=persistent, BackgroundColor=source.BackgroundColor };

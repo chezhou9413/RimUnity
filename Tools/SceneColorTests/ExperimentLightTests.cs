@@ -58,8 +58,8 @@ internal static partial class Program
 
             var depthWriter = additive with { Depth = additive.Depth with { Write = true } };
             args = Args(depthWriter);
-            if ((bool)tryAdapt.Invoke(null, args) || !Equals(args[1], depthWriter))
-                throw new Exception("depth-writing additive blend must stay on the host unchanged");
+            if (!(bool)tryAdapt.Invoke(null, args) || !Equals(((PipelineState)args[1]).Depth, depthWriter.Depth))
+                throw new Exception("depth-writing additive blend must capture with depth state preserved");
             foreach (var stencil in new[]
             {
                 additive.Stencil with { WriteMask = 255, PassOp = StencilOp.Replace },
@@ -69,8 +69,8 @@ internal static partial class Program
             {
                 var stencilWriter = additive with { Stencil = stencil };
                 args = Args(stencilWriter);
-                if ((bool)tryAdapt.Invoke(null, args) || !Equals(args[1], stencilWriter))
-                    throw new Exception("stencil-writing additive blend must stay on the host unchanged");
+                if (!(bool)tryAdapt.Invoke(null, args) || !Equals(((PipelineState)args[1]).Stencil, stencilWriter.Stencil))
+                    throw new Exception("stencil-writing additive blend must capture with stencil state preserved");
             }
 
             var coverage = new PipelineState(BlendState.Alpha, new DepthState(true, true), FaceCull.None);

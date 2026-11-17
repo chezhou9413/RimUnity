@@ -2,7 +2,7 @@ using Waylith.Rendering;
 
 namespace RimUnity.Rendering;
 
-//只接管无深度/模板写入副作用的加法材质；其余沿用宿主绘制。
+//加法线性材质进入光缓冲；深度/模板状态沿用原材质。
 internal static class HdrLightBlend
 {
     internal static bool ShouldCapture(FinalDrawItem draw)
@@ -21,12 +21,9 @@ internal static class HdrLightBlend
         if (!blend.Enabled || blend.ColorOp != BlendOp.Add) return false;
         if (blend.DstColor != BlendFactor.One || blend.SrcColor is not (BlendFactor.One or BlendFactor.SrcAlpha))
             return false;
-        //Captured draws replace the host draw, unlike Bloom's extra light pass.
-        //Dropping depth/stencil writes would change later draws' visibility.
-        var stencil = state.Stencil;
-        if (state.Depth.Write || (stencil.WriteMask != 0 &&
-            (stencil.PassOp != StencilOp.Keep || stencil.FailOp != StencilOp.Keep || stencil.DepthFailOp != StencilOp.Keep)))
-            return false;
+        //The light pass shares the host depth/stencil attachment and replaces the
+        //original draw in order. Preserve its writes instead of disabling capture
+        //for ZWrite materials (ShaderLab's default), or dropping those writes.
         var additive = blend with { SrcAlpha = BlendFactor.Zero, DstAlpha = BlendFactor.One, AlphaOp = BlendOp.Add };
         adapted = state with { Blend = additive };
         return true;
