@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using Verse;
 using static RimUnity.Settings.InspectorLayout;
@@ -12,10 +13,21 @@ public sealed partial class BloomSettings
     internal void DrawContent(Listing_Standard list)
     {
         list.Label(L("地图渲染", "Map rendering"));
-        string hdrLabel = L("启用地图 HDR 接管", "Enable map HDR rendering");
-        Widgets.CheckboxLabeled(list.GetRect(Height(hdrLabel, list.ColumnWidth)), hdrLabel, ref mapHdrEnabled);
-        list.Label(L("默认关闭。关闭时沿用原版地图绘制，Bloom 仍可独立生效。启用后使用线性 HDR 混合，可能改变透明特效的亮度与叠加效果。切换从下一帧生效。",
-            "Off by default. Use native map rendering while keeping independent Bloom. Enabling this uses linear HDR blending and may change the brightness and blending of transparent effects. Changes apply from the next frame."));
+        string modeLabel = L("地图 HDR 模式", "Map HDR mode");
+        var modeRow = list.GetRect(Height(modeLabel, list.ColumnWidth * .45f));
+        Widgets.Label(modeRow.LeftHalf(), modeLabel);
+        string current = ModeLabel(mapHdrMode);
+        if (Widgets.ButtonText(modeRow.RightHalf(), current))
+        {
+            var options = new List<FloatMenuOption>
+            {
+                new(ModeLabel(MapHdrMode.None), () => mapHdrMode = MapHdrMode.None),
+                new(ModeLabel(MapHdrMode.Legacy), () => mapHdrMode = MapHdrMode.Legacy),
+                new(ModeLabel(MapHdrMode.Experiment), () => mapHdrMode = MapHdrMode.Experiment),
+            };
+            Find.WindowStack.Add(new FloatMenu(options));
+        }
+        list.Label(ModeHelp(mapHdrMode));
         list.Gap(8);
         list.Label(L("Bloom 泛光", "Bloom"));
         list.Label(L("让明亮特效向周围扩散光晕。参数同时影响手动层和模组接管的层。", "Spread a glow around bright effects. Parameters affect both manual and mod-controlled layers."));
@@ -67,6 +79,23 @@ public sealed partial class BloomSettings
             }
         }
     }
+
+    private static string ModeLabel(MapHdrMode mode) => mode switch
+    {
+        MapHdrMode.Legacy => L("Legacy", "Legacy"),
+        MapHdrMode.Experiment => L("Experiment", "Experiment"),
+        _ => L("无", "None"),
+    };
+
+    private static string ModeHelp(MapHdrMode mode) => mode switch
+    {
+        MapHdrMode.Legacy => L("整幅场景线性混合。部分旧显卡驱动可能出现整屏发白；切换从下一帧生效。",
+            "Full-scene linear blending. Some older GPU drivers may wash out the whole screen. Changes apply from the next frame."),
+        MapHdrMode.Experiment => L("只有特效走线性光缓冲，原生场景保持原版绘制。出错时通常只影响特效像素；切换从下一帧生效。",
+            "Only effects use a linear light buffer; the native scene keeps host drawing. Failures usually affect effect pixels only. Changes apply from the next frame."),
+        _ => L("使用原版地图绘制。Bloom 仍可独立生效。",
+            "Use native map rendering. Bloom can still run independently."),
+    };
 
     //统一参数行，数值与滑块分别占用足够高度。
     private static void Parameter(Listing_Standard list, string label, ref float value, float min, float max, string explanation)

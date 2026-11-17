@@ -31,8 +31,10 @@ on the current GPU, not proof of every GPU driver, complete game map, occlusion,
 transparent draw ordering or real-game performance.
 
 With the optional fourth argument pointing to a compiled `RimUnity.dll` and the
-fifth to `0Harmony.dll`, the real-runtime tests also check the map HDR setting.
-They submit actual Linear shader draws and verify that capture follows the
-false/true/false sequence while independent Bloom layer selection stays intact.
-New settings and Reset defaults must both leave map HDR disabled. Older supplied
-runtime builds without this setting explicitly skip this regression.
+fifth to `0Harmony.dll`, the real-runtime tests also check `MapHdrMode`.
+They submit actual Linear shader draws and verify that capture follows
+None/Legacy/Experiment/None while independent Bloom layer selection stays intact.
+`HdrLightBlend` classification and Experiment light-composite pixels (additive,
+coverage, empty-light stability) are covered as well. Reset defaults must leave
+map HDR at `None`. Older supplied runtime builds without this setting explicitly
+skip this regression.

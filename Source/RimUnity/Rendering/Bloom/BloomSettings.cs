@@ -2,12 +2,15 @@ using Verse;
 
 namespace RimUnity.Rendering;
 
+//地图 HDR 与 Bloom 独立；None 表示沿用宿主绘制。
+public enum MapHdrMode { None, Legacy, Experiment }
+
 //阈值使用屏幕颜色尺度，模糊与强度计算在线性空间进行；设置只在主线程读取。
 public sealed partial class BloomSettings : ModSettings
 {
     public bool enabled;
     // Map HDR is independent of Bloom; absent settings keys intentionally default off.
-    public bool mapHdrEnabled;
+    public MapHdrMode mapHdrMode;
     public int layerMask;
     public float threshold = .8f, intensity = .6f, softKnee = .5f, scatter = .65f;
     //内容模组在地图生命周期内接管自己的层，不改写玩家保存的手动选择。
@@ -38,7 +41,7 @@ public sealed partial class BloomSettings : ModSettings
     public void ResetDefaults()
     {
         enabled = false;
-        mapHdrEnabled = false;
+        mapHdrMode = MapHdrMode.None;
         layerMask = 0;
         threshold = .8f;
         intensity = .6f;
@@ -49,7 +52,7 @@ public sealed partial class BloomSettings : ModSettings
     public override void ExposeData()
     {
         Scribe_Values.Look(ref enabled, "bloomEnabled", false);
-        Scribe_Values.Look(ref mapHdrEnabled, "mapHdrEnabled", false);
+        Scribe_Values.Look(ref mapHdrMode, "mapHdrMode", MapHdrMode.None);
         Scribe_Values.Look(ref layerMask, "bloomLayerMask", 0);
         Scribe_Values.Look(ref threshold, "bloomThreshold", .8f);
         Scribe_Values.Look(ref intensity, "bloomIntensity", .6f);
@@ -69,7 +72,7 @@ public sealed partial class BloomSettings : ModSettings
     //设置窗口与调试报告共用；不触碰渲染线程状态。
     public string Describe()
         => "manual=" + enabled
-            + "; mapHdr=" + mapHdrEnabled
+            + "; mapHdr=" + mapHdrMode
             + "; layerMask=0x" + layerMask.ToString("X8")
             + "; controlled=0x" + controlledLayers.ToString("X8")
             + "; active=0x" + activeLayers.ToString("X8")

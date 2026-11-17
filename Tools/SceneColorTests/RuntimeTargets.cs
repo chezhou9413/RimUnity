@@ -20,6 +20,7 @@ internal static partial class Program
             const BindingFlags instance = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
             using var fixture = new RuntimeGeometry(app, runtime, scratch);
             CheckMapHdrSetting(runtime, fixture);
+            CheckExperimentBlendAdapt(runtime);
             foreach (var format in SceneFormats)
             {
                 var host = Pattern(format);
@@ -38,7 +39,7 @@ internal static partial class Program
                     using var map = new MeshDrawFrame(number, new CameraView(identity, identity, identity, -1),
                         MeshDrawFrame.RentList(), MeshDrawFrame.RentList(), Vector3.Zero);
                     fixture.Add(map, repeat);
-                    using var snapshot = (IDisposable)Activator.CreateInstance(snapshotType, instance, null, new object[] { map, -1, false }, null);
+                    using var snapshot = (IDisposable)Activator.CreateInstance(snapshotType, instance, null, new object[] { map, -1, false, false }, null);
                     RenderTexture linearResult = null;
                     Submit(ctx => {
                         Call("Begin", ctx, host, number, false);

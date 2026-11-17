@@ -159,24 +159,26 @@ internal sealed class HdrDrawFrame : IDisposable
             // Keep refraction in the normal scene, where the host schedules its grab.
             && (!readOnlyDepth || draw.Binding.Shader.SceneGrab == null);
 
-    internal HdrDrawFrame(MeshDrawFrame source, int mask = -1, bool readOnlyDepth = false)
+    internal HdrDrawFrame(MeshDrawFrame source, int mask = -1, bool readOnlyDepth = false, bool lightBuffer = false)
     {
-        using var cpu = Diagnostics.LabCpuMetrics.Measure(readOnlyDepth
+        using var cpu = Diagnostics.LabCpuMetrics.Measure(readOnlyDepth || lightBuffer
             ? Diagnostics.LabCpuStage.BloomSnapshot : Diagnostics.LabCpuStage.HdrSnapshot);
         ArgumentNullException.ThrowIfNull(source);
-        var trace = new Diagnostics.DpaDiagnostics.HdrCapture(readOnlyDepth,
+        var trace = new Diagnostics.DpaDiagnostics.HdrCapture(readOnlyDepth || lightBuffer,
             System.Runtime.CompilerServices.Unsafe.SizeOf<MaterialUniformBytes>());
         bool complete = false;
         var stage = Diagnostics.DpaDiagnostics.HdrStage.Setup;
         var token = trace.Begin();
         try
         {
-            workspace = RentWorkspace(readOnlyDepth);
+            workspace = RentWorkspace(readOnlyDepth || lightBuffer);
             Frame = Shell(source, MeshDrawFrame.RentList(), MeshDrawFrame.RentList());
             trace.DynamicInput = source.Draws.Count; trace.PersistentInput = source.PersistentDraws.Count;
             trace.End(stage, token); stage = Diagnostics.DpaDiagnostics.HdrStage.FilterDynamic; token = trace.Begin();
             var dynamic = workspace.Dynamic;
-            foreach (var item in source.Draws) if (ShouldCapture(item, mask, readOnlyDepth)) dynamic.Add(item);
+            foreach (var item in source.Draws)
+                if (lightBuffer ? HdrLightBlend.ShouldCapture(item) : ShouldCapture(item, mask, readOnlyDepth))
+                    dynamic.Add(item);
             trace.End(stage, token); stage = Diagnostics.DpaDiagnostics.HdrStage.SortDynamic; token = trace.Begin();
             dynamic.Sort((a, b) => a.SortKey.CompareTo(b.SortKey));
             trace.End(stage, token); stage = Diagnostics.DpaDiagnostics.HdrStage.MergeAndLookup; token = trace.Begin();
@@ -186,7 +188,8 @@ internal sealed class HdrDrawFrame : IDisposable
             //与宿主合并顺序一致：键相等时先画持久绘制项。
             while (p < persistent.Count || d < dynamic.Count)
             {
-                if (p < persistent.Count && !ShouldCapture(persistent[p], mask, readOnlyDepth)) { p++; continue; }
+                if (p < persistent.Count && !(lightBuffer ? HdrLightBlend.ShouldCapture(persistent[p])
+                    : ShouldCapture(persistent[p], mask, readOnlyDepth))) { p++; continue; }
                 var item = p < persistent.Count && (d == dynamic.Count || persistent[p].SortKey.CompareTo(dynamic[d].SortKey) <= 0)
                     ? persistent[p++] : dynamic[d++];
                 var original = item.Binding;
@@ -198,7 +201,13 @@ internal sealed class HdrDrawFrame : IDisposable
                     bool linear = LinearShaderVariants.TryGet(original.Shader, out var shader);
                     if (!linear) shader = original.Shader;
                     var state = original.PipelineState;
-                    if (readOnlyDepth) state = state with { Depth = state.Depth with { Write = false },
+                    if (lightBuffer)
+                    {
+                        if (!HdrLightBlend.TryAdapt(state, out state))
+                            throw new InvalidOperationException("Light-buffer capture requires an adaptable blend.");
+                        linear = true;
+                    }
+                    else if (readOnlyDepth) state = state with { Depth = state.Depth with { Write = false },
                         Stencil = state.Stencil with { WriteMask = 0, PassOp = StencilOp.Keep, FailOp = StencilOp.Keep, DepthFailOp = StencilOp.Keep } };
                     var variant = original.ShaderVariant;
                     var key = new ShaderVariantKey(shader, variant.DynamicKeywordKeyId, variant.DynamicKeywordKey,
@@ -218,7 +227,7 @@ internal sealed class HdrDrawFrame : IDisposable
                 workspace.Linear.Add(captured.Linear ? (byte)1 : (byte)0); trace.Commands++;
                 trace.End(stage, token); stage = Diagnostics.DpaDiagnostics.HdrStage.MergeAndLookup; token = trace.Begin();
             }
-            Diagnostics.LabCpuMetrics.RecordSnapshot(readOnlyDepth, Frame.Draws.Count, mask);
+            Diagnostics.LabCpuMetrics.RecordSnapshot(readOnlyDepth || lightBuffer, Frame.Draws.Count, mask);
             trace.End(stage, token); token = default; complete = true;
         }
         catch { trace.End(stage, token); token = default; Dispose(); throw; }

@@ -10,7 +10,7 @@ Changing a texture through `Material.SetTexture` also updates its color encoding
 
 When calling `SetVector` on a color property, continue to provide values in the exported color convention. This call does not bypass color-space conversion.
 
-Rendering → Enable map HDR rendering is off by default, including when loading settings without this key. While off, maps use native rendering and selected layers can still produce Bloom through a separate floating-point light buffer. When enabled, map materials exported from Linear projects use linear HDR blending, preserving brightness above 1 until final composition. Changes apply at the next map-frame capture; no restart or resource re-export is needed. Map HDR and Bloom are independent, and explicitly enabled offscreen previews are unaffected by this map-only setting.
+Rendering → Map HDR mode defaults to None. Choose Legacy (full-scene linear blending) or Experiment (effects-only linear light buffer). Missing settings keys also stay off. While off, maps use native rendering and selected layers can still produce Bloom through a separate floating-point light buffer. Mode changes apply at the next map-frame capture; no restart or resource re-export is needed. Map HDR and Bloom are independent, and explicitly enabled offscreen previews are unaffected by this map-only setting. See the Chinese SceneColorContract.md for the detailed color contract.
 
 Map rendering retains material queues, depth tests and stencil tests. When draws are interleaved with native Gamma materials, the runtime converts color spaces between consecutive drawing segments. This adds floating-point buffer memory and full-screen drawing overhead, depending on resolution and draw ordering.
 

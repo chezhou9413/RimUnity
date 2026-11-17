@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -17,12 +18,27 @@ internal static class HdrMapHooks
     private static readonly Type MapPassType = AccessTools.TypeByName("RimWorldWaylith.Rendering.MapRenderFeature+MapMainPass")
         ?? throw new TypeLoadException("宿主缺少地图颜色绘制入口。");
     private static readonly ConditionalWeakTable<MeshDrawFrame, HdrDrawFrame> Frames = new();
+    private static readonly ConditionalWeakTable<MeshDrawFrame, HdrLightFrame> LightFrames = new();
     private static readonly ConditionalWeakTable<object, HdrDrawTarget> Targets = new();
+    private static readonly ConditionalWeakTable<object, HdrLightTarget> LightTargets = new();
     private static readonly ConditionalWeakTable<NativeTarget, Output> Outputs = new();
     private sealed record Output(int Frame, NativeTarget Texture);
+    private static readonly FieldInfo MapRendererField = AccessTools.Field(MapPassType, "renderer")
+        ?? throw new MissingFieldException(MapPassType.FullName, "renderer");
+    private sealed class SliceState
+    {
+        internal HdrLightFrame Light;
+        internal NativeTarget Scene;
+        internal int QueueMin, QueueMax;
+        internal List<FinalDrawItem> AfterLights;
+        internal MeshDrawFrame Under;
+        internal PassAttachment LoadAttachment;
+    }
     private static readonly Func<object, int, NativeTarget> Current = MakeCurrent();
+    private static readonly Func<object, PassAttachment> LoadAttachment = MakeLoadAttachment();
     internal static NativeTarget WarmupScene(object targets, int frame) => Current(targets, frame);
     internal static HdrDrawTarget WarmupTarget(object owner) => Targets.GetValue(owner, _ => new HdrDrawTarget("RimUnity.HdrMap"));
+    internal static HdrLightTarget WarmupLightTarget(object owner) => LightTargets.GetValue(owner, _ => new HdrLightTarget("RimUnity.HdrLight"));
 
     //主场景和后处理共用同一个目标身份，帧号防止菜单或空帧取到旧画面。
     internal static NativeTarget LinearScene(NativeTarget scene, int frame)
@@ -36,6 +52,14 @@ internal static class HdrMapHooks
             Expression.Call(Expression.Convert(target, type), AccessTools.Method(type, "Current"), frame), target, frame).Compile();
     }
 
+    private static Func<object, PassAttachment> MakeLoadAttachment()
+    {
+        var type = AccessTools.TypeByName("RimWorldWaylith.Rendering.SceneColorTargets");
+        var target = Expression.Parameter(typeof(object));
+        return Expression.Lambda<Func<object, PassAttachment>>(
+            Expression.Property(Expression.Convert(target, type), "LoadAttachment"), target).Compile();
+    }
+
     [HarmonyPatch]
     private static class Capture
     {
@@ -43,13 +67,20 @@ internal static class HdrMapHooks
         private static void Postfix(object __result)
         {
             if (__result is not MeshDrawFrame frame) return;
+            // BackdropAttachment 路径未接管；保留宿主原样绘制。
+            if (frame.PreserveSceneColor) return;
             HdrDrawFrame snapshot = null;
+            HdrLightFrame light = null;
+            var mode = RimUnityMod.Bloom?.mapHdrMode ?? MapHdrMode.None;
             // Capture on the main thread: toggles affect new frames only. Existing
             // snapshots retire normally; independent Bloom capture is not gated here.
-            if (RimUnityMod.Bloom?.mapHdrEnabled == true && HdrDrawFrame.Needed(frame))
+            if (mode == MapHdrMode.Legacy && HdrDrawFrame.Needed(frame))
             { snapshot = new HdrDrawFrame(frame); Frames.Add(frame, snapshot); }
-            if (Diagnostics.RenderDebugReport.Collecting) Diagnostics.RenderDebugReport.Frame(frame, snapshot != null);
-            Diagnostics.ParticleDebugWindow.CaptureFinalFrame(frame, snapshot?.Frame);
+            else if (mode == MapHdrMode.Experiment && HdrLightFrame.Needed(frame))
+            { light = new HdrLightFrame(frame); LightFrames.Add(frame, light); }
+            if (Diagnostics.RenderDebugReport.Collecting)
+                Diagnostics.RenderDebugReport.Frame(frame, snapshot != null || light != null);
+            Diagnostics.ParticleDebugWindow.CaptureFinalFrame(frame, snapshot?.Frame ?? light?.Lights.Frame);
         }
     }
 
@@ -58,8 +89,10 @@ internal static class HdrMapHooks
     {
         private static void Prefix(MeshDrawFrame __instance)
         {
-            if (!Frames.TryGetValue(__instance, out var snapshot)) return;
-            Frames.Remove(__instance); snapshot.Dispose();
+            if (Frames.TryGetValue(__instance, out var snapshot))
+            { Frames.Remove(__instance); snapshot.Dispose(); }
+            if (LightFrames.TryGetValue(__instance, out var light))
+            { LightFrames.Remove(__instance); light.Dispose(); }
         }
     }
 
@@ -68,23 +101,80 @@ internal static class HdrMapHooks
     {
         private static MethodBase TargetMethod() => AccessTools.Method(MapPassType, "RecordSlice");
         private static bool Prefix(object __instance, object ___sceneTargets, in FrameContext ctx,
-            MeshDrawFrame meshFrame, PassAttachment attachment, bool clear, int queueMin, int queueMax)
+            ref MeshDrawFrame meshFrame, PassAttachment attachment, bool clear, int queueMin, int queueMax,
+            ref SliceState __state)
         {
-            bool hdr = Frames.TryGetValue(meshFrame, out var snapshot);
-            if (Diagnostics.RenderDebugReport.Collecting) Diagnostics.RenderDebugReport.Stage("MapSlice", "frame=" + meshFrame.FrameNumber + "; slot=" + ctx.SubmissionFrameIndex + "; format=" + ctx.ColorFormat + "; depth=" + ctx.DepthFormat + "; samples=" + ctx.SampleCount + "; HDR=" + hdr + "; clear=" + clear + "; queue=" + queueMin + ".." + queueMax);
-            if (!hdr) return true;
-            var scene = Current(___sceneTargets, ctx.SubmissionFrameIndex);
-            var target = Targets.GetValue(__instance, _ => new HdrDrawTarget("RimUnity.HdrMap"));
-            if (clear)
+            bool legacy = Frames.TryGetValue(meshFrame, out var snapshot);
+            bool experiment = LightFrames.TryGetValue(meshFrame, out var light);
+            if (Diagnostics.RenderDebugReport.Collecting) Diagnostics.RenderDebugReport.Stage("MapSlice", "frame=" + meshFrame.FrameNumber + "; slot=" + ctx.SubmissionFrameIndex + "; format=" + ctx.ColorFormat + "; depth=" + ctx.DepthFormat + "; samples=" + ctx.SampleCount + "; HDR=" + (legacy ? "Legacy" : experiment ? "Experiment" : "off") + "; clear=" + clear + "; queue=" + queueMin + ".." + queueMax);
+            if (meshFrame.PreserveSceneColor) return true;
+            if (legacy)
             {
-                ClearScene(in ctx, meshFrame, attachment);
-                target.Begin(in ctx, scene, meshFrame.FrameNumber, false);
-                target.BindDepth(in ctx, scene);
+                var scene = Current(___sceneTargets, ctx.SubmissionFrameIndex);
+                var target = Targets.GetValue(__instance, _ => new HdrDrawTarget("RimUnity.HdrMap"));
+                if (clear)
+                {
+                    ClearScene(in ctx, meshFrame, attachment);
+                    target.Begin(in ctx, scene, meshFrame.FrameNumber, false);
+                    target.BindDepth(in ctx, scene);
+                }
+                target.Record(in ctx, scene, snapshot, queueMin, queueMax);
+                target.WriteScene(in ctx, scene, meshFrame.FrameNumber);
+                Outputs.AddOrUpdate(scene, new Output(meshFrame.FrameNumber, target.Result));
+                return false;
             }
-            target.Record(in ctx, scene, snapshot, queueMin, queueMax);
-            target.WriteScene(in ctx, scene, meshFrame.FrameNumber);
-            Outputs.AddOrUpdate(scene, new Output(meshFrame.FrameNumber, target.Result));
-            return false;
+            if (!experiment) return true;
+            //补画必须保留颜色和深度；宿主尚未提供 Load 附件时沿用完整原生帧。
+            var loadAttachment = LoadAttachment(___sceneTargets);
+            if (loadAttachment == null) return true;
+            var before = new List<FinalDrawItem>();
+            var after = new List<FinalDrawItem>();
+            light.Partition(queueMin, queueMax, before, after);
+            //先画光之前的外壳；夜晚等上层外壳留给 Postfix，避免遮罩画两次导致极暗。
+            var under = HdrDrawFrame.Shell(light.Shell, MeshDrawFrame.RentList(), MeshDrawFrame.RentList());
+            foreach (var draw in before) under.PersistentDraws.Add(draw);
+            __state = new SliceState
+            {
+                Light = light,
+                Scene = Current(___sceneTargets, ctx.SubmissionFrameIndex),
+                QueueMin = queueMin,
+                QueueMax = queueMax,
+                AfterLights = after,
+                Under = under,
+                LoadAttachment = loadAttachment
+            };
+            meshFrame = under;
+            //空 under 不能交给宿主 RecordPass：会把 MeshBatchRenderer 标成 sceneReady=false，整帧不再画。
+            if (before.Count == 0)
+            {
+                if (clear) ClearScene(in ctx, light.Shell, attachment);
+                return false;
+            }
+            return true;
+        }
+
+        private static void Postfix(object __instance, in FrameContext ctx, SliceState __state)
+        {
+            if (__state?.Light == null || __state.Scene == null) return;
+            try
+            {
+                var target = LightTargets.GetValue(__instance, _ => new HdrLightTarget("RimUnity.HdrLight"));
+                var hostRenderer = (MeshBatchRenderer)MapRendererField.GetValue(__instance);
+                byte hostPassId = (byte)AccessTools.Property(MapPassType, "PassId").GetValue(__instance);
+                try { target.RecordLights(in ctx, __state.Scene, __state.Light, __state.QueueMin, __state.QueueMax); }
+                //光缓冲和全屏合成共享命令缓冲；即使本段无需补画，也要让下段重新绑定宿主状态。
+                finally { hostRenderer.InvalidateCommandBufferBindings(); }
+                target.DrawShellItems(in ctx, __state.LoadAttachment, hostRenderer, hostPassId, __state.Light.Shell, __state.AfterLights);
+            }
+            finally
+            {
+                if (__state.Under != null)
+                {
+                    __state.Under.PersistentDraws.Clear();
+                    __state.Under.Dispose();
+                    __state.Under = null;
+                }
+            }
         }
     }
 
@@ -111,8 +201,9 @@ internal static class HdrMapHooks
         private static MethodBase TargetMethod() => AccessTools.Method(MapPassType, "OnRenderTargetRebuilt");
         private static void Prefix(object __instance, IRenderTarget __0)
         {
-            if (__0 is IRenderContext context && Targets.TryGetValue(__instance, out var target))
-                target.RebuildTargets(context);
+            if (__0 is not IRenderContext context) return;
+            if (Targets.TryGetValue(__instance, out var target)) target.RebuildTargets(context);
+            if (LightTargets.TryGetValue(__instance, out var light)) light.RebuildTargets(context);
         }
     }
     [HarmonyPatch]
@@ -124,7 +215,9 @@ internal static class HdrMapHooks
     //地图绘制通道退出时释放其渲染器和附件。
     private static void Release(object owner)
     {
-        if (!Targets.TryGetValue(owner, out var target)) return;
-        target.Dispose(); Targets.Remove(owner);
+        if (Targets.TryGetValue(owner, out var target))
+        { target.Dispose(); Targets.Remove(owner); }
+        if (LightTargets.TryGetValue(owner, out var light))
+        { light.Dispose(); LightTargets.Remove(owner); }
     }
 }

@@ -6,7 +6,7 @@ namespace RimUnity.Rendering;
 //颜色转换与网格绘制之间显式建立读写依赖，深度和模板保持地图原有内容。
 internal sealed unsafe partial class HdrDrawTarget
 {
-    private static VkRenderPass CreatePass(DeviceEx device, VkFormat depthFormat)
+    internal static VkRenderPass CreatePass(DeviceEx device, VkFormat depthFormat)
     {
         bool depth = depthFormat != VkFormat.Undefined;
         VkAttachmentDescription* attachments = stackalloc VkAttachmentDescription[2];

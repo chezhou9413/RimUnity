@@ -27,18 +27,27 @@ internal sealed partial class LoadingWarmupFeature
                 ?? throw new InvalidOperationException("地图颜色附件尚未准备。");
             var sceneContext = attachment.MakeFrameContext(in ctx);
             var scene = HdrMapHooks.WarmupScene(sceneTargets, ctx.SubmissionFrameIndex);
-            var hdr = HdrMapHooks.WarmupTarget(main).PrepareWarmup(in ctx, scene);
-            var targets = new List<(MeshBatchRenderer renderer, VkRenderPass pass, VkSampleCountFlags samples, bool linear, bool readOnly)> {
-                ((MeshBatchRenderer)RequiredField(main, "renderer"), sceneContext.RenderPass, sceneContext.SampleCount, false, false),
-                (hdr.renderer, hdr.pass, VkSampleCountFlags._1Bit, true, false)
+            var mode = RimUnityMod.Bloom?.mapHdrMode ?? MapHdrMode.None;
+            var targets = new List<(MeshBatchRenderer renderer, VkRenderPass pass, VkSampleCountFlags samples, bool linear, bool readOnly, bool light)> {
+                ((MeshBatchRenderer)RequiredField(main, "renderer"), sceneContext.RenderPass, sceneContext.SampleCount, false, false, false)
             };
+            if (mode == MapHdrMode.Legacy)
+            {
+                var hdr = HdrMapHooks.WarmupTarget(main).PrepareWarmup(in ctx, scene);
+                targets.Add((hdr.renderer, hdr.pass, VkSampleCountFlags._1Bit, true, false, false));
+            }
+            else if (mode == MapHdrMode.Experiment)
+            {
+                var light = HdrMapHooks.WarmupLightTarget(main).PrepareWarmup(in ctx, scene);
+                targets.Add((light.renderer, light.pass, VkSampleCountFlags._1Bit, true, true, true));
+            }
             if (bloom && Composite() is { } composite)
             {
                 var pipeline = BloomHooks.Get(composite);
                 if (pipeline != null)
                 {
                     var layers = pipeline.PrepareWarmup(in ctx, scene);
-                    targets.Add((layers.renderer, layers.pass, VkSampleCountFlags._1Bit, true, true));
+                    targets.Add((layers.renderer, layers.pass, VkSampleCountFlags._1Bit, true, true, false));
                 }
             }
             foreach (var target in targets)
@@ -50,7 +59,11 @@ internal sealed partial class LoadingWarmupFeature
                     if (target.linear && LinearShaderVariants.TryGet(original, out var linear)) shader = linear;
                     if (!visited.Add(shader.Id) || shader.HasErrors) continue;
                     var state = shader.PipelineState;
-                    if (target.readOnly) state = state with { Depth = state.Depth with { Write = false },
+                    if (target.light)
+                    {
+                        if (!HdrLightBlend.TryAdapt(state, out state)) continue;
+                    }
+                    else if (target.readOnly) state = state with { Depth = state.Depth with { Write = false },
                         Stencil = state.Stencil with { WriteMask = 0, PassOp = StencilOp.Keep, FailOp = StencilOp.Keep, DepthFailOp = StencilOp.Keep } };
                     var variant = new ShaderVariantKey(shader, ShaderKeywordIdMaker.GetOrCreateId(keywords), keywords, shader.UseTexture);
                     var binding = new MaterialBinding(0, 0, 0, "RimUnity.Warmup." + shader.Key, shader, shader.MaterialLayout,

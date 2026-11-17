@@ -53,6 +53,7 @@ internal static partial class Program
         runner.CheckTransferSequences();
         runner.CheckFrameSlots();
         runner.CheckMapColorChains();
+        runner.CheckExperimentLightComposite();
         runner.CheckRuntimeTargets();
         runner.CheckFormats();
         Console.WriteLine($"PASS {checks} real Vulkan pixel checks; hidden window, no game/save loaded.");

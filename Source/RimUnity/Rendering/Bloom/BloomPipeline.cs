@@ -13,7 +13,7 @@ namespace RimUnity.Rendering;
 internal sealed class BloomPipeline : IDisposable
 {
     private const int Levels = 5;
-    private static readonly string[] ShaderNames = { "BloomPrefilter", "BloomDown", "BloomUp", "BloomComposite", "HdrComposite", "HdrTransfer" };
+    private static readonly string[] ShaderNames = { "BloomPrefilter", "BloomDown", "BloomUp", "BloomComposite", "HdrComposite", "HdrTransfer", "HdrLightComposite" };
     private readonly CompositePass scene;
     private readonly PostEffectPass[] down = new PostEffectPass[Levels], up = new PostEffectPass[Levels - 1];
     private readonly PostEffectPass combine, hdrCombine;
