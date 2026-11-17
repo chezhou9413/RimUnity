@@ -23,7 +23,10 @@ internal sealed unsafe class HdrLightTarget : IDisposable
     //同帧的多个切片可引用同一附件；已记录的 framebuffer 保留到安全的目标重建阶段。
     private Dictionary<VkImageView, VkFramebuffer>[] compositeFramebuffers;
     private GpuTextureAllocation[] boundDepth;
-    private CompositeInline composite;
+    //RecordInline resets its descriptor pool. Each run needs a different instance
+    //until this frame slot retires; instances are reused at the next frame number.
+    private readonly List<CompositeInline> composites = new();
+    private int[] compositeFrames, compositeCounts;
     private int sceneWidth, sceneHeight;
     private VkFormat sceneColor, sceneDepth;
 
@@ -56,7 +59,7 @@ internal sealed unsafe class HdrLightTarget : IDisposable
         SnapshotScene(ctx.CommandBuffer, scene, snapshots[slot]);
         HdrSceneCopy.Clear(ctx.CommandBuffer, lights[slot]);
         DrawLights(in ctx, scene, frame, draws);
-        Composite(in ctx, scene, slot);
+        Composite(in ctx, scene, slot, frame.FrameNumber);
         Diagnostics.RenderDebugReport.HdrLightPass("completed", frame.FrameNumber, in ctx, scene, lights[slot], snapshots[slot], draws.Count);
     }
 
@@ -128,9 +131,18 @@ internal sealed unsafe class HdrLightTarget : IDisposable
         }
     }
 
-    private void Composite(in FrameContext ctx, NativeTarget scene, int slot)
+    private void Composite(in FrameContext ctx, NativeTarget scene, int slot, int frameNumber)
     {
         EnsureComposite(in ctx, scene);
+        if (compositeFrames[slot] != frameNumber)
+        {
+            compositeFrames[slot] = frameNumber;
+            compositeCounts[slot] = 0;
+        }
+        int index = compositeCounts[slot];
+        if (index == composites.Count) composites.Add(new CompositeInline(name + ".Composite." + index));
+        var composite = composites[index];
+        compositeCounts[slot]++;
         var begin = new VkRenderPassBeginInfo
         {
             RenderPass = compositePass, Framebuffer = BindCompositeFramebuffer(slot, scene), RenderArea = new VkRect2D(scene.Extent)
@@ -150,9 +162,10 @@ internal sealed unsafe class HdrLightTarget : IDisposable
     {
         if (!compositePass.IsNull()) return;
         device = ctx.Device;
-        composite ??= new CompositeInline(name + ".Composite");
         compositePass = CreateCompositePass(device, scene.ColorFormat);
         compositeFramebuffers = new Dictionary<VkImageView, VkFramebuffer>[ctx.RenderContext.FramesInFlight];
+        compositeFrames = new int[compositeFramebuffers.Length];
+        compositeCounts = new int[compositeFramebuffers.Length];
         for (int i = 0; i < compositeFramebuffers.Length; i++)
             compositeFramebuffers[i] = new();
     }
@@ -283,7 +296,9 @@ internal sealed unsafe class HdrLightTarget : IDisposable
 
     private void ReleaseTargets()
     {
-        composite?.Dispose(); composite = null;
+        foreach (var composite in composites) composite.Dispose();
+        composites.Clear();
+        compositeFrames = null; compositeCounts = null;
         if (lightFramebuffers != null)
             foreach (var framebuffer in lightFramebuffers)
                 if (!framebuffer.IsNull()) device.DestroyFramebuffer(framebuffer, device.VkAllocator);

@@ -20,6 +20,7 @@ internal static class Program
     {
         NightOverlay(); TrailDoesNotDimWall(); InterleavedLayers(); EqualKeysKeepHostOrder(); LightFirst();
         NextSliceAfterEmptyTail(); MultipleLightsAndSlots(); MissingLoadAttachment(); BorrowedDrawCleanup();
+        CompositeDescriptorLifetime(); WriteSideEffectsStayNative();
         HostDepthLayout();
         TraceChecks();
         Console.WriteLine($"PASS {checks} HDR light lifecycle checks (recording boundary; no GPU/game).");
@@ -292,6 +293,98 @@ internal static class Program
         target.RecordLights(f.Ctx, f.Scenes.Current(1), light.Lights.Frame, lightRun);
         Check(ctx.Device.Created.Count > created, "rendering recreates targets after rebuild");
         ctx.Device.FinishRecording();
+    }
+
+    private static void CompositeDescriptorLifetime()
+    {
+        using var f = new Fixture();
+        f.Add(2000, .1f, light: true);
+        using var light = new HdrLightFrame(f.Frame);
+        var target = HdrMapHooks.WarmupLightTarget(f.Pass);
+        var ctx = f.Ctx;
+        for (int i = 0; i < 3; i++) target.RecordLights(ctx, f.Scenes.Current(0), light.Lights.Frame, light.Lights.Frame.Draws);
+        var first = ctx.CommandBuffer.CompositeEffects.ToArray();
+        Check(first.Length == 3 && first.Distinct().Count() == 3,
+            "each recorded light run retains an independent descriptor pool");
+
+        // The same effect can use another slot's pool while slot zero is in flight.
+        f.Context.SubmissionFrameIndex = 1;
+        light.Lights.Frame.FrameNumber = 2;
+        var secondSlot = f.Ctx;
+        target.RecordLights(secondSlot, f.Scenes.Current(1), light.Lights.Frame, light.Lights.Frame.Draws);
+        Check(ReferenceEquals(secondSlot.CommandBuffer.CompositeEffects.Single(), first[0]) && ctx.Device.CreatedEffects.Count == 3,
+            "different frame slots reuse effects without resetting an in-flight slot's pool");
+
+        // Returning to an earlier slot must retain its own cursor across slices.
+        f.Context.SubmissionFrameIndex = 0;
+        light.Lights.Frame.FrameNumber = 1;
+        target.RecordLights(ctx, f.Scenes.Current(0), light.Lights.Frame, light.Lights.Frame.Draws);
+        Check(ctx.CommandBuffer.CompositeEffects.Distinct().Count() == 4,
+            "returning to a slot continues its run cursor instead of resetting earlier descriptors");
+
+        ctx.Device.RetireDescriptorSlot(0);
+        light.Lights.Frame.FrameNumber = 3;
+        var nextFrame = f.Ctx;
+        for (int i = 0; i < 3; i++) target.RecordLights(nextFrame, f.Scenes.Current(0), light.Lights.Frame, light.Lights.Frame.Draws);
+        Check(nextFrame.CommandBuffer.CompositeEffects.SequenceEqual(first) && ctx.Device.CreatedEffects.Count == 4,
+            "a retired slot reuses cached effects on its next frame without growing the pool");
+        Check(ctx.Device.DisposedEffects.Count == 0, "recording never disposes an in-flight composite effect");
+
+        ctx.Device.FinishRecording(); target.RebuildTargets(f.Context);
+        Check(ctx.Device.DisposedEffects.Count == 4, "rebuild releases every cached composite effect exactly once");
+        var rebuilt = f.Ctx;
+        target.RecordLights(rebuilt, f.Scenes.Current(0), light.Lights.Frame, light.Lights.Frame.Draws);
+        Check(!first.Contains(rebuilt.CommandBuffer.CompositeEffects.Single()) && ctx.Device.CreatedEffects.Count == 5,
+            "rebuild clears cursors and recreates effects even at the same frame number");
+        ctx.Device.FinishRecording(); target.Dispose();
+        Check(ctx.Device.DisposedEffects.SetEquals(ctx.Device.CreatedEffects), "target disposal releases all recreated effects");
+    }
+
+    private static void WriteSideEffectsStayNative()
+    {
+        var additive = new FinalDrawItem(1000, .1f, true, false).Binding.PipelineState;
+        var writes = new[]
+        {
+            additive with { Depth = new DepthState(true) },
+            additive with { Stencil = new StencilState(255, StencilOp.Replace, StencilOp.Keep, StencilOp.Keep) },
+            additive with { Stencil = new StencilState(255, StencilOp.Keep, StencilOp.Replace, StencilOp.Keep) },
+            additive with { Stencil = new StencilState(255, StencilOp.Keep, StencilOp.Keep, StencilOp.Replace) }
+        };
+        foreach (var state in writes)
+        {
+            Check(!HdrLightBlend.TryAdapt(state, out var rejected) && rejected == state,
+                "depth, stencil-pass, stencil-fail and depth-fail writes must fall back with their original state");
+            using var f = new Fixture();
+            var writer = f.Add(3000, .3f, light: true);
+            writer.Binding.PipelineState = state;
+            Check(!HdrLightFrame.Needed(f.Frame), "a side-effect-only frame stays entirely native");
+            var before = f.Add(2000, .1f, light: true);
+            var after = f.Add(4000, .2f, light: true);
+            using (var snapshot = new HdrLightFrame(f.Frame))
+                Check(snapshot.Shell.PersistentDraws.Contains(writer) && !snapshot.Lights.Frame.Draws.Contains(writer),
+                    "side-effect draw remains in the host shell when other lights are captured");
+            f.Capture(); var ctx = f.Ctx;
+            f.Slice(ctx, true, int.MinValue, int.MaxValue);
+            Check(ctx.CommandBuffer.DrawOrder.SequenceEqual(new[] { before, writer, after })
+                && ReferenceEquals(ctx.CommandBuffer.DrawOwners[1], f.Pass.renderer)
+                && writer.Binding.PipelineState == state && writer.DrawCount == 1,
+                "host executes the side-effect draw once at its original position and with unmodified state");
+        }
+        foreach (var stencil in new[]
+        {
+            new StencilState(255, StencilOp.Keep, StencilOp.Keep, StencilOp.Keep),
+            new StencilState(0, StencilOp.Replace, StencilOp.Replace, StencilOp.Replace)
+        })
+        {
+            var state = additive with { Stencil = stencil };
+            Check(HdrLightBlend.TryAdapt(state, out var adapted) && adapted.Stencil == stencil && adapted.Depth == state.Depth,
+                "read-only stencil states stay eligible and retain their tests and operations");
+        }
+        var alphaWeighted = additive with { Blend = additive.Blend with { SrcColor = BlendFactor.SrcAlpha } };
+        Check(HdrLightBlend.TryAdapt(alphaWeighted, out var alphaAdapted)
+            && alphaAdapted.Blend.SrcColor == BlendFactor.SrcAlpha
+            && alphaAdapted.Blend.SrcAlpha == BlendFactor.Zero && alphaAdapted.Blend.DstAlpha == BlendFactor.One,
+            "read-only alpha-weighted additive lights still capture without alpha coverage");
     }
 
     private static void MissingLoadAttachment()

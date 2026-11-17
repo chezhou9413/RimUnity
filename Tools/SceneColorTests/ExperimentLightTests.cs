@@ -49,12 +49,29 @@ internal static partial class Program
 
             var additive = new PipelineState(
                 new BlendState(true, BlendFactor.SrcAlpha, BlendFactor.One, BlendOp.Add, BlendFactor.One, BlendFactor.One, BlendOp.Add),
-                new DepthState(true, true), FaceCull.None);
+                new DepthState(true, false), FaceCull.None);
             var args = Args(additive);
             if (!(bool)tryAdapt.Invoke(null, args)) throw new Exception("additive blend must adapt");
             var adaptedAdd = (PipelineState)args[1];
             if (adaptedAdd.Blend.SrcAlpha != BlendFactor.Zero || adaptedAdd.Blend.DstAlpha != BlendFactor.One || adaptedAdd.Depth.Write)
-                throw new Exception("additive adapt must clear alpha coverage and depth write");
+                throw new Exception("read-only additive adapt must clear alpha coverage");
+
+            var depthWriter = additive with { Depth = additive.Depth with { Write = true } };
+            args = Args(depthWriter);
+            if ((bool)tryAdapt.Invoke(null, args) || !Equals(args[1], depthWriter))
+                throw new Exception("depth-writing additive blend must stay on the host unchanged");
+            foreach (var stencil in new[]
+            {
+                additive.Stencil with { WriteMask = 255, PassOp = StencilOp.Replace },
+                additive.Stencil with { WriteMask = 255, FailOp = StencilOp.Replace },
+                additive.Stencil with { WriteMask = 255, DepthFailOp = StencilOp.Replace }
+            })
+            {
+                var stencilWriter = additive with { Stencil = stencil };
+                args = Args(stencilWriter);
+                if ((bool)tryAdapt.Invoke(null, args) || !Equals(args[1], stencilWriter))
+                    throw new Exception("stencil-writing additive blend must stay on the host unchanged");
+            }
 
             var coverage = new PipelineState(BlendState.Alpha, new DepthState(true, true), FaceCull.None);
             args = Args(coverage);

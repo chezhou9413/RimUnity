@@ -4,7 +4,8 @@ Links the production `HdrMapHooks`, `HdrLightFrame`, `HdrLightBlend` and
 `HdrLightTarget` sources. A recording host/Vulkan boundary checks scene-pass
 selection, binding invalidation and framebuffer lifetime without a game install.
 It rejects reopening a clear attachment without clear values, stale host bindings
-after another renderer takes over, and destruction of a referenced framebuffer.
+after another renderer takes over, destruction of a referenced framebuffer, and
+reset/disposal of descriptor pools still referenced by recorded commands.
 
 ```powershell
 dotnet run --project Tools/HdrLightLifecycleTests -c Release
@@ -30,6 +31,13 @@ its scene pass. They reject destructive/invalid depth barriers across light-firs
 shell-first and repeated slices, and check the production render pass's depth and
 stencil load/store/layout contract.
 The scalar scene values only detect ordering/clearing, not color-space correctness.
+
+The post-effect boundary models the host's `RecordInline` pool reset. Regressions
+cover separate descriptors for interleaved light runs and slices, independent
+in-flight slots, reuse after slot retirement, and effect disposal/recreation on
+target rebuild. Depth-writing and stencil-writing additive materials must remain
+on the host, retaining their state and position among captured lights; read-only
+stencil operations and alpha-weighted additive blends remain eligible.
 
 Also links the HDR diagnostic formatter and bounded text recorder. Checks inactive
 and stopped logging, concurrent recording, baseline retention, explicit truncation,

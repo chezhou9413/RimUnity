@@ -2,7 +2,7 @@ using Waylith.Rendering;
 
 namespace RimUnity.Rendering;
 
-//把可进光缓冲的混合改成覆盖率累积；其余材质回落给宿主原版绘制。
+//只接管无深度/模板写入副作用的加法材质；其余沿用宿主绘制。
 internal static class HdrLightBlend
 {
     internal static bool ShouldCapture(FinalDrawItem draw)
@@ -21,16 +21,14 @@ internal static class HdrLightBlend
         if (!blend.Enabled || blend.ColorOp != BlendOp.Add) return false;
         if (blend.DstColor != BlendFactor.One || blend.SrcColor is not (BlendFactor.One or BlendFactor.SrcAlpha))
             return false;
+        //Captured draws replace the host draw, unlike Bloom's extra light pass.
+        //Dropping depth/stencil writes would change later draws' visibility.
+        var stencil = state.Stencil;
+        if (state.Depth.Write || (stencil.WriteMask != 0 &&
+            (stencil.PassOp != StencilOp.Keep || stencil.FailOp != StencilOp.Keep || stencil.DepthFailOp != StencilOp.Keep)))
+            return false;
         var additive = blend with { SrcAlpha = BlendFactor.Zero, DstAlpha = BlendFactor.One, AlphaOp = BlendOp.Add };
-        adapted = state with
-        {
-            Blend = additive,
-            Depth = state.Depth with { Write = false },
-            Stencil = state.Stencil with
-            {
-                WriteMask = 0, PassOp = StencilOp.Keep, FailOp = StencilOp.Keep, DepthFailOp = StencilOp.Keep
-            }
-        };
+        adapted = state with { Blend = additive };
         return true;
     }
 }

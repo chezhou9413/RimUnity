@@ -4,6 +4,7 @@ using System.Reflection;
 using Brutal.VulkanApi;
 using Brutal.VulkanApi.Abstractions;
 using Waylith.Rendering;
+using Waylith.Rendering.PostFx;
 
 namespace HarmonyLib
 {
@@ -62,6 +63,8 @@ namespace Brutal.VulkanApi
         internal int Clears;
         internal readonly List<VkFramebuffer> CompositeFramebuffers = new();
         internal readonly List<FinalDrawItem> DrawOrder = new();
+        internal readonly List<MeshBatchRenderer> DrawOwners = new();
+        internal readonly List<PostEffectPass> CompositeEffects = new();
         internal readonly List<VkImageMemoryBarrier> ImageBarriers = new();
         public unsafe void BeginRenderPass(in VkRenderPassBeginInfo begin, VkSubpassContents contents)
         {
@@ -92,6 +95,8 @@ namespace Brutal.VulkanApi.Abstractions
         internal readonly HashSet<VkRenderPass> CompositePasses = new();
         internal readonly List<VkAttachmentDescription> DepthAttachments = new();
         internal readonly HashSet<VkFramebuffer> Created = new(), Destroyed = new(), Referenced = new();
+        internal readonly HashSet<(PostEffectPass Effect, int Slot)> ReferencedDescriptorPools = new();
+        internal readonly HashSet<PostEffectPass> CreatedEffects = new(), DisposedEffects = new();
         internal VkRenderPass Pass(VkAttachmentLoadOp load) { var pass = new VkRenderPass(++serial); Loads.Add(pass, load); return pass; }
         internal VkFramebuffer Framebuffer(VkImageView view, bool owned = false)
         { var fb = new VkFramebuffer(++serial); Views.Add(fb, view); if (owned) Created.Add(fb); return fb; }
@@ -109,7 +114,8 @@ namespace Brutal.VulkanApi.Abstractions
             if (!Destroyed.Add(fb)) throw new InvalidOperationException("Framebuffer destroyed twice");
         }
         public void DestroyRenderPass(VkRenderPass pass, object allocator) { }
-        internal void FinishRecording() => Referenced.Clear();
+        internal void RetireDescriptorSlot(int slot) => ReferencedDescriptorPools.RemoveWhere(p => p.Slot == slot);
+        internal void FinishRecording() { Referenced.Clear(); ReferencedDescriptorPools.Clear(); }
     }
 }
 namespace Waylith.Graphics
@@ -166,7 +172,7 @@ namespace Waylith.Rendering
     }
     public enum BlendOp { Add }
     public enum BlendFactor { Zero, One, SrcAlpha }
-    public enum StencilOp { Keep }
+    public enum StencilOp { Keep, Replace }
     public record struct BlendState(bool Enabled, BlendFactor SrcColor, BlendFactor DstColor, BlendOp ColorOp, BlendFactor SrcAlpha, BlendFactor DstAlpha, BlendOp AlphaOp);
     public record struct DepthState(bool Write);
     public record struct StencilState(int WriteMask, StencilOp PassOp, StencilOp FailOp, StencilOp DepthFailOp);
@@ -214,6 +220,7 @@ namespace Waylith.Rendering
                 {
                     draw.DrawCount++;
                     ctx.CommandBuffer.DrawOrder.Add(draw);
+                    ctx.CommandBuffer.DrawOwners.Add(this);
                     if (draw.Multiply) ctx.CommandBuffer.Destination.Value *= draw.Value;
                     else if (draw.Alpha >= 0) ctx.CommandBuffer.Destination.Value = draw.Value * draw.Alpha + ctx.CommandBuffer.Destination.Value * (1 - draw.Alpha);
                     else if (draw.Binding.Shader.Linear) ctx.CommandBuffer.Destination.Value += draw.Value;
@@ -228,12 +235,30 @@ namespace Waylith.Rendering.PostFx
     public class PostEffectPass : IDisposable
     {
         private readonly RenderTexture[] inputs = new RenderTexture[2];
+        private DeviceEx device;
         public PostEffectPass(string name, string path, int[] bindings, BlendState blend, int pushConstantSize, bool writeDepth) { }
-        private void EnsureInline(in FrameContext ctx, VkRenderPass pass, VkSampleCountFlags samples) { }
+        private void EnsureInline(in FrameContext ctx, VkRenderPass pass, VkSampleCountFlags samples)
+        { if (device == null) { device=ctx.Device; device.CreatedEffects.Add(this); } }
         public void SetInput(int index, RenderTexture texture) => inputs[index]=texture;
         public void RecordInline(in FrameContext ctx, VkRenderPass pass, VkSampleCountFlags samples)
-        { ctx.CommandBuffer.BoundOwner=this; ctx.CommandBuffer.Destination.Value=inputs[0].Value+inputs[1].Value; }
-        public void Dispose() { }
+        {
+            EnsureInline(in ctx, pass, samples);
+            // Host RecordInline calls BeginFrame, resetting this instance's slot pool.
+            // A reset frees all sets, including those referenced by earlier commands.
+            if (!device.ReferencedDescriptorPools.Add((this, ctx.SubmissionFrameIndex)))
+                throw new InvalidOperationException("Reset descriptor pool still referenced by recorded commands");
+            if (device.DisposedEffects.Contains(this)) throw new InvalidOperationException("Used disposed effect");
+            ctx.CommandBuffer.CompositeEffects.Add(this);
+            ctx.CommandBuffer.BoundOwner=this;
+            ctx.CommandBuffer.Destination.Value=inputs[0].Value+inputs[1].Value;
+        }
+        public void Dispose()
+        {
+            if (device == null) return;
+            if (device.ReferencedDescriptorPools.Any(p => ReferenceEquals(p.Effect, this)))
+                throw new InvalidOperationException("Disposed descriptor pool still referenced by recorded commands");
+            if (!device.DisposedEffects.Add(this)) throw new InvalidOperationException("Effect disposed twice");
+        }
     }
 }
 namespace RimWorldWaylith.Rendering
