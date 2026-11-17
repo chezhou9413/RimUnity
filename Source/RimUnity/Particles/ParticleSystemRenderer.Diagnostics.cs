@@ -8,6 +8,17 @@ namespace RimUnity;
 
 public sealed partial class ParticleSystemRenderer
 {
+    private void TraceHdrSubmission(Material mat, int route)
+    {
+        try
+        {
+            RenderDebugReport.Stage("ParticleSubmit", "unityFrame=" + UnityEngine.Time.frameCount + "; renderer=" + gameObject.name + "#" + GetInstanceID()
+                + "; material=" + mat?.name + "#" + mat?.engineMaterial.Id + "; materialIsTrail=" + ReferenceEquals(mat, trailMaterial)
+                + "; layer=" + gameObject.layer + "; vertices=" + GeometryVertexCount + "; indices=" + indices.Count
+                + "; route=" + route + " (0=incomplete,1=empty,2=UI,3=batch,4=world-mesh,5=camera-UI)");
+        }
+        catch (Exception error) { RenderDebugReport.Stage("HdrTraceError", "particle-submit: " + error.Message); }
+    }
     private static string FormatVector(Vector4 v) => string.Format(CultureInfo.InvariantCulture, "({0:G9}, {1:G9}, {2:G9}, {3:G9})", v.x, v.y, v.z, v.w);
     private string DiagnosticPath()
     {

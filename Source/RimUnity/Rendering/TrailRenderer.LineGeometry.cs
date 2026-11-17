@@ -25,7 +25,7 @@ public sealed partial class TrailRenderer
         foreach (Material material in sharedMaterials)
         {
             if (material == null) continue;
-            if (Diagnostics.ParticleDebugWindow.Capturing)
+            if (Diagnostics.ParticleDebugWindow.Capturing || Diagnostics.RenderDebugReport.HdrTracing)
             {
                 Diagnostics.RendererDebugCapture.Capture(this, batch, material, "LineRenderer", widthMultiplier, colors);
             }

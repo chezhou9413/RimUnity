@@ -276,6 +276,7 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
         finally
         {
             if (dpaToken.Start != 0) Diagnostics.DpaDiagnostics.EndSubmit(dpaToken, UnityEngine.Time.frameCount, GeometryVertexCount, indices.Count, dpaRoute);
+            if (Diagnostics.RenderDebugReport.HdrTracing) TraceHdrSubmission(mat, dpaRoute);
         }
     }
 }

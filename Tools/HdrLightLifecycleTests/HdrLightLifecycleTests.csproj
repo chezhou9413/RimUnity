@@ -10,5 +10,7 @@
     <Compile Include="$(HdrSourceRoot)/HdrLightTarget.cs" Link="Runtime/HdrLightTarget.cs" />
     <Compile Include="$(HdrSourceRoot)/HdrLightFrame.cs" Link="Runtime/HdrLightFrame.cs" />
     <Compile Include="$(HdrSourceRoot)/HdrLightBlend.cs" Link="Runtime/HdrLightBlend.cs" />
+    <Compile Include="../../Source/RimUnity/Diagnostics/RenderTraceBuffer.cs" Link="Runtime/RenderTraceBuffer.cs" />
+    <Compile Include="../../Source/RimUnity/Diagnostics/RenderDebugReport.Hdr.cs" Link="Runtime/RenderDebugReport.Hdr.cs" />
   </ItemGroup>
 </Project>

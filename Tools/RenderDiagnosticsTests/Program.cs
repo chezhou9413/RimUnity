@@ -153,7 +153,7 @@ class P
                 foreach (var action in actions)
                     Check((bool)action.GetType().GetProperty("IsAllowedInCurrentGameState").GetValue(action), "diagnostic action visible in " + state + ": " + action.GetType().GetField("name").GetValue(action));
             }
-            Check(actions.Length == 7, "all seven cross-scene diagnostic actions tested");
+            Check(actions.Length == 8, "all eight cross-scene diagnostic actions tested");
         }
         finally { SetState(previousState); }
         var copier = a.GetType("RimUnity.Rendering.FrameMetadataCopier", true).GetMethod("Build", flags);

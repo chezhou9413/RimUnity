@@ -181,10 +181,19 @@ internal sealed class BloomPipeline : IDisposable
     //浮点场景在最后一次合成才编码；普通场景继续沿用宿主的显示颜色路径。
     private void Composite(in FrameContext ctx, BloomFrame settings)
     {
-        if (effects.Result != null) { effects.Composite(in ctx); return; }
+        if (effects.Result != null)
+        {
+            if (Diagnostics.RenderDebugReport.HdrTracing) Diagnostics.RenderDebugReport.Stage("CompositeRoute", "frame=" + settings.FrameNumber + "; route=screen-effects; bloomPrepared=" + prepared);
+            effects.Composite(in ctx); return;
+        }
         NativeRenderTexture source = scene.Source?.Invoke(ctx.SubmissionFrameIndex);
-        if (source == null) return;
+        if (source == null)
+        {
+            if (Diagnostics.RenderDebugReport.HdrTracing) Diagnostics.RenderDebugReport.Stage("CompositeRoute", "frame=" + settings.FrameNumber + "; skipped=source-null");
+            return;
+        }
         var hdr = HdrMapHooks.LinearScene(source, settings.FrameNumber);
+        if (Diagnostics.RenderDebugReport.HdrTracing) Diagnostics.RenderDebugReport.Stage("CompositeRoute", "frame=" + settings.FrameNumber + "; route=" + (hdr != null && prepared ? "linear-hdr+bloom" : prepared ? "native+bloom" : "native-only") + "; prepareMiss=" + lastPrepareMiss);
         if (Diagnostics.RenderDebugReport.Collecting) Diagnostics.RenderDebugReport.Stage("CompositeInputs", "frame=" + settings.FrameNumber + "; slot=" + ctx.SubmissionFrameIndex + "; source=" + source.Width + "x" + source.Height + "/" + source.ColorFormat + "; sourceCreated=" + source.IsCreated + "; output=" + ctx.ColorFormat + "; depth=" + ctx.DepthFormat + "; samples=" + ctx.SampleCount + "; linearHDR=" + (hdr == null ? "none" : hdr.Width + "x" + hdr.Height + "/" + hdr.ColorFormat) + "; bloomPrepared=" + prepared + "; enabled=" + settings.Enabled + "; intensity=" + settings.Intensity + "; saturation=" + scene.Saturation + "; mask=" + settings.LayerMask + "; targets=" + (targets?.Length ?? 0));
         if (Diagnostics.ParticleDebugWindow.Capturing)
             Diagnostics.RendererDebugCapture.CompositeState = "场景合成：source=" + source.ColorFormat + " / output=" + ctx.ColorFormat

@@ -27,5 +27,10 @@ one command buffer; color-view changes and frame-slot isolation; target rebuild;
 fallback when the host has no load attachment; and cleanup after a draw failure.
 The scalar scene values only detect ordering/clearing, not color-space correctness.
 
+Also links the HDR diagnostic formatter and bounded text recorder. Checks inactive
+and stopped logging, concurrent recording, baseline retention, explicit truncation,
+capture/run/target details, native fallback visibility and unchanged draw results
+with tracing enabled. The game debug-menu/export integration needs a game build.
+
 This complements `Tools/SceneColorTests`: it does not replace real Vulkan pixel
 tests, validation layers, depth/stencil tests or in-game night-map verification.

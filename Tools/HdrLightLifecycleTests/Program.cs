@@ -20,7 +20,48 @@ internal static class Program
     {
         NightOverlay(); TrailDoesNotDimWall(); InterleavedLayers(); EqualKeysKeepHostOrder(); LightFirst();
         NextSliceAfterEmptyTail(); MultipleLightsAndSlots(); MissingLoadAttachment(); BorrowedDrawCleanup();
+        TraceChecks();
         Console.WriteLine($"PASS {checks} HDR light lifecycle checks (recording boundary; no GPU/game).");
+    }
+
+    private static void TraceChecks()
+    {
+        string Report(RimUnity.Diagnostics.RenderTraceBuffer buffer)
+        { var text = new System.Text.StringBuilder(); buffer.AppendTo(text); return text.ToString(); }
+        var bounded = new RimUnity.Diagnostics.RenderTraceBuffer(maxEvents: 3, maxChars: 1024, maxDetail: 64);
+        bounded.Record("test", "inactive");
+        Check(Report(bounded).Contains("events=0"), "inactive trace records no events");
+        bounded.Start(); bounded.Record("test", "baseline");
+        for (int i = 0; i < 10; i++) bounded.Record("test", "event-" + i);
+        string overflow = Report(bounded);
+        Check(overflow.Contains("baseline") && overflow.Contains("event-9") && overflow.Contains("droppedOldest=8"),
+            "bounded trace preserves baseline and latest events, reporting evictions");
+        bounded.Record("long", new string('x', 1000));
+        Check(Report(bounded).Contains("DETAIL TRUNCATED") && Report(bounded).Contains("clippedDetails=1"), "oversized diagnostic text is explicitly truncated");
+        bounded.Stop(); string stopped = Report(bounded); bounded.Record("test", "after-stop");
+        Check(Report(bounded) == stopped, "stopped trace remains readable and immutable");
+        bounded.Start(); Parallel.For(0, 200, i => bounded.Record("parallel", "event-" + i)); bounded.Stop();
+        Check(Report(bounded).Contains("events=200; retained=3; droppedOldest=197"), "main/render thread events serialize without exceeding capacity");
+        bounded.Clear(); Check(Report(bounded).Contains("events=0") && !Report(bounded).Contains("event-199"), "new capture cannot retain previous scene text");
+
+        var trace = RimUnity.Diagnostics.RenderDebugReport.Trace;
+        trace.Start(); RimUnity.Diagnostics.RenderDebugReport.Collecting = true;
+        try
+        {
+            using var f = new Fixture();
+            f.Add(1000, .6f); f.Add(2000, 0, light: true); f.Add(3000, .5f, multiply: true); f.Add(4000, .1f, light: true);
+            f.Capture(); f.Slice(f.Ctx, true, int.MinValue, int.MaxValue);
+            string report = Report(trace);
+            Check(report.Contains("requested=Experiment; route=Experiment") && report.Contains("captured=2"), "trace identifies actual frame takeover and capture counts");
+            Check(report.Contains("classification=light") && report.Contains("run=1 LIGHT") && report.Contains("run=2 SHELL"), "trace includes material classification and interleaved boundaries");
+            Check(report.Contains("HdrLightPass") && report.Contains("phase=completed") && report.Contains("scene=") && report.Contains("hostBindingsInvalidated=True"), "trace covers target identities, completion and binding recovery");
+            Check(Math.Abs(f.Scenes.Current(0).Value - .4f) < .0001f, "enabling diagnostics does not change recorded rendering result");
+            trace.Clear(); trace.Start();
+            using var fallback = new Fixture(); fallback.Add(1000, .2f, light: true); fallback.Frame.PreserveSceneColor = true;
+            fallback.Capture();
+            Check(Report(trace).Contains("route=preserved-native"), "preserved/native frames remain visible to diagnostics");
+        }
+        finally { RimUnity.Diagnostics.RenderDebugReport.Collecting = false; trace.Clear(); }
     }
 
     private sealed class Fixture : IDisposable

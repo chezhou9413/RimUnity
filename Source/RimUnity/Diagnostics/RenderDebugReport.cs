@@ -24,19 +24,32 @@ internal static partial class RenderDebugReport
     private static EngineApplication application;
     private static Stopwatch timer;
     private static StringBuilder initial;
+    private static int captureSeconds;
+    private static bool hdrCapture;
+    private static readonly RenderTraceBuffer HdrTrace = new();
+    internal static bool HdrTracing => Collecting && HdrTrace.Active;
     internal static volatile bool Collecting;
     private const BindingFlags Flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
     private const int MaxText = 4 * 1024 * 1024;
 
     //The host ANDs state flags; zero adds no scene constraint (Entry | Playing is impossible).
     [DebugAction("RimUnity", "复制调试信息", allowedGameStates = (AllowedGameStates)0)]
-    private static void Copy()
+    private static void Copy() => BeginCapture(3, false);
+
+    [DebugAction("RimUnity", "HDR 明暗诊断（20秒）", allowedGameStates = (AllowedGameStates)0)]
+    private static void CaptureHdr() => BeginCapture(20, true);
+
+    private static void BeginCapture(int seconds, bool hdr)
     {
         if (!Prefs.DevMode) return;
         if (Collecting) { Messages.Message("正在采集渲染信息，请稍候。", MessageTypeDefOf.NeutralEvent, false); return; }
+        captureSeconds = seconds; hdrCapture = hdr;
+        HdrTrace.Clear(); ResetHdrSampling();
+        if (hdr) HdrTrace.Start();
         initial = new StringBuilder(32768);
         initial.AppendLine("RimUnity 场景与显存诊断 / report schema 1");
         initial.AppendLine("UTC: " + DateTime.UtcNow.ToString("O"));
+        initial.AppendLine("HDR trace build=hdr-light-trace-v1; order=interleaved-light-runs; runtime MVID=" + typeof(RenderDebugReport).Assembly.ManifestModule.ModuleVersionId);
         initial.AppendLine("Compatibility SystemInfo values may be placeholders; prefer native Vulkan GPU descriptions and VMA heap budgets below.");
         initial.AppendLine("Evidence: CPU state, engine allocation accounting and observed render calls. Not a GPU pixel/descriptor readback. No forced GC, device idle, texture upload, eviction or render-setting changes.");
         initial.AppendLine("Paths are redacted for the current user profile. Save contents, account tokens and full environment are not collected.");
@@ -50,17 +63,19 @@ internal static partial class RenderDebugReport
         timer = Stopwatch.StartNew(); Collecting = true;
         application.OnUpdate += Tick;
         application.BeforeGraphicsShutdown += Cancel;
-        Messages.Message("正在采集 3 秒渲染诊断，完成后自动复制并保存报告。", MessageTypeDefOf.NeutralEvent, false);
+        Messages.Message("正在采集 " + seconds + " 秒渲染诊断。" + (hdr ? "请先保持未开火，再触发曳光弹，最后等待消失。" : "") + "完成后自动复制并保存报告。", MessageTypeDefOf.NeutralEvent, false);
+        if (hdr) Log.Message("[RimUnity] HDR 明暗诊断开始（20秒），build=hdr-light-trace-v1，MVID=" + typeof(RenderDebugReport).Assembly.ManifestModule.ModuleVersionId);
     }
     private static void Tick()
     {
-        if (timer.Elapsed.TotalSeconds < 3) return;
+        if (timer.Elapsed.TotalSeconds < captureSeconds) return;
         Finish();
     }
-    private static void Cancel(EngineApplication app) { Stop(); initial = null; ClearStages(); }
+    private static void Cancel(EngineApplication app) { Stop(); initial = null; ClearStages(); HdrTrace.Clear(); }
     private static void Stop()
     {
         Collecting = false;
+        HdrTrace.Stop();
         if (application != null) { application.OnUpdate -= Tick; application.BeforeGraphicsShutdown -= Cancel; }
         application = null; timer?.Stop();
     }
@@ -68,7 +83,8 @@ internal static partial class RenderDebugReport
     {
         Stop();
         var report = initial ?? new StringBuilder(); initial = null;
-        Section(report, "三秒渲染调用采样", FrameSection);
+        Section(report, captureSeconds + " 秒渲染调用采样", FrameSection);
+        if (hdrCapture) Section(report, "HDR 明暗变化连续追踪", HdrTrace.AppendTo);
         Section(report, "设备、显存与宿主渲染器（采集后）", GraphicsSection);
         Section(report, "资源、相机和设置（采集后）", ResourcesSection);
         Section(report, "程序集身份与文件指纹", AssembliesSection);
@@ -81,13 +97,15 @@ internal static partial class RenderDebugReport
         try
         {
             string directory = Path.Combine(GenFilePaths.ConfigFolderPath, "RimUnityReports"); Directory.CreateDirectory(directory);
-            path = Path.Combine(directory, "render-debug-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff") + ".txt");
+            path = Path.Combine(directory, (hdrCapture ? "hdr-light-" : "render-debug-") + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff") + ".txt");
             File.WriteAllText(path, text, new UTF8Encoding(false));
+            if (hdrCapture) Log.Message("[RimUnity] HDR 明暗诊断已保存：" + path);
         }
         catch (Exception e) { text += "\nReport file failed: " + Error(e); }
         try { UnityEngine.GUIUtility.systemCopyBuffer = ClipboardText(text, path); Messages.Message("调试信息已复制。报告副本：" + (path ?? "保存失败，请使用剪贴板"), MessageTypeDefOf.TaskCompletion, false); }
         catch (Exception e) { Log.Warning("[RimUnity] 剪贴板失败：" + Error(e) + "；报告：" + path); }
         ClearStages();
+        HdrTrace.Clear();
     }
     private static string ClipboardText(string text, string path) => text.Length <= MaxText ? text
         : text.Substring(0, MaxText) + "\n[CLIPBOARD TRUNCATED; full report file: " + Redact(path ?? "file save failed") + "]";
@@ -179,7 +197,7 @@ internal static partial class RenderDebugReport
                 if (folders is IEnumerable values) b.AppendLine("  " + key + "=" + string.Join(" | ", values.Cast<object>().Select(Scalar)));
             }
         }
-        foreach (string file in new[] { "BloomPrefilter.frag.glsl", "BloomDown.frag.glsl", "BloomUp.frag.glsl", "BloomComposite.frag.glsl", "HdrComposite.frag.glsl", "HdrTransfer.frag.glsl" }) Fingerprint(b, Path.Combine(RimUnityMod.ShaderDirectory, file));
+        foreach (string file in new[] { "BloomPrefilter.frag.glsl", "BloomDown.frag.glsl", "BloomUp.frag.glsl", "BloomComposite.frag.glsl", "HdrComposite.frag.glsl", "HdrTransfer.frag.glsl", "HdrLightComposite.frag.glsl" }) Fingerprint(b, Path.Combine(RimUnityMod.ShaderDirectory, file));
     }
     private static void Fingerprint(StringBuilder b, string file)
     {

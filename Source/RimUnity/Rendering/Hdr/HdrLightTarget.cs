@@ -47,10 +47,12 @@ internal sealed unsafe class HdrLightTarget : IDisposable
         if (lights == null) Initialize(in ctx, scene);
         BindDepth(in ctx, scene);
         int slot = ctx.SubmissionFrameIndex;
+        Diagnostics.RenderDebugReport.HdrLightPass("begin", frame.FrameNumber, in ctx, scene, lights[slot], snapshots[slot], draws.Count);
         SnapshotScene(ctx.CommandBuffer, scene, snapshots[slot]);
         HdrSceneCopy.Clear(ctx.CommandBuffer, lights[slot]);
         DrawLights(in ctx, scene, frame, draws);
         Composite(in ctx, scene, slot);
+        Diagnostics.RenderDebugReport.HdrLightPass("completed", frame.FrameNumber, in ctx, scene, lights[slot], snapshots[slot], draws.Count);
     }
 
     //只画一次排在光之后的外壳（夜晚/迷雾等），压在光上且不重复压暗底层。

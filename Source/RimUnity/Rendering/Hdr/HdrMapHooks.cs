@@ -67,17 +67,20 @@ internal static class HdrMapHooks
         private static void Postfix(object __result)
         {
             if (__result is not MeshDrawFrame frame) return;
+            var mode = RimUnityMod.Bloom?.mapHdrMode ?? MapHdrMode.None;
             // BackdropAttachment 路径未接管；保留宿主原样绘制。
-            if (frame.PreserveSceneColor) return;
+            if (frame.PreserveSceneColor)
+            { Diagnostics.RenderDebugReport.HdrFrame(frame, mode, "preserved-native", 0); return; }
             HdrDrawFrame snapshot = null;
             HdrLightFrame light = null;
-            var mode = RimUnityMod.Bloom?.mapHdrMode ?? MapHdrMode.None;
             // Capture on the main thread: toggles affect new frames only. Existing
             // snapshots retire normally; independent Bloom capture is not gated here.
             if (mode == MapHdrMode.Legacy && HdrDrawFrame.Needed(frame))
             { snapshot = new HdrDrawFrame(frame); Frames.Add(frame, snapshot); }
             else if (mode == MapHdrMode.Experiment && HdrLightFrame.Needed(frame))
             { light = new HdrLightFrame(frame); LightFrames.Add(frame, light); }
+            Diagnostics.RenderDebugReport.HdrFrame(frame, mode, snapshot != null ? "Legacy" : light != null ? "Experiment" : "native",
+                snapshot?.Frame.Draws.Count ?? light?.Lights.Frame.Draws.Count ?? 0);
             if (Diagnostics.RenderDebugReport.Collecting)
                 Diagnostics.RenderDebugReport.Frame(frame, snapshot != null || light != null);
             Diagnostics.ParticleDebugWindow.CaptureFinalFrame(frame, snapshot?.Frame ?? light?.Lights.Frame);
@@ -124,11 +127,20 @@ internal static class HdrMapHooks
                 return false;
             }
             if (!experiment) return true;
-            if (!light.HasLights(queueMin, queueMax)) return true;
+            if (!light.HasLights(queueMin, queueMax))
+            {
+                if (Diagnostics.RenderDebugReport.HdrTracing) Diagnostics.RenderDebugReport.Stage("HdrFallback", "frame=" + meshFrame.FrameNumber + "; queue=" + queueMin + ".." + queueMax + "; native: no lights in slice");
+                return true;
+            }
             //补画必须保留颜色和深度；宿主尚未提供 Load 附件时沿用完整原生帧。
             var loadAttachment = LoadAttachment(___sceneTargets);
-            if (loadAttachment == null) return true;
+            if (loadAttachment == null)
+            {
+                if (Diagnostics.RenderDebugReport.HdrTracing) Diagnostics.RenderDebugReport.Stage("HdrFallback", "frame=" + meshFrame.FrameNumber + "; native: missing LoadAttachment");
+                return true;
+            }
             var runs = light.Partition(queueMin, queueMax);
+            Diagnostics.RenderDebugReport.HdrPlan(meshFrame.FrameNumber, runs);
             bool startsWithShell = !runs[0].Light;
             //宿主先画首段外壳，其余光与外壳由 Postfix 按原顺序交替记录。
             var under = HdrDrawFrame.Shell(light.Shell, MeshDrawFrame.RentList(), MeshDrawFrame.RentList());
@@ -160,9 +172,11 @@ internal static class HdrMapHooks
                 var target = LightTargets.GetValue(__instance, _ => new HdrLightTarget("RimUnity.HdrLight"));
                 var hostRenderer = (MeshBatchRenderer)MapRendererField.GetValue(__instance);
                 byte hostPassId = (byte)AccessTools.Property(MapPassType, "PassId").GetValue(__instance);
+                if (Diagnostics.RenderDebugReport.HdrTracing && __state.NextRun > 0) Diagnostics.RenderDebugReport.Stage("HdrRun", "frame=" + __state.Light.Shell.FrameNumber + "; slot=" + ctx.SubmissionFrameIndex + "; run=0; initial shell completed by host");
                 for (int i = __state.NextRun; i < __state.Runs.Count; i++)
                 {
                     var run = __state.Runs[i];
+                    if (Diagnostics.RenderDebugReport.HdrTracing) Diagnostics.RenderDebugReport.Stage("HdrRun", "frame=" + __state.Light.Shell.FrameNumber + "; slot=" + ctx.SubmissionFrameIndex + "; run=" + i + "; light=" + run.Light + "; draws=" + run.Draws.Count + "; begin");
                     if (run.Light)
                     {
                         try { target.RecordLights(in ctx, __state.Scene, __state.Light.Lights.Frame, run.Draws); }
@@ -170,7 +184,13 @@ internal static class HdrMapHooks
                         finally { hostRenderer.InvalidateCommandBufferBindings(); }
                     }
                     else target.DrawShellItems(in ctx, __state.LoadAttachment, hostRenderer, hostPassId, __state.Light.Shell, run.Draws);
+                    if (Diagnostics.RenderDebugReport.HdrTracing) Diagnostics.RenderDebugReport.Stage("HdrRun", "frame=" + __state.Light.Shell.FrameNumber + "; slot=" + ctx.SubmissionFrameIndex + "; run=" + i + "; completed; hostBindingsInvalidated=" + run.Light);
                 }
+            }
+            catch (Exception error)
+            {
+                if (Diagnostics.RenderDebugReport.HdrTracing) Diagnostics.RenderDebugReport.Stage("HdrRunError", "frame=" + __state.Light.Shell.FrameNumber + "; " + error);
+                throw;
             }
             finally
             {

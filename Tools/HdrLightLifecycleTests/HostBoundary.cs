@@ -163,11 +163,17 @@ namespace Waylith.Rendering
     public record struct DepthState(bool Write);
     public record struct StencilState(int WriteMask, StencilOp PassOp, StencilOp FailOp, StencilOp DepthFailOp);
     public record struct PipelineState(BlendState Blend, DepthState Depth, StencilState Stencil);
-    public sealed class Shader { internal bool Linear; }
-    public sealed class MaterialBinding { public Shader Shader = new(); public PipelineState PipelineState; }
+    public sealed class Shader { internal bool Linear; public string Key = "TestShader"; public bool HasErrors; public SceneGrabPoint SceneGrab; }
+    public sealed class SceneGrabPoint { public int Queue; }
+    public sealed class MaterialBinding
+    {
+        private static int next; public int MaterialId = ++next; public int Id => MaterialId; public int MaterialVersion = 1;
+        public string DebugName = "TestMaterial"; public Shader Shader = new(); public PipelineState PipelineState;
+    }
     public sealed class FinalDrawItem
     {
         public byte PassId = 1; public int RenderQueue; public int SortKey;
+        public int Layer; public bool HasOverride;
         public MaterialBinding Binding = new(); internal float Value; internal bool Multiply, Disposed; internal int DrawCount;
         internal float Alpha = -1;
         public FinalDrawItem(int queue, float value, bool light, bool multiply)
@@ -256,7 +262,15 @@ namespace RimUnity
 }
 namespace RimUnity.Diagnostics
 {
-    internal static class RenderDebugReport { internal static bool Collecting => false; internal static void Frame(MeshDrawFrame frame, bool hdr) { } internal static void Stage(string name, string detail) { } }
+    internal static partial class RenderDebugReport
+    {
+        internal static bool Collecting;
+        internal static readonly RenderTraceBuffer Trace = new();
+        internal static bool HdrTracing => Collecting && Trace.Active;
+        private static string Error(Exception error) => error.GetBaseException().Message;
+        internal static void Frame(MeshDrawFrame frame, bool hdr) { }
+        internal static void Stage(string name, string detail) { if (Collecting) Trace.Record(name, detail); }
+    }
     internal static class ParticleDebugWindow { internal static void CaptureFinalFrame(MeshDrawFrame source, MeshDrawFrame captured) { } }
 }
 namespace RimUnity.Rendering

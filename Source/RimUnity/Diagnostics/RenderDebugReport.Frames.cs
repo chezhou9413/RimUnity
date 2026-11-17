@@ -14,12 +14,13 @@ internal static partial class RenderDebugReport
 {
     private sealed record Sample(long Calls, string First, string Last, string Detail);
     private static readonly object StageGate = new();
-    //At most 32 stage keys, only during the explicit 3-second capture; no frames/materials/targets retained.
+    //At most 32 stage keys, only during explicit capture; no frames/materials/targets retained.
     private static readonly Dictionary<string, Sample> Stages = new();
     private static void ClearStages() { lock (StageGate) Stages.Clear(); }
     internal static void Stage(string key, string detail)
     {
         if (!Collecting) return;
+        HdrTrace.Record(key, detail);
         lock (StageGate)
         {
             if (Stages.Count >= 32 && !Stages.ContainsKey(key)) return;

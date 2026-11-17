@@ -9,6 +9,24 @@ internal static class RendererDebugCapture
     internal static string CompositeState = "场景合成：尚未采样。";
     internal static void Capture(Component owner, Mesh mesh, Material material, string kind, float width, IReadOnlyList<Color> colors)
     {
+        if (RenderDebugReport.HdrTracing)
+        {
+            try
+            {
+                float minAlpha = float.PositiveInfinity, maxAlpha = float.NegativeInfinity, maxRgb = 0; int invalid = 0;
+                for (int i = 0; i < Math.Min(colors.Count, 4096); i++)
+                {
+                    var c = colors[i]; minAlpha = Math.Min(minAlpha, c.a); maxAlpha = Math.Max(maxAlpha, c.a);
+                    maxRgb = Math.Max(maxRgb, Math.Max(c.r, Math.Max(c.g, c.b)));
+                    if (!float.IsFinite(c.r) || !float.IsFinite(c.g) || !float.IsFinite(c.b) || !float.IsFinite(c.a)) invalid++;
+                }
+                RenderDebugReport.Stage("EffectSubmit", kind + "; unityFrame=" + UnityEngine.Time.frameCount + "; object=" + owner.gameObject.name + "#" + owner.GetInstanceID()
+                    + "; layer=" + owner.gameObject.layer + "; material=" + material.name + "#" + material.engineMaterial.Id
+                    + "; shader=" + material.shader.name + "; mesh=" + mesh.EngineMesh.Id + "; vertices=" + mesh.vertexCount
+                    + "; width=" + width + "; colors=" + colors.Count + "; alpha=" + minAlpha + ".." + maxAlpha + "; maxRgb=" + maxRgb + "; nonFiniteColors=" + invalid);
+            }
+            catch (Exception error) { RenderDebugReport.Stage("HdrTraceError", "effect-submit: " + error.Message); }
+        }
         if (!ParticleDebugWindow.Capturing) return;
         string key = kind + ":" + owner.GetInstanceID() + ":" + material.GetInstanceID();
         if (!ParticleDebugWindow.BeginSample(key)) return;
