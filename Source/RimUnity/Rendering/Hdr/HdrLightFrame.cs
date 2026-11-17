@@ -42,7 +42,8 @@ internal sealed class HdrLightFrame : IDisposable
     private void FillShell(MeshDrawFrame source)
     {
         var dynamic = new List<FinalDrawItem>(source.Draws.Count);
-        foreach (var item in source.Draws) dynamic.Add(item);
+        foreach (var item in source.Draws)
+            if (HdrLightBlend.IsMap(item)) dynamic.Add(item);
         dynamic.Sort((a, b) => a.SortKey.CompareTo(b.SortKey));
         var persistent = source.PersistentDraws;
         int p = 0, d = 0;
@@ -50,6 +51,7 @@ internal sealed class HdrLightFrame : IDisposable
         {
             var item = p < persistent.Count && (d == dynamic.Count || persistent[p].SortKey.CompareTo(dynamic[d].SortKey) <= 0)
                 ? persistent[p++] : dynamic[d++];
+            if (!HdrLightBlend.IsMap(item)) continue;
             //按源对象找快照，不能用两次过滤排序后的下标配对（相同键排序不稳定）。
             bool light = HdrLightBlend.ShouldCapture(item);
             if (light) ordered.Add((Lights.LightDraws[item], true));

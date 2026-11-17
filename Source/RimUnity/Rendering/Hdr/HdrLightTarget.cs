@@ -50,10 +50,10 @@ internal sealed unsafe class HdrLightTarget : IDisposable
         if (lights == null) Initialize(in ctx, scene);
         BindDepth(in ctx, scene);
         int slot = ctx.SubmissionFrameIndex;
-        // RecordLights runs after the host's clear/load scene pass. Both host passes
-        // leave depth/stencil in AttachmentOptimal, but do not update CurrentLayout.
-        // Adopt that known final layout; an Undefined -> attachment barrier would
-        // discard the map's depth/stencil. Our light pass loads and preserves both.
+        // Host clear/load passes leave color sampleable and depth/stencil attached
+        // without updating CurrentLayout. Adopt both final layouts before copying
+        // or loading; a transition from Undefined can discard the map contents.
+        scene.Color.SetMipLayout(0, VkImageLayout.ShaderReadOnlyOptimal);
         scene.Depth?.SetMipLayout(0, VkImageLayout.DepthStencilAttachmentOptimal);
         Diagnostics.RenderDebugReport.HdrLightPass("begin", frame.FrameNumber, in ctx, scene, lights[slot], snapshots[slot], draws.Count);
         SnapshotScene(ctx.CommandBuffer, scene, snapshots[slot]);

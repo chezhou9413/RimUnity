@@ -21,6 +21,7 @@ internal static partial class Program
             using var fixture = new RuntimeGeometry(app, runtime, scratch);
             CheckMapHdrSetting(runtime, fixture);
             CheckExperimentBlendAdapt(runtime);
+            CheckExperimentMapSlices(runtime, fixture);
             foreach (var format in SceneFormats)
             {
                 var host = Pattern(format);

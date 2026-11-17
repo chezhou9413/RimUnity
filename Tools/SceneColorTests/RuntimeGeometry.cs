@@ -11,7 +11,7 @@ internal sealed class RuntimeGeometry : IDisposable
 {
     private readonly Mesh mesh;
     private readonly MeshDrawGeometry geometry;
-    private readonly MaterialBinding gamma, transparent, visible, additive;
+    private readonly MaterialBinding gamma, transparent, visible, additive, shade;
     private readonly byte mapPass;
     private delegate FinalDrawItem RentDraw(Matrix4x4 matrix, byte passId, MeshDrawGeometry mesh, MaterialBinding binding,
         bool hasOverride, in MaterialUniformBytes uniforms, in MaterialTextureResourceSet<Texture> resources,
@@ -41,13 +41,15 @@ internal sealed class RuntimeGeometry : IDisposable
         visible = Binding("LinearVisible", "vec4(.01,.04,.09,.5)", true, BlendState.Alpha);
         // Experiment only captures true additive blends; Alpha coverage stays on the host.
         additive = Binding("LinearAdditive", "vec4(.01,.04,.09,1)", true, BlendState.Additive);
+        shade = Binding("NativeShade", "vec4(.5,.5,.5,1)", false, BlendState.MultiplyDestination);
 
         MaterialBinding Binding(string name, string color, bool linear, BlendState blend)
         {
             string vertex = "#version 450\nvoid main(){vec2 p=vec2((gl_VertexIndex<<1)&2,gl_VertexIndex&2);gl_Position=vec4(p*2-1,0,1);}";
             string fragment = "#version 450\nlayout(location=0) out vec4 c;\n"
                 + "vec3 RU_Encode(vec3 v){return mix(v*12.92,1.055*pow(max(v,vec3(0)),vec3(1.0/2.4))-.055,step(vec3(.0031308),v));}\n"
-                + "void RU_SourceMain(){c=" + color + ";}\nvoid main(){RU_SourceMain();c.rgb=RU_Encode(c.rgb);}\n// @rimunity-linear-program 1\n";
+                + "void RU_SourceMain(){c=" + color + ";}\nvoid main(){RU_SourceMain();"
+                + (linear ? "c.rgb=RU_Encode(c.rgb);" : "") + "}\n// @rimunity-linear-program 1\n";
             string vertPath = Path.Combine(scratch, name + ".vert.glsl"), fragPath = Path.Combine(scratch, name + ".frag.glsl");
             File.WriteAllText(vertPath, vertex); File.WriteAllText(fragPath, fragment);
             var pipeline = new PipelineState(blend, new DepthState(false, false), FaceCull.None);
@@ -78,13 +80,15 @@ internal sealed class RuntimeGeometry : IDisposable
     }
 
     //Additive linear draw used by Experiment capture-mode regressions.
-    internal void AddAdditive(MeshDrawFrame frame) => AddDraw(frame, additive);
+    internal void AddAdditive(MeshDrawFrame frame, int queue = 3001) => AddDraw(frame, additive, queue);
 
-    private void AddDraw(MeshDrawFrame frame, MaterialBinding material)
+    internal void AddShade(MeshDrawFrame frame, int queue) => AddDraw(frame, shade, queue);
+
+    private void AddDraw(MeshDrawFrame frame, MaterialBinding material, int queue = 3001)
     {
         int order = frame.Draws.Count;
         frame.Draws.Add(rent(Matrix4x4.Identity, mapPass, geometry, material, false,
-            in material.Uniforms, in material.Resources, order, 3001, null, 0, 0, null));
+            in material.Uniforms, in material.Resources, order, queue, null, 0, 0, null));
     }
 
     public void Dispose() => mesh.Dispose();

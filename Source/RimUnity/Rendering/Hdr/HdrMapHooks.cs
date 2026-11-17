@@ -127,17 +127,25 @@ internal static class HdrMapHooks
                 return false;
             }
             if (!experiment) return true;
-            if (!light.HasLights(queueMin, queueMax))
-            {
-                if (Diagnostics.RenderDebugReport.HdrTracing) Diagnostics.RenderDebugReport.Stage("HdrFallback", "frame=" + meshFrame.FrameNumber + "; queue=" + queueMin + ".." + queueMax + "; native: no lights in slice");
-                return true;
-            }
             //补画必须保留颜色和深度；宿主尚未提供 Load 附件时沿用完整原生帧。
             var loadAttachment = LoadAttachment(___sceneTargets);
             if (loadAttachment == null)
             {
                 if (Diagnostics.RenderDebugReport.HdrTracing) Diagnostics.RenderDebugReport.Stage("HdrFallback", "frame=" + meshFrame.FrameNumber + "; native: missing LoadAttachment");
                 return true;
+            }
+            if (!light.HasLights(queueMin, queueMax))
+            {
+                // Waylith caches Draws on the first RecordPass of the frame. Every
+                // Experiment slice must use the same empty Draws list semantics;
+                // otherwise later runs replay cached draws or lose their own draws.
+                if (light.Shell.PersistentDraws.Count > 0)
+                {
+                    meshFrame = light.Shell;
+                    return true;
+                }
+                if (clear) ClearScene(in ctx, light.Shell, attachment);
+                return false;
             }
             var runs = light.Partition(queueMin, queueMax);
             Diagnostics.RenderDebugReport.HdrPlan(meshFrame.FrameNumber, runs);

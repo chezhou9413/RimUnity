@@ -38,3 +38,7 @@ None/Legacy/Experiment/None while independent Bloom layer selection stays intact
 coverage, empty-light stability) are covered as well. Reset defaults must leave
 map HDR at `Experiment`. Older supplied runtime builds without this setting explicitly
 skip this regression.
+
+The installed game's map pass also records native shade and two HDR light runs
+on either side of a scene grab. Readback checks the grabbed image and final map
+pixels, with HDR disabled as a native control.
