@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using Waylith.Rendering;
 
 namespace RimUnity.ShaderTool;
 
@@ -51,9 +50,7 @@ internal static class ShaderLabStages
             (vertex, fragment) = RimUnity.Rendering.ShaderColorSpace.Convert(vertex, fragment);
         (vertex, fragment) = RimUnity.Rendering.ShaderStorageLayout.Convert(vertex, fragment);
         RimUnity.Rendering.ShaderBindingValidation.Validate(vertex, fragment);
-        //此 API 的返回值表示发现错误，不能按 Try 风格反向解释。
-        if (ShaderMetadataParser.ValidateStageInterface(vertex, fragment, vertexPath, fragmentPath))
-            throw new InvalidDataException("顶点输出与片元输入不一致。");
+        RimUnity.Rendering.ShaderStageValidation.Validate(vertex, fragment, vertexPath, fragmentPath);
         File.WriteAllText(vertexPath, vertex, new UTF8Encoding(false));
         File.WriteAllText(fragmentPath, fragment, new UTF8Encoding(false));
         ShaderCompiler.Verify(vertexPath); ShaderCompiler.Verify(fragmentPath);

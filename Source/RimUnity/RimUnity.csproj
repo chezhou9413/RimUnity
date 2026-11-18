@@ -20,6 +20,7 @@
     <Compile Include="../Shared/ShaderStorageLayout.cs" Link="Rendering/ShaderStorageLayout.cs" />
     <Compile Include="../Shared/SkinnedShaderProgram.cs" Link="Rendering/SkinnedShaderProgram.cs" />
     <Compile Include="../Shared/ShaderBindingValidation.cs" Link="Rendering/ShaderBindingValidation.cs" />
+    <Compile Include="../Shared/ShaderStageValidation.cs" Link="Rendering/ShaderStageValidation.cs" />
   </ItemGroup>
 </Project>
 

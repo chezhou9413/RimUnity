@@ -53,8 +53,9 @@ internal static class CustomShaderLoader
         ShaderBindingValidation.Validate(vertex, fragment);
         var layout = CustomShaderTextureLayout.BindTexelSizes(ShaderStorageLayout.Extract(fragment, data.key));
         var inputs = ShaderMetadataParser.ExtractVertexInputLayout(vertex, data.key);
-        if (layout.HasErrors || inputs.HasErrors || ShaderMetadataParser.ValidateStageInterface(vertex, fragment, vertexPath, fragmentPath))
-            throw new InvalidDataException("Shader 布局或阶段接口不合法：" + data.sourceName);
+        if (layout.HasErrors || inputs.HasErrors)
+            throw new InvalidDataException("Shader 布局不合法：" + data.sourceName);
+        ShaderStageValidation.Validate(vertex, fragment, vertexPath, fragmentPath);
         var program = new ShaderProgramDefinition
         {
             vertexShaderFileName = vertexPath, fragmentShaderFileName = fragmentPath,

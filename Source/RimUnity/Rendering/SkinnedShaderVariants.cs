@@ -20,11 +20,13 @@ internal static class SkinnedShaderVariants
             ShaderSourceLoader.ReadShaderSource(source.FragmentShaderFileName));
         var layout = CustomShaderTextureLayout.BindTexelSizes(ShaderStorageLayout.Extract(fragment, key));
         var inputs = ShaderMetadataParser.ExtractVertexInputLayout(vertex, key);
-        if (layout.HasErrors || inputs.HasErrors || ShaderMetadataParser.ValidateStageInterface(vertex, fragment, key + ".vert.glsl", key + ".frag.glsl"))
-            throw new InvalidOperationException(key + "：蒙皮 Shader 布局或阶段接口无效。");
+        if (layout.HasErrors || inputs.HasErrors)
+            throw new InvalidOperationException(key + "：蒙皮 Shader 布局无效。");
+        string vertexName = key + ".vert.glsl", fragmentName = key + ".frag.glsl";
+        ShaderStageValidation.Validate(vertex, fragment, vertexName, fragmentName);
         var stages = new PrecompiledShaderStages(
-            RuntimeShaderCompiler.Compile(vertex, key + ".vert.glsl", "main", RuntimeShaderLanguage.Glsl, RuntimeShaderStage.Vertex),
-            RuntimeShaderCompiler.Compile(fragment, key + ".frag.glsl", "main", RuntimeShaderLanguage.Glsl, RuntimeShaderStage.Fragment), false);
+            RuntimeShaderCompiler.Compile(vertex, vertexName, "main", RuntimeShaderLanguage.Glsl, RuntimeShaderStage.Vertex),
+            RuntimeShaderCompiler.Compile(fragment, fragmentName, "main", RuntimeShaderLanguage.Glsl, RuntimeShaderStage.Fragment), false);
         var shader = new NativeShader(key, source.ShaderPath, source.Program, source.Keywords.ToArray(), layout,
             source.PipelineState, vertexInputLayout: inputs, precompiledStages: stages);
         if (shader.HasErrors) throw new InvalidOperationException(key + "：蒙皮 Shader 校验失败。");
