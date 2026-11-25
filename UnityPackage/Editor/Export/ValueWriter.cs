@@ -83,13 +83,21 @@ namespace RimUnity.Editor
             for (Type type = value.GetType(); type != null && type != stopAt && type != typeof(MonoBehaviour) && type != typeof(object); type = type.BaseType)
                 foreach (FieldInfo field in type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
                 {
-                    if (field.IsStatic || field.IsInitOnly || field.IsNotSerialized) continue;
+                    if (field.IsStatic || field.IsInitOnly || field.IsNotSerialized || IsExportIgnored(field)) continue;
                     if (field.IsDefined(typeof(SerializeReference), true)) throw new NotSupportedException(path + "." + field.Name + "：SerializeReference 尚未支持。");
                     if (!field.IsPublic && !field.IsDefined(typeof(SerializeField), true)) continue;
                     if (!names.Add(field.Name)) throw new NotSupportedException(path + "：隐藏的同名字段 " + field.Name);
                     members.Add(new MemberData { name = field.Name, value = Write(field.GetValue(value), path + "." + field.Name) });
                 }
             return members;
+        }
+
+        //按特性类名跳过显式标记忽略导出的字段（如 #if UNITY_EDITOR 调试字段），不强制业务程序集引用 RimUnity.Authoring。
+        private static bool IsExportIgnored(FieldInfo field)
+        {
+            foreach (CustomAttributeData attribute in field.GetCustomAttributesData())
+                if (attribute.AttributeType.Name == nameof(RimUnityIgnoreAttribute)) return true;
+            return false;
         }
 
         //按公开成员名导出内置组件，避免依赖 Unity 内部 YAML 字段布局。
