@@ -49,9 +49,9 @@ internal sealed class ValueReader
         }
     }
 
-    //引用类型不匹配时直接指出需要调整的脚本引用。
+    //引用类型不匹配时直接指出需要调整的脚本引用；弱引用外层对象已销毁时返回 null。
     private static object Checked(RimUnity.Object value, Type type)
-        => type.IsInstanceOfType(value) ? value : throw new InvalidCastException($"导出引用 {value.GetType().FullName} 不能赋给 {type.FullName}；请使用 RimUnity 对应类型。");
+        => value == null ? null : type.IsInstanceOfType(value) ? value : throw new InvalidCastException($"导出引用 {value.GetType().FullName} 不能赋给 {type.FullName}；请使用 RimUnity 对应类型。");
 
     //常用 Unity 值类型保留原有 API 和内存布局。
     private static object Vector(float[] v, Type t)
@@ -71,13 +71,28 @@ internal sealed class ValueReader
     }
 
     //可序列化私有字段包括基类字段；属性仅用于显式内置组件适配。
+    private static readonly HashSet<(Type, string)> s_missingMemberWarnings = new();
+
     internal void Apply(object target, IEnumerable<MemberData> members)
     {
+        Type targetType = target.GetType();
         foreach (MemberData member in members)
         {
             try
             {
-                MemberInfo binding = ResolveMember(target.GetType(), member);
+                MemberInfo binding = ResolveMember(targetType, member);
+                if (binding == null)
+                {
+                    if (member.property)
+                    {
+                        throw new MissingFieldException(targetType.FullName, member.name);
+                    }
+                    if (s_missingMemberWarnings.Add((targetType, member.name)))
+                    {
+                        Verse.Log.Warning($"[RimUnity] 忽略预制体中已移除的旧字段：{targetType.FullName}.{member.name}（如需同步最新组件结构请重新导出资源）");
+                    }
+                    continue;
+                }
                 if (binding is PropertyInfo property)
                 {
                     if (member.value.kind == "event") EventBinder.Bind(property.GetValue(target), member.value.calls, this, objects);
@@ -95,7 +110,7 @@ internal sealed class ValueReader
                     else field.SetValue(target, Read(member.value, field.FieldType));
                 }
             }
-            catch (Exception ex) { throw new InvalidOperationException($"还原 {target.GetType().FullName}.{member.name} 失败", ex); }
+            catch (Exception ex) { throw new InvalidOperationException($"还原 {targetType.FullName}.{member.name} 失败", ex); }
         }
     }
 
@@ -111,7 +126,6 @@ internal sealed class ValueReader
                 binding = current.GetProperty(member.name, flags);
         for (Type current = type; current != null && binding == null; current = current.BaseType)
             binding = current.GetField(member.name, flags);
-        if (binding == null) throw new MissingFieldException(type.FullName, member.name);
         bindings.Add(key, binding);
         return binding;
     }

@@ -25,8 +25,7 @@ internal static class ResourceLoader
                 var node = Get<GameObject>("prefab").transform;
                 foreach (int index in Get<int[]>("children")) node = node.GetChild(index);
                 var componentType = TypeResolver.Component(Get<string>("componentType"));
-                result = node.gameObject.GetComponents(componentType)[Get<int>("componentIndex")];
-                break;
+                return node.gameObject.GetComponents(componentType)[Get<int>("componentIndex")];
             case "ScriptableObject":
                 var script = ScriptableObject.CreateInstance(TypeResolver.Resolve(Get<string>("scriptType")));
                 reader.Apply(script, fields["fields"].fields);
@@ -79,10 +78,14 @@ internal static class ResourceLoader
                     if (fields.ContainsKey("mipMapBias")) numeric.mipMapBias = Get<float>("mipMapBias");
                     result = numeric; break;
                 }
-                Texture2D texture = Texture2D.LoadFile(catalog.Resolve(Get<string>("file")), Get<bool>("linear"),
-                    fields.ContainsKey("readable") && Get<bool>("readable"));
+                string texturePath = catalog.Resolve(Get<string>("file"));
+                FilterMode filterMode = Get<FilterMode>("filterMode");
+                //严格按导出清单中的 mipmapCount 决定是否生成 Mip 链，避免改变已有旧导出包（尤其是无边距 2D 精灵图集）的显存与采样行为。
+                bool generateMips = fields.ContainsKey("mipmapCount") && Get<int>("mipmapCount") > 1;
+                Texture2D texture = Texture2D.LoadFile(texturePath, Get<bool>("linear"),
+                    fields.ContainsKey("readable") && Get<bool>("readable"), generateMips);
                 texture.wrapMode = Get<TextureWrapMode>("wrapMode");
-                texture.filterMode = Get<FilterMode>("filterMode");
+                texture.filterMode = filterMode;
                 if (fields.ContainsKey("anisoLevel")) texture.anisoLevel = Get<int>("anisoLevel");
                 if (fields.ContainsKey("mipMapBias")) texture.mipMapBias = Get<float>("mipMapBias");
                 result = texture;

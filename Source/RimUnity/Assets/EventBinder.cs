@@ -21,6 +21,8 @@ internal static class EventBinder
         {
             if (call.state == 0) continue;
             if (!objects.TryGetValue(call.target, out var target)) throw new InvalidOperationException($"事件目标不存在：{call.target}");
+            //外层弱引用指向的宿主对象已被销毁时跳过绑定，避免子树克隆期间空引用异常。
+            if (target == null) continue;
             Expression[] passed = call.mode switch
             {
                 0 => args,

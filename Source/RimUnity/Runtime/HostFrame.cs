@@ -26,6 +26,7 @@ internal static class HostFrame
         application = EngineApplication.Instance ?? throw new InvalidOperationException("Waylith 主循环尚未创建。");
         NativeRuntime.SceneOwnerProvider = () => Current.Game;
         NativeRuntime.ExceptionRaised += Report;
+        NativeRuntime.WarningRaised += ReportWarning;
         NativeRuntime.HierarchyChanged += UI.Runtime.UguiDirty.Mark;
         application.OnUpdate += Update;
         application.FrameEnqueued += FinishFrame;
@@ -90,6 +91,8 @@ internal static class HostFrame
     //将脚本异常明确交给游戏日志，保留对象与堆栈信息。
     private static void Report(Exception error, Object context)
         => Log.Error($"[RimUnity] {context?.name ?? "运行时"}：{error}");
+    private static void ReportWarning(string message)
+        => Log.Warning($"[RimUnity] {message}");
 
     //GPU 设备销毁前清理自有场景并解除订阅。
     private static void Shutdown(EngineApplication app)
@@ -110,6 +113,7 @@ internal static class HostFrame
         app.FrameEnqueued -= FinishFrame;
         app.BeforeGraphicsShutdown -= Shutdown;
         NativeRuntime.ExceptionRaised -= Report;
+        NativeRuntime.WarningRaised -= ReportWarning;
         NativeRuntime.HierarchyChanged -= UI.Runtime.UguiDirty.Mark;
         NativeRuntime.SceneOwnerProvider = null;
         application = null;

@@ -7,6 +7,7 @@ public sealed partial class Texture2D : Texture
 {
     private static Texture2D white, black, gray, normal;
     private readonly bool linear;
+    private readonly bool _hasMipChain;
     //图集只在像素提交后刷新，不在每帧复制静态贴图。
     public int contentRevision { get; private set; }
     public bool isExternallyOwned => !OwnsResource;
@@ -20,9 +21,21 @@ public sealed partial class Texture2D : Texture
         get { long bytes = 0; for (int i = 0; i < mipmapCount; i++) bytes += CoreTexture.CpuData.GetLevelSizeBytes(i); return bytes; }
     }
     public Texture2D(int width, int height, TextureFormat format = TextureFormat.RGBA32, bool mipChain = false, bool linear = false)
-        : base(new Waylith.Rendering.Texture2D(width, height, (Waylith.Rendering.LoadedTextureFormat)format, mipChain, linear)) => this.linear = linear;
-    private Texture2D(Waylith.Rendering.Texture2D native) : base(native) => linear = native.CpuData?.Linear ?? false;
-    private Texture2D(Waylith.Rendering.Texture2D native, bool owns) : base(native, owns) => linear = native.CpuData?.Linear ?? false;
+        : base(new Waylith.Rendering.Texture2D(width, height, (Waylith.Rendering.LoadedTextureFormat)format, mipChain, linear))
+    {
+        this.linear = linear;
+        _hasMipChain = mipChain;
+    }
+    private Texture2D(Waylith.Rendering.Texture2D native) : base(native)
+    {
+        linear = native.CpuData?.Linear ?? false;
+        _hasMipChain = native.MipCount > 1;
+    }
+    private Texture2D(Waylith.Rendering.Texture2D native, bool owns) : base(native, owns)
+    {
+        linear = native.CpuData?.Linear ?? false;
+        _hasMipChain = native.MipCount > 1;
+    }
     internal static Texture2D Borrow(Waylith.Rendering.Texture2D native) => new(native, false);
     //游戏图标保持宿主所有权，UI 精灵只共享相同的设备贴图。
     public static Texture2D FromNative(Waylith.Rendering.Texture2D native) => (Texture2D)Texture.FromNative(native);
@@ -41,17 +54,53 @@ public sealed partial class Texture2D : Texture
             CoreTexture.Opaque = true;
             for (int i = 3; i < pixels.Length; i += 4)
                 if (pixels[i] != 255) { CoreTexture.Opaque = false; break; }
-            CoreTexture.ReplaceCpuData(decodedWidth, decodedHeight, Waylith.Rendering.LoadedTextureFormat.Rgba32, new[] { pixels }, 1, linear);
+            int mipCount = _hasMipChain ? Waylith.Graphics.Textures.TexturePixelData.CalculateMipCount(decodedWidth, decodedHeight) : 1;
+            if (mipCount > 1)
+            {
+                CoreTexture.ReplaceCpuData(decodedWidth, decodedHeight, Waylith.Rendering.LoadedTextureFormat.Rgba32, new[] { pixels }, mipCount, linear, upload: false);
+                CoreTexture.Apply(updateMipmaps: true, makeNoLongerReadable: markNonReadable);
+            }
+            else
+            {
+                CoreTexture.ReplaceCpuData(decodedWidth, decodedHeight, Waylith.Rendering.LoadedTextureFormat.Rgba32, new[] { pixels }, 1, linear);
+                if (markNonReadable)
+                {
+                    CoreTexture.Apply(false, true);
+                }
+            }
+            contentRevision++;
+            return true;
         }
-        else
+
+        if (!CoreTexture.LoadEncodedImage(bytes))
         {
-            if (!CoreTexture.LoadEncodedImage(bytes)) return false;
-            PrepareFileWrite(true);
+            return false;
         }
-        var data = CoreTexture.CpuData;
-        if (data.Linear != linear) CoreTexture.ReplaceCpuData(width, height, data.Format, data.Levels, data.MipCount, linear);
+        PrepareFileWrite(true);
+        var cpuData = CoreTexture.CpuData;
+        int desiredMipCount = _hasMipChain ? Waylith.Graphics.Textures.TexturePixelData.CalculateMipCount(width, height) : 1;
+        //Waylith TexturePixelData.GenerateMipmaps 仅支持非压缩 Rgba32 降采样，跳过块压缩及其他格式避免未初始化 mip 级。
+        bool needsMipGeneration = _hasMipChain
+            && cpuData.Format == Waylith.Rendering.LoadedTextureFormat.Rgba32
+            && cpuData.MipCount < desiredMipCount;
+        if (needsMipGeneration)
+        {
+            CoreTexture.ReplaceCpuData(width, height, cpuData.Format, new[] { cpuData.Levels[0] }, desiredMipCount, linear, upload: false);
+            CoreTexture.Apply(updateMipmaps: true, makeNoLongerReadable: markNonReadable);
+        }
+        else if (cpuData.Linear != linear)
+        {
+            CoreTexture.ReplaceCpuData(width, height, cpuData.Format, cpuData.Levels, cpuData.MipCount, linear);
+            if (markNonReadable)
+            {
+                CoreTexture.Apply(false, true);
+            }
+        }
+        else if (markNonReadable)
+        {
+            CoreTexture.Apply(false, true);
+        }
         contentRevision++;
-        if (markNonReadable) CoreTexture.Apply(false, true);
         return true;
     }
     public Color GetPixel(int x, int y) { var c = CoreTexture.GetPixel(Wrap(x, width), height - 1 - Wrap(y, height)); return new(c.r, c.g, c.b, c.a); }

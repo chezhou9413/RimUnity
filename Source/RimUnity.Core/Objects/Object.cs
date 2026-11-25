@@ -45,6 +45,36 @@ public class Object
     //资源类型覆盖此入口释放自己拥有的原生资源。
     protected virtual void Release() { }
 
+    //标记根对象及其子树跨存档与场景切换保留，仅在进程关闭清理时释放（切场景时 AssetCatalog 托管的 RenderTexture 资产仍由宿主 EvictTextures 回收）。
+    public static void DontDestroyOnLoad(Object target)
+    {
+        Runtime.NativeRuntime.AssertThread();
+        if (target == null)
+        {
+            return;
+        }
+
+        GameObject targetObject = target is GameObject gameObject
+            ? gameObject
+            : target is Component component ? component.gameObject : null;
+        if (targetObject == null)
+        {
+            return;
+        }
+        if (targetObject.IsAssetToken)
+        {
+            throw new InvalidOperationException("不能对资源模板调用 DontDestroyOnLoad。");
+        }
+        //与 Unity 原版一致：DontDestroyOnLoad 仅对根对象生效，对子节点调用只告警并忽略，不提权父树。
+        if (targetObject.transform.parent != null)
+        {
+            Runtime.NativeRuntime.Warn($"DontDestroyOnLoad 仅对根 GameObject 生效，已忽略非根对象：{targetObject.name}");
+            return;
+        }
+
+        Runtime.NativeRuntime.SetSceneOwnershipRecursive(targetObject, persistAcrossScenes: true, sceneOwner: null);
+    }
+
     //明文模板注册工厂后才能克隆，禁止静默返回模板或浅拷贝引用。
     public static T Instantiate<T>(T original) where T : Object
     {

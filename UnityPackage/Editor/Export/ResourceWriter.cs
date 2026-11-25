@@ -34,6 +34,8 @@ namespace RimUnity.Editor
         //预制体和资源共用同一个依赖收集栈。
         internal void Begin() => dependencies.Push(new HashSet<string>());
         internal List<string> End() => dependencies.Pop().OrderBy(s => s, StringComparer.Ordinal).ToList();
+        internal bool TryBeginWriting(string id) => writing.Add(id);
+        internal void EndWriting(string id) => writing.Remove(id);
 
         //不可保存的场景外引用会报错，不用名字猜测对应资产。
         internal string Add(Object asset, string path, bool ui = false, bool cameraUi = false)
@@ -60,6 +62,14 @@ namespace RimUnity.Editor
                 finally { Object.DestroyImmediate(defaults); }
                 });
             }
+            if (asset is GameObject prefabAsset && PrefabUtility.IsPartOfPrefabAsset(prefabAsset))
+            {
+                if (prefabAsset.transform.parent != null)
+                {
+                    throw new NotSupportedException(path + "：请引用外部预制体的根节点资产，而非子对象：" + prefabAsset.name);
+                }
+                return _AddExternalPrefab(prefabAsset, path);
+            }
             if (!AssetDatabase.TryGetGUIDAndLocalFileIdentifier(asset, out string guid, out long local))
                 throw new NotSupportedException(path + "：引用不是可导出的工程资产：" + asset.name);
             string id = guid + "_" + local.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -76,6 +86,53 @@ namespace RimUnity.Editor
                     context.OutputFile = Path.Combine(directory, id + ".json");
                     return result;
                 });
+            }
+            finally { writing.Remove(id); }
+        }
+
+        //脚本字段引用的外部预制体以标准 Prefab 记录导出，与顶层导出共享同一资源 ID。
+        private string _AddExternalPrefab(GameObject prefabAsset, string path)
+        {
+            string assetPath = AssetDatabase.GetAssetPath(prefabAsset);
+            string guid = AssetDatabase.AssetPathToGUID(assetPath);
+            if (string.IsNullOrEmpty(guid))
+                throw new NotSupportedException(path + "：外部预制体不是可导出的工程资产：" + prefabAsset.name);
+            string id = guid + "_prefab";
+            if (dependencies.Count > 0) dependencies.Peek().Add(id);
+            if (records.ContainsKey(id)) return id;
+            if (!writing.Add(id)) throw new NotSupportedException(path + "：预制体依赖形成循环引用：" + assetPath);
+            try
+            {
+                Begin();
+                bool ended = false;
+                try
+                {
+                    string logical = "__assets/" + id;
+                    PrefabWriter.Read(prefabAsset, this, id, logical, (data, context) =>
+                    {
+                        string file = id + ".json";
+                        ExportJson.Write(Path.Combine(directory, file), data);
+                        context.OutputFile = Path.Combine(directory, file);
+                        ended = true;
+                        records.Add(id, new AssetRecord
+                        {
+                            id = id,
+                            sourcePath = assetPath,
+                            name = prefabAsset.name,
+                            description = data.warnings.Count == 0 ? "" : "[降级导出] " + string.Join("\n", data.warnings),
+                            path = logical,
+                            file = relative + "/" + file,
+                            type = "Prefab",
+                            dependencies = End()
+                        });
+                    });
+                    return id;
+                }
+                catch
+                {
+                    if (!ended) End();
+                    throw;
+                }
             }
             finally { writing.Remove(id); }
         }
@@ -159,6 +216,7 @@ namespace RimUnity.Editor
                     if (numeric) { Put("numericFormat", "RGBAFloatLE"); Put("width", texture.width); Put("height", texture.height); }
                     Put("wrapMode", texture.wrapMode); Put("filterMode", texture.filterMode);
                     Put("anisoLevel", texture.anisoLevel); Put("mipMapBias", texture.mipMapBias);
+                    Put("mipmapCount", texture.mipmapCount);
                 }
                 else if (asset is UnityEngine.U2D.SpriteAtlas atlas)
                 {
@@ -223,7 +281,31 @@ namespace RimUnity.Editor
                     data.type = "Material";
                     MaterialWriter.Write(material, data, writer, path, this, ui, cameraUi);
                 }
-                else if (!SpineWriter.Resource(asset, data, writer, path)) throw new NotSupportedException(path + "：未实现的资源类型：" + asset.GetType().FullName);
+                else if (asset is Component prefabComponent && PrefabUtility.IsPartOfPrefabAsset(prefabComponent.gameObject))
+                {
+                    GameObject prefabRoot = AssetDatabase.LoadMainAssetAtPath(inputPath) as GameObject;
+                    if (prefabRoot == null) throw new NotSupportedException(path + "：无法解析外部预制体根节点：" + inputPath);
+                    var childPath = new List<int>();
+                    for (Transform cur = prefabComponent.transform; cur != null && cur != prefabRoot.transform; cur = cur.parent)
+                        childPath.Add(cur.GetSiblingIndex());
+                    childPath.Reverse();
+                    int componentIndex = Array.IndexOf(prefabComponent.gameObject.GetComponents(prefabComponent.GetType()), prefabComponent);
+                    data.type = "PrefabComponent";
+                    Put("prefab", prefabRoot);
+                    Put("children", childPath.ToArray());
+                    Put("componentType", ComponentWriter.MapTypeName(prefabComponent.GetType().FullName));
+                    Put("componentIndex", componentIndex);
+                }
+                else if (SpineWriter.Resource(asset, data, writer, path)) { }
+                else if (asset is ScriptableObject scriptable
+                    && !scriptable.GetType().FullName.StartsWith("UnityEngine.", StringComparison.Ordinal)
+                    && !scriptable.GetType().FullName.StartsWith("TMPro.", StringComparison.Ordinal))
+                {
+                    data.type = "ScriptableObject";
+                    Put("scriptType", scriptable.GetType().FullName);
+                    data.members.Add(new MemberData { name = "fields", value = new ValueData { kind = "data", fields = writer.Fields(scriptable, path) } });
+                }
+                else throw new NotSupportedException(path + "：未实现的资源类型：" + asset.GetType().FullName);
                 string json = id + ".json";
                 ExportJson.Write(Path.Combine(directory, json), data);
                 records.Add(id, new AssetRecord { id = id, sourcePath = sourcePath, name = asset.name, description = "", path = "__assets/" + id,
