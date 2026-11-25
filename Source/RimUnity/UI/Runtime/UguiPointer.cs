@@ -114,6 +114,15 @@ internal static class UguiPointer
         RaycastResult overlayHit = _HitTest(guiPoint, filterCanvas: null, overlayOnly: true);
         if (overlayHit.gameObject == null)
         {
+            if (currentEvent.type == EventType.MouseDown)
+            {
+                GameObject selectedObject = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
+                Canvas selectedCanvas = selectedObject != null ? selectedObject.GetComponentInParent<Canvas>() : null;
+                if (selectedCanvas != null && selectedCanvas.EffectiveMode == RenderMode.ScreenSpaceOverlay)
+                {
+                    _DeselectIfSelectionChanged(null, LeftSlot.EnsureData());
+                }
+            }
             return;
         }
 

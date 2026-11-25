@@ -48,13 +48,43 @@ internal static class UguiLayout
     //读取分配剩余空间时的权重。
     internal static float GetFlexibleSize(RectTransform rect, int axis) => Property(rect, axis, 2);
 
-    //每个轴先自底向上测量，再自顶向下分配尺寸。
+    //每个轴先自底向上测量，再自顶向下分配尺寸；随后同步非活动子树的锚点局部坐标，避免激活前读取 localPosition 错位。
     internal static void Rebuild(RectTransform root)
     {
         for (int axis = 0; axis < 2; axis++)
         {
             Measure(root, axis);
             Arrange(root, axis);
+        }
+        RefreshInactiveAnchors(root);
+    }
+
+    //非活动子树不执行 LayoutController，仅随最新父矩形刷新锚点对应的 localPosition。
+    private static void RefreshInactiveAnchors(RectTransform parent)
+    {
+        for (int i = 0; i < parent.childCount; i++)
+        {
+            if (parent.GetChild(i) is not RectTransform child) continue;
+            if (!child.gameObject.activeSelf)
+            {
+                RefreshSubtreeAnchors(child);
+            }
+            else
+            {
+                RefreshInactiveAnchors(child);
+            }
+        }
+    }
+
+    private static void RefreshSubtreeAnchors(RectTransform rect)
+    {
+        rect.RefreshAnchors();
+        for (int i = 0; i < rect.childCount; i++)
+        {
+            if (rect.GetChild(i) is RectTransform child)
+            {
+                RefreshSubtreeAnchors(child);
+            }
         }
     }
 

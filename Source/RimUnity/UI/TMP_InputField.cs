@@ -7,10 +7,44 @@ using KeyCode = UnityEngine.KeyCode;
 
 namespace RimUnity.UI;
 
-//标准单行 TMP 编辑器，保留原 SDF 文本并通过事件系统管理焦点与选区；
-//IME 仅通过 KeyDown.character 接收已提交字符（Waylith Input.imeCompositionMode / compositionCursorPos 为未实现 stub，暂不支持 composition 预览）。
+//标准单行 TMP 编辑器，保留原 SDF 文本并通过事件系统与 Waylith TextFocus / IME 同步焦点、候选窗位置与组合预览；
+//RimWorld 1.7.5014 rev1195 的 UnityStubs 已实现 Input.compositionString / Input.imeCompositionMode / Input.compositionCursorPos 以及 ImeComposition / TextFocus。
 public sealed partial class TMP_InputField : Selectable, IPointerClickHandler, IDragHandler, IInitializePotentialDragHandler, IUpdateSelectedHandler
 {
+    //与宿主 IMGUI 控件 ID 分离的保留段，用于向 Waylith TextFocus / TextInputBridge 声明当前文本焦点。
+    private const int HostControlIdMask = 0x7F000000;
+    private const int HostControlIdTag = 0x52000000;
+    private static TMP_InputField s_focused;
+
+    internal int HostControlId => HostControlIdTag | (GetInstanceID() & 0x00FFFFFF);
+    internal static bool IsHostControlId(int controlId) => (controlId & HostControlIdMask) == HostControlIdTag;
+    internal static TMP_InputField ActiveFocused
+    {
+        get
+        {
+            if (s_focused != null && (!s_focused || !s_focused.isFocused || !s_focused.IsActive() || !s_focused.IsInteractable()))
+            {
+                s_focused = null;
+            }
+            return s_focused;
+        }
+    }
+    internal string ActiveComposition => isFocused && !readOnly ? UnityEngine.Input.compositionString ?? "" : "";
+    internal string DisplayText
+    {
+        get
+        {
+            string composition = ActiveComposition;
+            if (composition.Length == 0)
+            {
+                return value;
+            }
+            int start = Math.Min(caret, anchor);
+            int length = Math.Abs(caret - anchor);
+            return value.Remove(start, length).Insert(start, composition);
+        }
+    }
+
     public enum CharacterValidation { None = 0, Digit = 1, Integer = 2, Decimal = 3 }
     public CharacterValidation characterValidation { get; set; }
     public RectTransform textViewport { get; set; }
@@ -155,7 +189,13 @@ public sealed partial class TMP_InputField : Selectable, IPointerClickHandler, I
         {
             return;
         }
+        if (s_focused != null && s_focused != this)
+        {
+            s_focused._DeactivateInputFieldInternal(invokeDeselect: true);
+        }
         isFocused = true;
+        s_focused = this;
+        UnityEngine.GUIUtility.keyboardControl = readOnly ? 0 : HostControlId;
         wasCanceled = false;
         original = text;
         caret = text.Length;
@@ -171,6 +211,14 @@ public sealed partial class TMP_InputField : Selectable, IPointerClickHandler, I
             return;
         }
         isFocused = false;
+        if (s_focused == this)
+        {
+            s_focused = null;
+        }
+        if (UnityEngine.GUIUtility.keyboardControl == HostControlId)
+        {
+            UnityEngine.GUIUtility.keyboardControl = 0;
+        }
         if (anchor != caret)
         {
             onEndTextSelection.Invoke(text, anchor, caret);
@@ -254,9 +302,51 @@ public sealed partial class TMP_InputField : Selectable, IPointerClickHandler, I
     //编辑时按普通字符显示，失焦恢复作者指定的富文本模式。
     internal void Refresh()
     {
-        if (textComponent != null) { textComponent.text = text; textComponent.richText = richText && !isFocused; textComponent.enableWordWrapping = false; }
-        if (placeholder != null) placeholder.enabled = text.Length == 0;
+        string display = DisplayText;
+        if (textComponent != null) { textComponent.text = display; textComponent.richText = richText && !isFocused; textComponent.enableWordWrapping = false; }
+        if (placeholder != null) placeholder.enabled = display.Length == 0;
         blinkStart = Time.unscaledTime;
         if (isFocused && anchor != caret) onTextSelection.Invoke(text, anchor, caret);
+    }
+
+    //同步 IME 组合预览串到可视文本与占位符，不改写已提交的 text 值或触发 onValueChanged。
+    internal void SyncComposition()
+    {
+        string display = DisplayText;
+        if (textComponent != null && textComponent.text != display)
+        {
+            textComponent.text = display;
+            blinkStart = Time.unscaledTime;
+        }
+        if (placeholder != null)
+        {
+            bool showPlaceholder = display.Length == 0;
+            if (placeholder.enabled != showPlaceholder)
+            {
+                placeholder.enabled = showPlaceholder;
+            }
+        }
+    }
+
+    //在宿主 GUI.ProcessPendingWindows 清理未绘制 IMGUI 焦点后同步 RimUnity 输入框焦点，确保 Waylith TextFocus 与 TextInputBridge 持续激活。
+    internal static void SyncHostTextFocus()
+    {
+        TMP_InputField focused = ActiveFocused;
+        int currentControl = UnityEngine.GUIUtility.keyboardControl;
+        if (focused == null || focused.readOnly)
+        {
+            if (IsHostControlId(currentControl))
+            {
+                UnityEngine.GUIUtility.keyboardControl = 0;
+            }
+            return;
+        }
+        if (currentControl == 0 || IsHostControlId(currentControl))
+        {
+            UnityEngine.GUIUtility.keyboardControl = focused.HostControlId;
+            return;
+        }
+        //原版 IMGUI 文本控件主动接管了焦点，退让当前 UGUI 输入框焦点。
+        focused.DeactivateInputField(clearSelection: true);
     }
 }

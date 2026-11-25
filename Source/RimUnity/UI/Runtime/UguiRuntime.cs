@@ -138,6 +138,7 @@ internal static partial class UguiRuntime
     internal static void Draw()
     {
         if (Event.current.type != EventType.Repaint) return;
+        TMP_InputField.ActiveFocused?.SyncComposition();
         Rendering.ShaderGlobals.Update();
         ScreenCameraUi.Draw();
         //整帧字形先入图集，避免逐个 Text 绘制时反复扩容、复制和上传同一张图集。
@@ -193,7 +194,7 @@ internal static partial class UguiRuntime
                     style.fontSize = Mathf.Max(1, Mathf.RoundToInt(text.fontSize * scale));
                     Rect bounds = Bounds(entry, text is Text custom ? custom.ContentRect : entry.Rect.rect);
                     var previousMaterial = text.material;
-                    if (previousMaterial == null && (entry.Masks.Length > 0 || entry.RectMasks.Length > 0)) text.material = UiMaskData.DefaultMaterial();
+                    if (previousMaterial == null && (entry.Masks.Length > 0 || UiRectMaskData.NeedsShader(entry))) text.material = UiMaskData.DefaultMaterial();
                     try { UguiTextRenderer.Draw(entry, text, style, bounds, tint, scale); }
                     finally { text.material = previousMaterial; }
                 }
@@ -246,6 +247,13 @@ internal static partial class UguiRuntime
     private static class GuiWindowInputPatch
     {
         private static void Prefix() => UguiPointer.ProcessPreWindow();
+    }
+
+    //宿主在 Repaint 结束清理未绘制 IMGUI 文本焦点后同步 RimUnity 输入框焦点，确保 Waylith TextInputBridge 持续开启字符/IME 输入。
+    [HarmonyPatch(typeof(UnityEngine.GUI), nameof(UnityEngine.GUI.ProcessPendingWindows))]
+    private static class GuiPendingWindowsPatch
+    {
+        private static void Postfix() => TMP_InputField.SyncHostTextFocus();
     }
 
     //进入 UI 根边界前处理覆盖层输入，在游戏绘制结束后绘制覆盖层。

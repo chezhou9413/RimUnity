@@ -1,17 +1,19 @@
 using System;
+using HarmonyLib;
 using RimUnity.Runtime;
 using Verse;
 using Waylith;
 
 namespace RimUnity;
 
-//直接订阅 Waylith 主循环，在宿主更新之后、冻结绘制队列之前推进自有运行时。
+//直接订阅 Waylith 主循环，在宿主更新之后、InputSystem.BeginFrame 清空边沿输入与冻结绘制队列之前推进自有运行时。
 internal static class HostFrame
 {
     private static EngineApplication application;
     private static Game lastGame;
     private static bool framePending;
     private static float effectsTime;
+    private static int lastUpdatedFrame = -1;
     //帧调度安装后，内容模组才可以创建运行时对象。
     internal static bool IsInstalled => application != null;
     //调试场景仅在启用期间订阅，生成测试实例发生在本帧模拟之前。
@@ -28,12 +30,31 @@ internal static class HostFrame
         NativeRuntime.ExceptionRaised += Report;
         NativeRuntime.WarningRaised += ReportWarning;
         NativeRuntime.HierarchyChanged += UI.Runtime.UguiDirty.Mark;
-        application.OnUpdate += Update;
+        application.OnUpdate += UpdateFallback;
         application.FrameEnqueued += FinishFrame;
         application.BeforeGraphicsShutdown += Shutdown;
         RenderPipeline.RenderPipelineManager.Install(application);
         Rendering.LoadingWarmup.Install(application);
         lastGame = Current.Game;
+    }
+
+    //RimWorld 1.7.5014 rev1195 在 app.OnUpdate 末尾调用 InputSystem.BeginFrame 清除边沿输入；
+    //优先在宿主 UnityRuntime.Update 结束后立即推进，确保 RimUnity 脚本在清理前读取 GetKeyDown / GetMouseButtonDown。
+    [HarmonyPatch(typeof(Waylith.UnityCompat.UnityRuntime), nameof(Waylith.UnityCompat.UnityRuntime.Update))]
+    private static class UnityRuntimeUpdatePatch
+    {
+        private static void Postfix() => UpdateOncePerFrame();
+    }
+
+    private static void UpdateFallback() => UpdateOncePerFrame();
+
+    private static void UpdateOncePerFrame()
+    {
+        if (application == null) return;
+        int frame = Waylith.Time.FrameCount;
+        if (lastUpdatedFrame == frame) return;
+        lastUpdatedFrame = frame;
+        Update();
     }
 
     //退出或更换游戏时释放场景实例，模板和共享资源保留在资源缓存中。
@@ -111,13 +132,14 @@ internal static class HostFrame
         NativeRuntime.ClearScene();
         ParticleDrawBatch.Clear();
         Tweening.DOTween.Clear();
-        app.OnUpdate -= Update;
+        app.OnUpdate -= UpdateFallback;
         app.FrameEnqueued -= FinishFrame;
         app.BeforeGraphicsShutdown -= Shutdown;
         NativeRuntime.ExceptionRaised -= Report;
         NativeRuntime.WarningRaised -= ReportWarning;
         NativeRuntime.HierarchyChanged -= UI.Runtime.UguiDirty.Mark;
         NativeRuntime.SceneOwnerProvider = null;
+        lastUpdatedFrame = -1;
         application = null;
     }
 }
