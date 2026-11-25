@@ -31,6 +31,7 @@ internal static class HostFrame
         application.OnUpdate += Update;
         application.FrameEnqueued += FinishFrame;
         application.BeforeGraphicsShutdown += Shutdown;
+        RenderPipeline.RenderPipelineManager.Install(application);
         Rendering.LoadingWarmup.Install(application);
         lastGame = Current.Game;
     }
@@ -100,6 +101,7 @@ internal static class HostFrame
         FinishFrame(app);
         //宿主已等待渲染线程和 GPU 并释放管线，先丢弃取消的加载快照，再处理片段释放回调。
         Rendering.LoadingWarmup.Shutdown(app);
+        RenderPipeline.RenderPipelineManager.Shutdown();
         Rendering.HdrDrawFrame.ClearWorkspaces();
         Diagnostics.DpaDiagnostics.SetEnabled(false);
         Diagnostics.DpaDiagnostics.Reset();

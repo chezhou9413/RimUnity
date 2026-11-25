@@ -21,6 +21,13 @@ public sealed class RenderTexture : Texture
         Target = target; antiAliasing = samples;
         CaptureTarget = samples == 1 ? target : new UnityEngine.RenderTexture(target.width * 2, target.height * 2, target.depth, target.graphicsFormat, 1);
     }
+    //确保底层 GPU 颜色附件已在主线程分配，供自定义渲染管线步骤在渲染线程安全访问。
+    public bool EnsureCreated()
+    {
+        EnsureAllocation(Target);
+        return Target.Create() && Target.GpuTexture != null;
+    }
+
     //宿主 Create 尚未映射单通道格式，在进入宿主绘制前分配真实颜色附件。
     internal void PrepareCapture() => EnsureAllocation(CaptureTarget);
 
