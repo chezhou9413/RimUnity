@@ -34,7 +34,7 @@ internal static class UguiLayout
                 candidatePriority = 0;
             }
             else continue;
-            if (value < 0 || candidatePriority < priority) continue;
+            if (!float.IsFinite(value) || value < 0 || candidatePriority < priority) continue;
             result = candidatePriority > priority ? value : Mathf.Max(result, value);
             priority = candidatePriority;
         }

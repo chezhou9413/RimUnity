@@ -16,6 +16,7 @@ internal static partial class UguiRuntime
     {
         internal ParticleSystem Particles;
         internal int Order;
+        internal bool Visible = true;
         //相机画布作为一个 UI 渲染层提交，子图形可以保留制作时的对象层。
         internal int RenderLayer => Canvas.EffectiveMode == RenderMode.ScreenSpaceCamera
             ? Canvas.rootCanvas.gameObject.layer : (Particles != null ? Particles.gameObject.layer : Rect.gameObject.layer);
@@ -45,49 +46,52 @@ internal static partial class UguiRuntime
         Entries.Clear();
         //窗口没有可绘制面积时清空提交，保留画布上一次有效布局，恢复尺寸后重新准备。
         if (Screen.width <= 0 || Screen.height <= 0) return;
+        Rect screenClip = new(0, 0, Screen.width / Prefs.UIScale, Screen.height / Prefs.UIScale);
         foreach (Canvas canvas in Canvases)
         {
             if (!canvas.isActiveAndEnabled || !canvas.isRootCanvas) continue;
             canvas.Prepare();
             UguiDirty.EnsureLayout((RectTransform)canvas.transform);
             GraphicRaycaster raycaster = canvas.GetComponent<GraphicRaycaster>();
-            Collect(canvas, (RectTransform)canvas.transform, 1f, raycaster != null && raycaster.enabled,
-                new Rect(0, 0, Screen.width / Prefs.UIScale, Screen.height / Prefs.UIScale), new UguiProjection(canvas),
+            Collect(canvas, (RectTransform)canvas.transform, raycaster != null && raycaster.enabled,
+                screenClip, screenClip, new UguiProjection(canvas),
                 CollectContext.FromAncestors(canvas.transform.parent));
         }
         Entries.Sort((a, b) => a.Canvas.EffectiveOrder != b.Canvas.EffectiveOrder ? a.Canvas.EffectiveOrder.CompareTo(b.Canvas.EffectiveOrder) : a.Order.CompareTo(b.Order));
     }
 
     //以层级顺序收集图形，让后绘制元素先接收命中。
-    private static void Collect(Canvas canvas, RectTransform rect, float alpha, bool raycast, Rect clip, UguiProjection projection, CollectContext context)
+    private static void Collect(Canvas canvas, RectTransform rect, bool raycast, Rect clip, Rect screenClip, UguiProjection projection, CollectContext context)
     {
         if (!rect.gameObject.activeInHierarchy) return;
         Canvas nested = rect.GetComponent<Canvas>();
         if (nested != null && nested != canvas && nested.isActiveAndEnabled)
         {
             nested.Prepare(); canvas = nested; projection = new UguiProjection(canvas);
+            GraphicRaycaster nestedRaycaster = nested.GetComponent<GraphicRaycaster>();
+            if (nestedRaycaster != null) raycast = nestedRaycaster.enabled;
         }
         CanvasGroup group = rect.GetComponent<CanvasGroup>();
-        if (group != null && group.enabled)
-        {
-            alpha *= group.alpha;
-        }
         context = context.WithGroup(group);
         Mask stencil = rect.GetComponent<Mask>();
-        //先处理当前节点，再递归子节点；查询列表可以共用而无需逐节点分配数组。
+        bool maskHidden = stencil != null && stencil.MaskEnabled() && !stencil.showMaskGraphic;
+        //先处理当前节点，再递归子节点；showMaskGraphic = false 仅隐藏绘制，仍保留射线命中（如 ScrollView Viewport）。
         rect.GetComponents(CollectedGraphics);
         foreach (Graphic graphic in CollectedGraphics)
         {
-            if (!graphic.enabled || (stencil != null && stencil.MaskEnabled() && !stencil.showMaskGraphic)) continue;
-            if (!IntersectsClip(projection, rect, graphic, clip)) continue;
+            if (!graphic.enabled) continue;
+            bool isMaskable = graphic is not MaskableGraphic maskableGraphic || maskableGraphic.maskable;
+            Rect effectiveClip = isMaskable ? clip : screenClip;
+            if (!IntersectsClip(projection, rect, graphic, effectiveClip)) continue;
             bool acceptsRaycast = raycast && graphic.raycastTarget && context.GroupsAllowRaycast;
-            Entries.Add(CreateEntry(canvas, rect, graphic, alpha, acceptsRaycast, clip, context));
+            if (maskHidden && !acceptsRaycast) continue;
+            Entries.Add(CreateEntry(canvas, rect, graphic, context.Alpha, acceptsRaycast, effectiveClip, context, isMaskable, !maskHidden));
         }
         CollectedGraphics.Clear();
         var particles = rect.GetComponent<ParticleSystem>();
         if (particles != null && particles.enabled)
         {
-            Entry entry = CreateEntry(canvas, rect, null, alpha, false, clip, context);
+            Entry entry = CreateEntry(canvas, rect, null, context.Alpha, false, clip, context);
             entry.Particles = particles; Entries.Add(entry);
         }
         //Mask 的包围矩形只用于粗裁剪，圆角和透明像素仍由原来的遮罩处理。
@@ -98,32 +102,36 @@ internal static partial class UguiRuntime
         {
             Rect local = rect.rect;
             local.xMin += mask.padding.x; local.yMin += mask.padding.y; local.xMax -= mask.padding.z; local.yMax -= mask.padding.w;
-            Rect r = projection.Bounds(rect, local);
-            clip = Rect.MinMaxRect(Mathf.Max(clip.xMin, r.xMin), Mathf.Max(clip.yMin, r.yMin), Mathf.Min(clip.xMax, r.xMax), Mathf.Min(clip.yMax, r.yMax));
+            if (local.width <= 0f || local.height <= 0f)
+                clip = default;
+            else
+            {
+                Rect r = projection.Bounds(rect, local);
+                clip = Rect.MinMaxRect(Mathf.Max(clip.xMin, r.xMin), Mathf.Max(clip.yMin, r.yMin), Mathf.Min(clip.xMax, r.xMax), Mathf.Min(clip.yMax, r.yMax));
+            }
         }
         context = context.WithMasks(stencil, mask);
         for (int i = 0; i < rect.childCount; i++)
-            if (rect.GetChild(i) is RectTransform child) Collect(canvas, child, alpha, raycast, clip, projection, context);
-            else CollectTransform(canvas, rect.GetChild(i), rect, alpha, raycast, clip, projection, context);
+            if (rect.GetChild(i) is RectTransform child) Collect(canvas, child, raycast, clip, screenClip, projection, context);
+            else CollectTransform(canvas, rect.GetChild(i), rect, raycast, clip, screenClip, projection, context);
     }
 
     //普通 Transform 的粒子节点也保留层级顺序，不要求作者替换成 RectTransform。
-    private static void CollectTransform(Canvas canvas, Transform node, RectTransform parentRect, float alpha, bool raycast, Rect clip, UguiProjection projection, CollectContext context)
+    private static void CollectTransform(Canvas canvas, Transform node, RectTransform parentRect, bool raycast, Rect clip, Rect screenClip, UguiProjection projection, CollectContext context)
     {
         if (!node.gameObject.activeInHierarchy) return;
         CanvasGroup group = node.GetComponent<CanvasGroup>();
-        if (group != null && group.enabled) alpha *= group.alpha;
         context = context.WithGroup(group);
         var particles = node.GetComponent<ParticleSystem>();
         if (particles != null && particles.enabled)
         {
-            Entry entry = CreateEntry(canvas, parentRect, null, alpha, false, clip, context);
+            Entry entry = CreateEntry(canvas, parentRect, null, context.Alpha, false, clip, context);
             entry.Particles = particles; Entries.Add(entry);
         }
         context = context.WithMasks(node.GetComponent<Mask>(), node.GetComponent<RectMask2D>());
         for (int i = 0; i < node.childCount; i++)
-            if (node.GetChild(i) is RectTransform rect) Collect(canvas, rect, alpha, raycast, clip, projection, context);
-            else CollectTransform(canvas, node.GetChild(i), parentRect, alpha, raycast, clip, projection, context);
+            if (node.GetChild(i) is RectTransform rect) Collect(canvas, rect, raycast, clip, screenClip, projection, context);
+            else CollectTransform(canvas, node.GetChild(i), parentRect, raycast, clip, screenClip, projection, context);
     }
 
     //绘制只发生在 Repaint，所有全局 GUI 状态由 finally 恢复。
@@ -134,14 +142,14 @@ internal static partial class UguiRuntime
         ScreenCameraUi.Draw();
         //整帧字形先入图集，避免逐个 Text 绘制时反复扩容、复制和上传同一张图集。
         foreach (Entry entry in Entries)
-            if (entry.Canvas.EffectiveMode == RenderMode.ScreenSpaceOverlay && entry.Graphic is Text text
+            if (entry.Visible && entry.Canvas.EffectiveMode == RenderMode.ScreenSpaceOverlay && entry.Graphic is Text text
                 && text.isActiveAndEnabled && entry.Clip.width > 0 && entry.Clip.height > 0)
                 UguiTextRenderer.Warm(entry, text);
         try
         {
             foreach (Entry entry in Entries)
             {
-                if (entry.Canvas.EffectiveMode != RenderMode.ScreenSpaceOverlay) continue;
+                if (!entry.Visible || entry.Canvas.EffectiveMode != RenderMode.ScreenSpaceOverlay) continue;
                 UiMaskData.Current = entry;
                 Graphic graphic = entry.Graphic;
                 if (entry.Particles != null)
@@ -218,15 +226,26 @@ internal static partial class UguiRuntime
     {
         if (!entry.Clip.Contains(point)) return false;
         Vector2 screen = new(point.x * Prefs.UIScale, Screen.height - point.y * Prefs.UIScale);
-        foreach (var mask in entry.Masks) if (!RectTransformUtility.RectangleContainsScreenPoint(mask.transform, screen)) return false;
+        Camera eventCamera = entry.Canvas.EffectiveMode == RenderMode.ScreenSpaceOverlay
+            ? null
+            : (entry.Canvas.rootCanvas.worldCamera != null ? entry.Canvas.rootCanvas.worldCamera : Camera.main);
+        foreach (var mask in entry.Masks)
+            if (!RectTransformUtility.RectangleContainsScreenPoint(mask.transform, screen, eventCamera)) return false;
         foreach (var mask in entry.RectMasks)
         {
             var rect = (RectTransform)mask.transform;
-            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(rect, screen, entry.Canvas.worldCamera, out var local)) return false;
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(rect, screen, eventCamera, out var local)) return false;
             Rect r = rect.rect; r.xMin += mask.padding.x; r.yMin += mask.padding.y; r.xMax -= mask.padding.z; r.yMax -= mask.padding.w;
             if (!r.Contains(local)) return false;
         }
-        return RectTransformUtility.RectangleContainsScreenPoint(entry.Rect, screen);
+        return RectTransformUtility.RectangleContainsScreenPoint(entry.Rect, screen, eventCamera);
+    }
+
+    //在宿主把鼠标/滚轮事件派发给 IMGUI 窗口之前，先处理顶层 Overlay 与已捕获的 UGUI 交互。
+    [HarmonyPatch(typeof(UnityEngine.GUI), nameof(UnityEngine.GUI.DispatchInputToWindows))]
+    private static class GuiWindowInputPatch
+    {
+        private static void Prefix() => UguiPointer.ProcessPreWindow();
     }
 
     //进入 UI 根边界前处理覆盖层输入，在游戏绘制结束后绘制覆盖层。

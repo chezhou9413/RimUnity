@@ -23,13 +23,14 @@ public sealed class TMP_Dropdown : Selectable, IPointerClickHandler, ISubmitHand
     private int selected;
     private Verse.FloatMenu activeMenu;
     public bool IsExpanded => activeMenu != null && Verse.Find.WindowStack.Windows.Contains(activeMenu);
-    //关闭菜单并释放窗口引用。
-    public void Hide() { activeMenu?.Close(); activeMenu = null; }
+    //关闭菜单并释放窗口引用，避免停用面板时误播关闭音效。
+    public void Hide() { if (activeMenu != null) { activeMenu.Close(false); activeMenu = null; } }
     public int value
     {
         get => selected;
         set
         {
+            if (options.Count == 0) return;
             int previous = selected;
             SetValueWithoutNotify(value);
             if (selected != previous) onValueChanged.Invoke(selected);
@@ -37,12 +38,17 @@ public sealed class TMP_Dropdown : Selectable, IPointerClickHandler, ISubmitHand
     }
     //外部同步选项时不触发回写事件。
     public void SetValueWithoutNotify(int value) { selected = options.Count == 0 ? 0 : System.Math.Clamp(value, 0, options.Count - 1); RefreshShownValue(); }
-    //选项集合可由业务直接替换，刷新时同步有效下标。
+    //选项集合可由业务直接替换，刷新时同步有效下标和图标显隐。
     public void RefreshShownValue()
     {
         selected = options.Count == 0 ? 0 : System.Math.Clamp(selected, 0, options.Count - 1);
         if (captionText != null) captionText.text = options.Count > 0 ? options[selected].text : "";
-        if (captionImage != null) captionImage.sprite = options.Count > 0 ? options[selected].image : null;
+        if (captionImage != null)
+        {
+            Sprite sprite = options.Count > 0 ? options[selected].image : null;
+            captionImage.sprite = sprite;
+            captionImage.enabled = sprite != null;
+        }
     }
     //清空选项并恢复空白标题。
     public void ClearOptions() { options.Clear(); selected = 0; RefreshShownValue(); }
@@ -68,6 +74,11 @@ public sealed class TMP_Dropdown : Selectable, IPointerClickHandler, ISubmitHand
     public void OnSubmit(BaseEventData data) => Show();
     //取消展开的选项。
     public void OnCancel(BaseEventData data) => Hide();
+    protected override void OnEnable()
+    {
+        base.OnEnable();
+        RefreshShownValue();
+    }
     //关闭界面时同步关闭浮动菜单。
     protected override void OnDisable()
     {

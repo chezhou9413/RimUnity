@@ -1,5 +1,7 @@
-
 namespace RimUnity.EventSystems;
+
+//事件系统处理器标记接口，与 UGUI ExecuteEvents 保持一致。
+public interface IEventSystemHandler { }
 
 //保存焦点事件的处理标记和所属事件系统。
 public class BaseEventData
@@ -8,11 +10,14 @@ public class BaseEventData
     public bool used { get; private set; }
     public GameObject selectedObject
     {
-        get => eventSystem?.currentSelectedGameObject;
-        set => eventSystem?.SetSelectedGameObject(value, this);
+        get => eventSystem != null ? eventSystem.currentSelectedGameObject : null;
+        set
+        {
+            if (eventSystem != null) eventSystem.SetSelectedGameObject(value, this);
+        }
     }
     //未显式指定时使用当前事件系统。
-    public BaseEventData(EventSystem system = null) => eventSystem = system ?? EventSystem.current;
+    public BaseEventData(EventSystem system = null) => eventSystem = system != null ? system : EventSystem.current;
     //停止后续默认输入处理。
     public void Use() => used = true;
     //允许复用事件对象。
@@ -30,9 +35,9 @@ public class AxisEventData : BaseEventData
     public AxisEventData(EventSystem system = null) : base(system) { }
 }
 
-public interface IMoveHandler { void OnMove(AxisEventData eventData); }
-public interface ISubmitHandler { void OnSubmit(BaseEventData eventData); }
-public interface ICancelHandler { void OnCancel(BaseEventData eventData); }
-public interface ISelectHandler { void OnSelect(BaseEventData eventData); }
-public interface IDeselectHandler { void OnDeselect(BaseEventData eventData); }
-public interface IUpdateSelectedHandler { void OnUpdateSelected(BaseEventData eventData); }
+public interface IMoveHandler : IEventSystemHandler { void OnMove(AxisEventData eventData); }
+public interface ISubmitHandler : IEventSystemHandler { void OnSubmit(BaseEventData eventData); }
+public interface ICancelHandler : IEventSystemHandler { void OnCancel(BaseEventData eventData); }
+public interface ISelectHandler : IEventSystemHandler { void OnSelect(BaseEventData eventData); }
+public interface IDeselectHandler : IEventSystemHandler { void OnDeselect(BaseEventData eventData); }
+public interface IUpdateSelectedHandler : IEventSystemHandler { void OnUpdateSelected(BaseEventData eventData); }

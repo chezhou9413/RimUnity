@@ -29,28 +29,42 @@ public class EventSystem : MonoBehaviour
         alreadySelecting = true;
         try
         {
-            Send<IDeselectHandler>(currentSelectedGameObject, h => h.OnDeselect(data));
+            ExecuteEvents.Execute(currentSelectedGameObject, data, ExecuteEvents.deselectHandler);
             currentSelectedGameObject = selected;
-            Send<ISelectHandler>(selected, h => h.OnSelect(data));
+            ExecuteEvents.Execute(selected, data, ExecuteEvents.selectHandler);
         }
         finally { alreadySelecting = false; }
     }
     //查询桥接画布的实际命中结果。
     public bool IsPointerOverGameObject() => UI.Runtime.UguiPointer.IsOverUi;
+    public bool IsPointerOverGameObject(int pointerId) => UI.Runtime.UguiPointer.IsOverUi;
     //按前后顺序返回实际可交互图形，不使用组件包围盒代替遮罩命中。
     public void RaycastAll(PointerEventData data, System.Collections.Generic.List<RaycastResult> results)
     {
         results.Clear();
         UI.Runtime.UguiRuntime.Prepare();
-        Vector2 gui = new(data.position.x / Verse.Prefs.UIScale, (Screen.height - data.position.y) / Verse.Prefs.UIScale);
+        float invScale = Verse.Prefs.UIScale > 0f ? 1f / Verse.Prefs.UIScale : 1f;
+        Vector2 gui = new(data.position.x * invScale, (Screen.height - data.position.y) * invScale);
         var entries = UI.Runtime.UguiRuntime.Entries;
         for (int i = entries.Count - 1; i >= 0; i--)
-            if (entries[i].Raycast && UI.Runtime.UguiRuntime.Contains(entries[i], gui)) results.Add(new RaycastResult { gameObject = entries[i].Rect.gameObject });
+        {
+            var entry = entries[i];
+            if (entry.Raycast && UI.Runtime.UguiRuntime.Contains(entry, gui))
+            {
+                results.Add(new RaycastResult
+                {
+                    gameObject = entry.Rect.gameObject,
+                    screenPosition = data.position,
+                    depth = entry.Order,
+                    sortingOrder = entry.Canvas.EffectiveOrder
+                });
+            }
+        }
     }
-    //同一焦点对象上的活动组件依次接收事件。
+    //保留内部辅助供遗留调用点使用，底层统一委托 ExecuteEvents 校验活动状态。
     internal static bool Send<T>(GameObject target, System.Action<T> call)
     {
-        if (target == null) return false;
+        if (target == null || !target.activeInHierarchy) return false;
         bool handled = false;
         foreach (T handler in target.GetComponents<T>())
             if (handler is not Behaviour b || b.isActiveAndEnabled) { call(handler); handled = true; }
