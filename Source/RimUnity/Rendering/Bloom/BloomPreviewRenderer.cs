@@ -55,10 +55,9 @@ internal sealed class BloomPreviewRenderer : IDisposable
         int frame = ++frameNumber;
         using var captured = Capture(commands, view, frame);
         using var sceneFrame = new HdrDrawFrame(captured);
-        var settings = RimUnityMod.Bloom.Snapshot() with
-        { FrameNumber = frame, Draws = new HdrDrawFrame(captured, mask, readOnlyDepth: true) };
-        using (settings)
+        using (var settings = RimUnityMod.Bloom.Snapshot(frame))
         {
+            settings.Draws = HdrDrawFrame.CaptureBloom(captured, mask);
             var ctx = new FrameContext(context, context.FrameResources[0], command, scenePass, scene.GetFramebuffer(scenePass),
                 scene.Extent, VkSampleCountFlags._1Bit, scene.ColorFormat, scene.DepthFormat);
             command.Begin(VkCommandBufferUsageFlags.OneTimeSubmitBit);

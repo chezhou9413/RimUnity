@@ -157,10 +157,17 @@ internal sealed class HdrDrawFrame : IDisposable
 
     internal static bool ShouldCapture(FinalDrawItem draw, int mask, bool readOnlyDepth)
         => IsMap(draw) && (mask & (1 << draw.Layer)) != 0
-            // Bloom's separate light buffer must not copy the grabbed background.
-            // Keep refraction in the normal scene, where the host schedules its grab.
+            //折射由宿主在普通场景抓屏，泛光层不复制被折射的背景。
             && (!readOnlyDepth || draw.Binding.Shader.SceneGrab == null);
 
+    //泛光层本帧没有可绘制内容时，向地图和预览返回空结果。
+    internal static HdrDrawFrame CaptureBloom(MeshDrawFrame source, int mask)
+    {
+        var snapshot = new HdrDrawFrame(source, mask, readOnlyDepth: true);
+        return snapshot.Frame == null ? null : snapshot;
+    }
+
+    //从首个可见指令继续复制，空泛光层无需租用工作区或构建地图快照。
     internal HdrDrawFrame(MeshDrawFrame source, int mask = -1, bool readOnlyDepth = false, bool lightBuffer = false)
     {
         using var cpu = Diagnostics.LabCpuMetrics.Measure(readOnlyDepth || lightBuffer
@@ -174,20 +181,40 @@ internal sealed class HdrDrawFrame : IDisposable
         var token = trace.Begin();
         try
         {
+            var draws = source.Draws;
+            var persistent = source.PersistentDraws;
+            trace.DynamicInput = draws.Count; trace.PersistentInput = persistent.Count;
+            int firstDynamic = 0, p = 0;
+            if (readOnlyDepth)
+            {
+                while (firstDynamic < draws.Count && !ShouldCapture(draws[firstDynamic], mask, true)) firstDynamic++;
+                if (firstDynamic == draws.Count)
+                {
+                    while (p < persistent.Count && !ShouldCapture(persistent[p], mask, true)) p++;
+                    if (p == persistent.Count)
+                    {
+                        Diagnostics.LabCpuMetrics.RecordSnapshot(true, 0, mask);
+                        trace.End(Diagnostics.DpaDiagnostics.HdrStage.FilterDynamic, token);
+                        complete = true;
+                        return;
+                    }
+                }
+            }
             workspace = RentWorkspace(readOnlyDepth || lightBuffer);
             Frame = Shell(source, MeshDrawFrame.RentList(), MeshDrawFrame.RentList());
-            trace.DynamicInput = source.Draws.Count; trace.PersistentInput = source.PersistentDraws.Count;
             trace.End(stage, token); stage = Diagnostics.DpaDiagnostics.HdrStage.FilterDynamic; token = trace.Begin();
             var dynamic = workspace.Dynamic;
-            foreach (var item in source.Draws)
+            for (int i = firstDynamic; i < draws.Count; i++)
+            {
+                var item = draws[i];
                 if (lightBuffer ? HdrLightBlend.ShouldCapture(item) : ShouldCapture(item, mask, readOnlyDepth))
                     dynamic.Add(item);
+            }
             trace.End(stage, token); stage = Diagnostics.DpaDiagnostics.HdrStage.SortDynamic; token = trace.Begin();
             dynamic.Sort((a, b) => a.SortKey.CompareTo(b.SortKey));
             trace.End(stage, token); stage = Diagnostics.DpaDiagnostics.HdrStage.MergeAndLookup; token = trace.Begin();
-            var persistent = source.PersistentDraws;
             var bindings = workspace.Bindings;
-            int p = 0, d = 0;
+            int d = 0;
             //与宿主合并顺序一致：键相等时先画持久绘制项。
             while (p < persistent.Count || d < dynamic.Count)
             {

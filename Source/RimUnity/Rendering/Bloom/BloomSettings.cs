@@ -9,7 +9,7 @@ public enum MapHdrMode { None, Legacy, Experiment }
 public sealed partial class BloomSettings : ModSettings
 {
     public bool enabled;
-    // Map HDR is independent of Bloom; absent settings keys intentionally default off.
+    //地图 HDR 独立配置，缺省时关闭。
     public MapHdrMode mapHdrMode;
     public int layerMask;
     public float threshold = .8f, intensity = .6f, softKnee = .5f, scatter = .65f;
@@ -61,12 +61,12 @@ public sealed partial class BloomSettings : ModSettings
     }
 
     //给渲染线程传递不可变数值，不在渲染线程访问地图、模组设置或 Unity 对象。
-    internal BloomFrame Snapshot()
+    internal BloomFrame Snapshot(int frameNumber = 0)
     {
         int mask = EffectiveLayerMask;
         return new(mask != 0 && Current.ProgramState == ProgramState.Playing && Find.CurrentMap != null,
             Mathf.Clamp(threshold, 0, 4), Mathf.Clamp(intensity, 0, 4), Mathf.Clamp01(softKnee), Mathf.Clamp(scatter, .05f, .95f))
-            { LayerMask = mask };
+            { LayerMask = mask, FrameNumber = frameNumber };
     }
 
     //设置窗口与调试报告共用；不触碰渲染线程状态。
@@ -89,12 +89,13 @@ internal sealed record BloomFrame(bool Enabled, float Threshold, float Intensity
     private int disposed;
     internal int LayerMask { get; init; }
     internal int FrameNumber { get; init; }
-    internal HdrDrawFrame Draws { get; init; }
-    internal ScreenEfx.EfxFrame Effects { get; init; }
+    //主线程填完快照后才把它交给宿主，在途帧独占这两项资源。
+    internal HdrDrawFrame Draws { get; set; }
+    internal ScreenEfx.EfxFrame Effects { get; set; }
     //快照独占筛选后的绘制项，释放时不触碰地图本身的绘制缓存。
     public void Dispose()
     {
-        //The effects container can be pooled after retirement. An old payload must never dispose it twice.
+        //帧退役后效果容器可被复用，旧载荷只能释放一次。
         if (System.Threading.Interlocked.Exchange(ref disposed, 1) != 0) return;
         Draws?.Dispose(); Effects?.Dispose();
     }

@@ -121,19 +121,25 @@ internal static class BloomHooks
             + "。本帧沿用宿主合成。", 0x48414E44);
     }
 
-    //在宿主调用点接线，避免接口转发器和属性 getter 被内联后跳过补丁。
+    //在宿主捕获完成后读取同一阶段的载荷，保留原有接口调用和逐阶段计时。
     private static IEnumerable<CodeInstruction> PatchCapture(IEnumerable<CodeInstruction> instructions)
-        => ReplaceFeatureCall(instructions, AccessTools.Method(typeof(IRenderFeature), nameof(IRenderFeature.CaptureFrame)),
-            nameof(CaptureFeature));
-
-    private static IEnumerable<CodeInstruction> PatchPasses(IEnumerable<CodeInstruction> instructions)
-        => ReplaceFeatureCall(instructions, AccessTools.PropertyGetter(typeof(IRenderFeature), nameof(IRenderFeature.Passes)),
-            nameof(GetFeaturePasses));
-
-    private static IEnumerable<CodeInstruction> ReplaceFeatureCall(IEnumerable<CodeInstruction> instructions,
-        MethodInfo original, string replacementName)
     {
-        var replacement = AccessTools.Method(typeof(BloomHooks), replacementName);
+        var capture = AccessTools.Method(typeof(IRenderFeature), nameof(IRenderFeature.CaptureFrame));
+        var matcher = new CodeMatcher(instructions).MatchStartForward(
+            new CodeMatch(code => code.IsLdloc()), new CodeMatch(code => code.IsLdarg(1)),
+            new CodeMatch(code => code.Calls(capture)));
+        if (matcher.IsInvalid) throw new MissingMethodException("FrameRenderer 缺少渲染阶段捕获调用。");
+        var loadFeature = new CodeInstruction(matcher.Opcode, matcher.Operand);
+        matcher.Advance(3).Insert(loadFeature, new CodeInstruction(OpCodes.Ldarg_1),
+            CodeInstruction.Call(typeof(BloomHooks), nameof(AfterFeatureCapture)));
+        return matcher.InstructionEnumeration();
+    }
+
+    //在宿主读取通道列表的位置接入后处理，兼容已内联的属性访问。
+    private static IEnumerable<CodeInstruction> PatchPasses(IEnumerable<CodeInstruction> instructions)
+    {
+        var original = AccessTools.PropertyGetter(typeof(IRenderFeature), nameof(IRenderFeature.Passes));
+        var replacement = AccessTools.Method(typeof(BloomHooks), nameof(GetFeaturePasses));
         bool found = false;
         foreach (var instruction in instructions)
         {
@@ -148,14 +154,14 @@ internal static class BloomHooks
         if (!found) throw new MissingMethodException("FrameRenderer no longer calls " + original);
     }
 
-    private static object CaptureFeature(IRenderFeature feature, in FrameTiming timing)
+    //地图提供宿主快照，后处理只构建本帧需要的泛光和屏幕效果。
+    private static object AfterFeatureCapture(object payload, IRenderFeature feature, in FrameTiming timing)
     {
-        object payload = feature.CaptureFrame(in timing);
-        if (!interfaceCompatible) return payload;
+        if (!interfaceCompatible || payload == null) return payload;
         if (feature is MapRenderFeature && payload is MeshDrawFrame map)
             Handoff.Offer(map.FrameNumber, map);
 
-        if (feature is not PostFxFeature || payload == null) return payload;
+        if (feature is not PostFxFeature) return payload;
         if (!Handoff.TryTake(timing.FrameNumber, out var captured, out var miss))
         {
             //世界地图和创建星球没有同帧地图快照，保留宿主载荷与原生合成。
@@ -165,10 +171,21 @@ internal static class BloomHooks
             return payload;
         }
         lastHandshakeMiss = null;
-        var settings = RimUnityMod.Bloom.Snapshot() with { FrameNumber = timing.FrameNumber };
-        if (settings.Enabled && settings.Intensity > 0)
-            settings = settings with { Draws = new HdrDrawFrame(captured, settings.LayerMask, readOnlyDepth: true) };
-        try { return settings with { Effects = ScreenEfx.EfxPlayer.Capture() }; }
+        var bloom = RimUnityMod.Bloom;
+        bool diagnostics = Diagnostics.RenderDebugReport.Collecting || Diagnostics.ParticleDebugWindow.Capturing;
+        if ((bloom.EffectiveLayerMask == 0 || bloom.intensity <= 0f)
+            && !ScreenEfx.EfxPlayer.HasPlaying && !diagnostics) return payload;
+
+        var settings = bloom.Snapshot(timing.FrameNumber);
+        try
+        {
+            if (settings.Enabled && settings.Intensity > 0f)
+                settings.Draws = HdrDrawFrame.CaptureBloom(captured, settings.LayerMask);
+            if (ScreenEfx.EfxPlayer.HasPlaying) settings.Effects = ScreenEfx.EfxPlayer.Capture();
+            if (settings.Draws != null || settings.Effects != null || diagnostics) return settings;
+            settings.Dispose();
+            return payload;
+        }
         catch { settings.Dispose(); throw; }
     }
 
