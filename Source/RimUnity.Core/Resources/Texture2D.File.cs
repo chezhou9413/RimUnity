@@ -9,13 +9,16 @@ namespace RimUnity;
 //文件纹理保留恢复来源，首次采样才上传 GPU，闲置后交给宿主管理驻留。
 public sealed partial class Texture2D
 {
-    //只加载已存在的资源，不把损坏的文件替换成占位图片。
+    //只加载已存在的资源，不把损坏的文件替换成占位图片；保留三参重载以兼容已编译模组。
     public static Texture2D LoadFile(string path, bool linear = false, bool readable = false)
+        => LoadFile(path, linear, readable, false);
+
+    public static Texture2D LoadFile(string path, bool linear, bool readable, bool mipChain)
     {
         Runtime.NativeRuntime.AssertThread();
         string fullPath = Path.GetFullPath(path);
-        var data = ReadFile(fullPath, out bool cached);
-        return new Texture2D(new FileTexture(fullPath, linear, readable, data, cached));
+        var data = ReadFile(fullPath, mipChain, out bool cached);
+        return new Texture2D(new FileTexture(fullPath, linear, readable, mipChain, data, cached));
     }
 
     private delegate bool ReadCached(string path, out LoadedTextureData data);
@@ -33,11 +36,18 @@ public sealed partial class Texture2D
     }
 
     //优先读宿主像素缓存；PNG 路径保留透明 RGB，不能再经过透明像素扩散。
-    private static LoadedTextureData ReadFile(string path, out bool cached)
+    private static LoadedTextureData ReadFile(string path, bool mipChain, out bool cached)
     {
+        bool isPayload = IO.GpuTexturePayload.IsFile(path);
         cached = ReadCache(path, out var data);
-        if (cached) return data;
-        if (IO.GpuTexturePayload.IsFile(path))
+        if (cached)
+        {
+            bool needsMipUpgrade = mipChain && !isPayload && data.Format == LoadedTextureFormat.Rgba32
+                && data.MipCount <= 1 && Math.Max(data.Width, data.Height) > 1;
+            if (!needsMipUpgrade) return data;
+            cached = false;
+        }
+        if (isPayload)
         {
             var payload = IO.GpuTexturePayload.Read(path);
             return new LoadedTextureData(payload.width, payload.height, payload.mipCount,
@@ -46,8 +56,24 @@ public sealed partial class Texture2D
         byte[] bytes = File.ReadAllBytes(path);
         byte[] rgba = PngDecoder.TryDecodeRgba32(bytes, out int width, out int height);
         if (rgba != null)
-            return new LoadedTextureData(width, height, 1, LoadedTextureFormat.Rgba32, new[] { rgba }, TexturePixelData.IsOpaqueRgba32(rgba));
-        if (GpuTextureService.TryLoadTextureFromMemory(bytes, out var decoded)) return decoded;
+        {
+            int mipCount = mipChain ? TexturePixelData.CalculateMipCount(width, height) : 1;
+            byte[][] levels = mipCount > 1
+                ? TexturePixelData.GenerateRgba32MipChain(rgba, width, height, mipCount, premultiplied: false)
+                : new[] { rgba };
+            return new LoadedTextureData(width, height, mipCount, LoadedTextureFormat.Rgba32, levels, TexturePixelData.IsOpaqueRgba32(rgba));
+        }
+        if (GpuTextureService.TryLoadTextureFromMemory(bytes, out var decoded))
+        {
+            if (mipChain && decoded.Format == LoadedTextureFormat.Rgba32 && decoded.MipCount <= 1
+                && Math.Max(decoded.Width, decoded.Height) > 1 && decoded.Levels is { Length: > 0 })
+            {
+                int mipCount = TexturePixelData.CalculateMipCount(decoded.Width, decoded.Height);
+                byte[][] levels = TexturePixelData.GenerateRgba32MipChain(decoded.Levels[0], decoded.Width, decoded.Height, mipCount, premultiplied: false);
+                return new LoadedTextureData(decoded.Width, decoded.Height, mipCount, decoded.Format, levels, decoded.Opaque, decoded.SourceStamp, decoded.Swizzle);
+            }
+            return decoded;
+        }
         throw new InvalidDataException("无法解码纹理：" + path);
     }
 
@@ -56,12 +82,13 @@ public sealed partial class Texture2D
     {
         private readonly string path;
         private readonly bool linear, keepReadable;
+        private readonly bool _mipChain;
         private bool disposed, modified;
 
-        internal FileTexture(string path, bool linear, bool readable, LoadedTextureData data, bool cached)
+        internal FileTexture(string path, bool linear, bool readable, bool mipChain, LoadedTextureData data, bool cached)
             : base(data.Width, data.Height, data.Format, linear, data.MipCount, true)
         {
-            this.path = path; this.linear = linear; keepReadable = readable;
+            this.path = path; this.linear = linear; keepReadable = readable; _mipChain = mipChain;
             Name = path; Opaque = data.Opaque;
             ReplaceCpuData(data.Width, data.Height, data.Format, data.Levels, data.MipCount, linear, false);
             CpuData.Swizzle = data.Swizzle;
@@ -78,7 +105,7 @@ public sealed partial class Texture2D
             if (modified) return;
             if (!replace && !CpuData.HasData)
             {
-                var data = ReadFile(path, out _);
+                var data = ReadFile(path, _mipChain, out _);
                 ReplaceCpuData(data.Width, data.Height, data.Format, data.Levels, data.MipCount, linear, false);
                 CpuData.Swizzle = data.Swizzle;
             }
@@ -93,7 +120,7 @@ public sealed partial class Texture2D
             if (GpuResource != null) return true;
             if (!CpuData.HasData)
             {
-                var data = ReadFile(path, out _);
+                var data = ReadFile(path, _mipChain, out _);
                 ReplaceCpuData(data.Width, data.Height, data.Format, data.Levels, data.MipCount, linear, false);
                 CpuData.Swizzle = data.Swizzle;
             }

@@ -9,6 +9,7 @@ public sealed class GameObject : Object
     internal readonly List<Component> Components = new();
     internal Func<GameObject> CloneFactory;
     internal object SceneOwner;
+    internal bool PersistAcrossScenes;
     private bool active = true;
     private int objectLayer;
     public Transform transform { get; }
@@ -54,6 +55,9 @@ public sealed class GameObject : Object
         if (!IsAssetToken) throw new InvalidOperationException("只有资源模板可以注册克隆工厂。");
         CloneFactory = factory ?? throw new ArgumentNullException(nameof(factory));
     }
+    //供加载器为预制体模板与运行实例的子树节点绑定克隆入口；运行时实例克隆仍按导出预制体结构重建，不深拷贝运行期修改状态。
+    internal void RegisterSubtreeCloneFactory(Func<GameObject> factory)
+        => CloneFactory = factory ?? throw new ArgumentNullException(nameof(factory));
     public void SetActive(bool value)
     {
         Runtime.NativeRuntime.AssertThread();
@@ -129,6 +133,7 @@ public sealed class GameObject : Object
         foreach (Component component in Components.ToArray()) if (component is not Transform) DestroyImmediate(component);
         transform.Detach();
         transform.Destroyed = true; Components.Clear();
+        CloneFactory = null; PersistAcrossScenes = false;
         Runtime.NativeRuntime.Unregister(this);
     }
     internal void Remove(Component component)

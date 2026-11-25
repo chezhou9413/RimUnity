@@ -17,7 +17,7 @@ namespace RimUnity.Editor
             if (text.overflowMode != TextOverflowModes.Overflow && text.overflowMode != TextOverflowModes.Masking
                 && text.overflowMode != TextOverflowModes.Truncate && text.overflowMode != TextOverflowModes.Ellipsis)
                 throw new NotSupportedException(path + "：TMP 分页和链接溢出尚未接通。");
-            foreach (string name in new[] { "text", "font", "fontSize", "fontSizeMin", "fontSizeMax", "enableAutoSizing", "enableWordWrapping", "richText", "enableKerning", "overflowMode", "alignment", "characterSpacing", "lineSpacing", "margin", "color", "raycastTarget", "faceColor", "outlineColor", "outlineWidth" }) data.members.Add(writer.Property(text, name, path));
+            foreach (string name in new[] { "text", "font", "fontSize", "fontSizeMin", "fontSizeMax", "enableAutoSizing", "enableWordWrapping", "richText", "enableKerning", "overflowMode", "alignment", "characterSpacing", "lineSpacing", "margin", "color", "raycastTarget", "maskable", "faceColor", "outlineColor", "outlineWidth" }) data.members.Add(writer.Property(text, name, path));
             Material material = text.fontSharedMaterial;
             if (material == null || !material.HasProperty("_GradientScale")) throw new NotSupportedException(path + "：仅支持 TMP SDF 字体材质。");
             foreach (string keyword in new[] { "UNDERLAY_ON", "UNDERLAY_INNER", "GLOW_ON", "BEVEL_ON" }) if (material.IsKeywordEnabled(keyword)) throw new NotSupportedException(path + "：TMP 材质特性尚未接通：" + keyword);

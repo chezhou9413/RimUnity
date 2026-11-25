@@ -26,9 +26,9 @@ namespace RimUnity.Editor
             ["UnityEngine.UI.Shadow"] = new[] { "effectColor", "effectDistance", "useGraphicAlpha" },
             ["UnityEngine.UI.Outline"] = new[] { "effectColor", "effectDistance", "useGraphicAlpha" },
             //overrideSprite 是非序列化的临时状态，getter 在无覆盖时返回 sprite，不能写入预制体。
-            ["UnityEngine.UI.Image"] = new[] { "color", "raycastTarget", "sprite", "type", "preserveAspect", "fillCenter", "fillMethod", "fillAmount", "fillClockwise", "fillOrigin", "pixelsPerUnitMultiplier", "useSpriteMesh" },
-            ["UnityEngine.UI.RawImage"] = new[] { "color", "raycastTarget", "texture", "uvRect" },
-            ["UnityEngine.UI.Text"] = new[] { "color", "raycastTarget", "text", "font", "fontSize", "fontStyle", "alignment", "supportRichText", "lineSpacing", "horizontalOverflow", "verticalOverflow", "resizeTextForBestFit", "resizeTextMinSize", "resizeTextMaxSize" },
+            ["UnityEngine.UI.Image"] = new[] { "color", "raycastTarget", "maskable", "sprite", "type", "preserveAspect", "fillCenter", "fillMethod", "fillAmount", "fillClockwise", "fillOrigin", "pixelsPerUnitMultiplier", "useSpriteMesh" },
+            ["UnityEngine.UI.RawImage"] = new[] { "color", "raycastTarget", "maskable", "texture", "uvRect" },
+            ["UnityEngine.UI.Text"] = new[] { "color", "raycastTarget", "maskable", "text", "font", "fontSize", "fontStyle", "alignment", "supportRichText", "lineSpacing", "horizontalOverflow", "verticalOverflow", "resizeTextForBestFit", "resizeTextMinSize", "resizeTextMaxSize" },
             ["UnityEngine.UI.Button"] = new[] { "interactable", "targetGraphic", "transition", "onClick" },
             ["UnityEngine.UI.Toggle"] = new[] { "interactable", "targetGraphic", "transition", "graphic", "group", "toggleTransition", "isOn", "onValueChanged" },
             ["UnityEngine.UI.ToggleGroup"] = new[] { "allowSwitchOff" },
@@ -173,6 +173,7 @@ namespace RimUnity.Editor
         internal static string MapTypeName(string type)
         {
             if (type == "TMPro.TextMeshProUGUI") return "RimUnity.UI.TextMeshProUGUI";
+            if (type == "TMPro.TMP_Text") return "RimUnity.UI.TMP_Text";
             if (type == "TMPro.TMP_FontAsset") return "RimUnity.UI.TMP_FontAsset";
             if (type == "TMPro.TMP_InputField") return "RimUnity.UI.TMP_InputField";
             if (type == "TMPro.TMP_Dropdown") return "RimUnity.UI.TMP_Dropdown";

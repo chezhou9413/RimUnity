@@ -45,17 +45,36 @@ namespace RimUnity.Editor
                         string guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(prefab));
                         if (string.IsNullOrEmpty(guid)) throw new ArgumentException("必须导出工程资源，不能导出场景对象：" + logical);
                         string id = guid + "_prefab";
-                        if (records.ContainsKey(id)) throw new ArgumentException("同一 Prefab 不能在同一批次使用多个逻辑路径。");
-                        resources.Begin();
-                        PrefabWriter.Read(prefab, resources, id, logical, (data, context) =>
+                        if (records.TryGetValue(id, out AssetRecord existing))
                         {
-                            string file = id + ".json";
-                            ExportJson.Write(Path.Combine(directory, file), data);
-                            context.OutputFile = Path.Combine(directory, file);
-                            records.Add(id, new AssetRecord { id = id, sourcePath = AssetDatabase.GetAssetPath(prefab), name = prefab.name, description = (request.description ?? "")
-                                + (data.warnings.Count == 0 ? "" : "\n[降级导出] " + string.Join("\n", data.warnings)), path = logical,
-                                file = generation + "/" + file, type = "Prefab", dependencies = resources.End() });
-                        });
+                            if (!existing.path.StartsWith("__assets/", StringComparison.Ordinal))
+                                throw new ArgumentException("同一 Prefab 不能在同一批次使用多个逻辑路径。");
+                            existing.path = logical;
+                            existing.description = request.description ?? existing.description;
+                            continue;
+                        }
+                        if (!resources.TryBeginWriting(id))
+                            throw new NotSupportedException(logical + "：预制体依赖形成循环引用：" + AssetDatabase.GetAssetPath(prefab));
+                        resources.Begin();
+                        bool ended = false;
+                        try
+                        {
+                            PrefabWriter.Read(prefab, resources, id, logical, (data, context) =>
+                            {
+                                string file = id + ".json";
+                                ExportJson.Write(Path.Combine(directory, file), data);
+                                context.OutputFile = Path.Combine(directory, file);
+                                ended = true;
+                                records.Add(id, new AssetRecord { id = id, sourcePath = AssetDatabase.GetAssetPath(prefab), name = prefab.name, description = (request.description ?? "")
+                                    + (data.warnings.Count == 0 ? "" : "\n[降级导出] " + string.Join("\n", data.warnings)), path = logical,
+                                    file = generation + "/" + file, type = "Prefab", dependencies = resources.End() });
+                            });
+                        }
+                        finally
+                        {
+                            if (!ended) resources.End();
+                            resources.EndWriting(id);
+                        }
                     }
                     else
                     {

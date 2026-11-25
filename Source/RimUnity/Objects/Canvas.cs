@@ -33,6 +33,9 @@ public class Canvas : MonoBehaviour
     //让动态添加内容后需要立刻测量尺寸的调用者刷新布局。
     public static void ForceUpdateCanvases() => UI.Runtime.UguiRuntime.Prepare();
 
+    //供封装在 Verse.Window 里的 ScreenSpaceCamera 画布在窗口回调期间处理输入。
+    public void ProcessWindowInput(Vector2 windowOffset) => UI.Runtime.UguiPointer.ProcessWindowCanvas(this, windowOffset);
+
     //屏幕变化后按 CanvasScaler 的 Unity 规则更新逻辑分辨率。
     internal void Prepare()
     {

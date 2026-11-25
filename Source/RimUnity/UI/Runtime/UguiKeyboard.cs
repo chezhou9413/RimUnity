@@ -16,7 +16,7 @@ internal static class UguiKeyboard
         Event ev = Event.current;
         if (ev.type != EventType.KeyDown && ev.type != EventType.KeyUp && ev.type != EventType.Repaint) return;
         BaseEventData update = new(system);
-        EventSystem.Send<IUpdateSelectedHandler>(system.currentSelectedGameObject, h => h.OnUpdateSelected(update));
+        ExecuteEvents.Execute(system.currentSelectedGameObject, update, ExecuteEvents.updateSelectedHandler);
         if (update.used) { if (ev.isKey) ev.Use(); return; }
         if (!system.sendNavigationEvents || ev.type != EventType.KeyDown) return;
         MoveDirection direction = ev.keyCode switch
@@ -41,18 +41,25 @@ internal static class UguiKeyboard
         }
         if (direction != MoveDirection.None)
         {
-            AxisEventData data = new(system) { moveDir = direction, moveVector = direction switch
+            AxisEventData data = new(system)
             {
-                MoveDirection.Left => Vector2.left, MoveDirection.Right => Vector2.right,
-                MoveDirection.Up => Vector2.up, _ => Vector2.down
-            } };
-            if (EventSystem.Send<IMoveHandler>(system.currentSelectedGameObject, h => h.OnMove(data))) ev.Use();
+                moveDir = direction,
+                moveVector = direction switch
+                {
+                    MoveDirection.Left => Vector2.left,
+                    MoveDirection.Right => Vector2.right,
+                    MoveDirection.Up => Vector2.up,
+                    _ => Vector2.down
+                }
+            };
+            if (ExecuteEvents.Execute(system.currentSelectedGameObject, data, ExecuteEvents.moveHandler)) ev.Use();
         }
         else
         {
             BaseEventData data = new(system);
-            bool handled = submit ? EventSystem.Send<ISubmitHandler>(system.currentSelectedGameObject, h => h.OnSubmit(data)) :
-                EventSystem.Send<ICancelHandler>(system.currentSelectedGameObject, h => h.OnCancel(data));
+            bool handled = submit
+                ? ExecuteEvents.Execute(system.currentSelectedGameObject, data, ExecuteEvents.submitHandler)
+                : ExecuteEvents.Execute(system.currentSelectedGameObject, data, ExecuteEvents.cancelHandler);
             if (handled || data.used) ev.Use();
         }
     }

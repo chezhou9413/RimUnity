@@ -1,7 +1,7 @@
 //Copyright (c) 2014-2015, Unity Technologies. MIT 许可见 ThirdParty/UGUI/LICENSE。
 namespace RimUnity.UI
 {
-    //按最小、期望和弹性尺寸分配布局空间。
+    //按最小、期望和弹性尺寸分配布局空间，childScaleWidth/Height 行为与 UGUI 1.0.0 一致。
     public abstract class HorizontalOrVerticalLayoutGroup : UguiLayoutGroup
     {
         [SerializeField] protected float m_Spacing = 0;
@@ -24,6 +24,7 @@ namespace RimUnity.UI
         {
             float combinedPadding = (axis == 0 ? padding.horizontal : padding.vertical);
             bool controlSize = (axis == 0 ? m_ChildControlWidth : m_ChildControlHeight);
+            bool useScale = (axis == 0 ? childScaleWidth : childScaleHeight);
             bool childForceExpandSize = (axis == 0 ? childForceExpandWidth : childForceExpandHeight);
 
             float totalMin = combinedPadding;
@@ -37,6 +38,14 @@ namespace RimUnity.UI
                 float min, preferred, flexible;
                 GetChildSizes(child, axis, controlSize, childForceExpandSize, out min, out preferred, out flexible);
 
+                if (useScale)
+                {
+                    float scaleFactor = child.localScale[axis];
+                    min *= scaleFactor;
+                    preferred *= scaleFactor;
+                    flexible *= scaleFactor;
+                }
+
                 if (alongOtherAxis)
                 {
                     totalMin = Mathf.Max(min + combinedPadding, totalMin);
@@ -47,8 +56,6 @@ namespace RimUnity.UI
                 {
                     totalMin += min + spacing;
                     totalPreferred += preferred + spacing;
-
-                    //累计子节点能够分配的弹性尺寸。
                     totalFlexible += flexible;
                 }
             }
@@ -67,6 +74,7 @@ namespace RimUnity.UI
         {
             float size = rectTransform.rect.size[axis];
             bool controlSize = (axis == 0 ? m_ChildControlWidth : m_ChildControlHeight);
+            bool useScale = (axis == 0 ? childScaleWidth : childScaleHeight);
             bool childForceExpandSize = (axis == 0 ? childForceExpandWidth : childForceExpandHeight);
             float alignmentOnAxis = GetAlignmentOnAxis(axis);
 
@@ -79,60 +87,63 @@ namespace RimUnity.UI
                     RectTransform child = rectChildren[i];
                     float min, preferred, flexible;
                     GetChildSizes(child, axis, controlSize, childForceExpandSize, out min, out preferred, out flexible);
+                    float scaleFactor = useScale ? child.localScale[axis] : 1f;
 
                     float requiredSpace = Mathf.Clamp(innerSize, min, flexible > 0 ? size : preferred);
-                    float startOffset = GetStartOffset(axis, requiredSpace);
+                    float startOffset = GetStartOffset(axis, requiredSpace * scaleFactor);
                     if (controlSize)
                     {
-                        SetChildAlongAxis(child, axis, startOffset, requiredSpace);
+                        SetChildAlongAxisWithScale(child, axis, startOffset, requiredSpace, scaleFactor);
                     }
                     else
                     {
                         float offsetInCell = (requiredSpace - child.sizeDelta[axis]) * alignmentOnAxis;
-                        SetChildAlongAxis(child, axis, startOffset + offsetInCell);
+                        SetChildAlongAxisWithScale(child, axis, startOffset + offsetInCell, scaleFactor);
                     }
                 }
             }
             else
             {
                 float pos = (axis == 0 ? padding.left : padding.top);
-                if (GetTotalFlexibleSize(axis) == 0 && GetTotalPreferredSize(axis) < size)
-                    pos = GetStartOffset(axis, GetTotalPreferredSize(axis) - (axis == 0 ? padding.horizontal : padding.vertical));
+                float itemFlexibleMultiplier = 0;
+                float surplusSpace = size - GetTotalPreferredSize(axis);
+
+                if (surplusSpace > 0)
+                {
+                    if (GetTotalFlexibleSize(axis) == 0)
+                        pos = GetStartOffset(axis, GetTotalPreferredSize(axis) - (axis == 0 ? padding.horizontal : padding.vertical));
+                    else if (GetTotalFlexibleSize(axis) > 0)
+                        itemFlexibleMultiplier = surplusSpace / GetTotalFlexibleSize(axis);
+                }
 
                 float minMaxLerp = 0;
                 if (GetTotalMinSize(axis) != GetTotalPreferredSize(axis))
                     minMaxLerp = Mathf.Clamp01((size - GetTotalMinSize(axis)) / (GetTotalPreferredSize(axis) - GetTotalMinSize(axis)));
-
-                float itemFlexibleMultiplier = 0;
-                if (size > GetTotalPreferredSize(axis))
-                {
-                    if (GetTotalFlexibleSize(axis) > 0)
-                        itemFlexibleMultiplier = (size - GetTotalPreferredSize(axis)) / GetTotalFlexibleSize(axis);
-                }
 
                 for (int i = 0; i < rectChildren.Count; i++)
                 {
                     RectTransform child = rectChildren[i];
                     float min, preferred, flexible;
                     GetChildSizes(child, axis, controlSize, childForceExpandSize, out min, out preferred, out flexible);
+                    float scaleFactor = useScale ? child.localScale[axis] : 1f;
 
                     float childSize = Mathf.Lerp(min, preferred, minMaxLerp);
                     childSize += flexible * itemFlexibleMultiplier;
                     if (controlSize)
                     {
-                        SetChildAlongAxis(child, axis, pos, childSize);
+                        SetChildAlongAxisWithScale(child, axis, pos, childSize, scaleFactor);
                     }
                     else
                     {
                         float offsetInCell = (childSize - child.sizeDelta[axis]) * alignmentOnAxis;
-                        SetChildAlongAxis(child, axis, pos + offsetInCell);
+                        SetChildAlongAxisWithScale(child, axis, pos + offsetInCell, scaleFactor);
                     }
-                    pos += childSize + spacing;
+                    pos += childSize * scaleFactor + spacing;
                 }
             }
         }
 
-        //读取子元素的布局约束并应用强制扩展。
+        //读取子元素的未缩放布局约束并应用强制扩展。
         private void GetChildSizes(RectTransform child, int axis, bool controlSize, bool childForceExpand,
             out float min, out float preferred, out float flexible)
         {
@@ -151,10 +162,6 @@ namespace RimUnity.UI
 
             if (childForceExpand)
                 flexible = Mathf.Max(flexible, 1);
-            float scale = Scale(child, axis);
-            min *= scale; preferred *= scale; flexible *= scale;
         }
-
     }
 }
-

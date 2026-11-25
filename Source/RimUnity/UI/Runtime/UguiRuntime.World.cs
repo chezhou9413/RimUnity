@@ -21,7 +21,7 @@ internal static partial class UguiRuntime
         Prepare(); WorldUiSubmission.BeginFrame();
         foreach (var entry in Entries)
         {
-            if (entry.Canvas.EffectiveMode == RenderMode.ScreenSpaceOverlay || entry.Clip.width <= 0 || entry.Clip.height <= 0) continue;
+            if (!entry.Visible || entry.Canvas.EffectiveMode == RenderMode.ScreenSpaceOverlay || entry.Clip.width <= 0 || entry.Clip.height <= 0) continue;
             Camera owner = entry.Canvas.rootCanvas.worldCamera ?? Camera.main;
             if (entry.Canvas.EffectiveMode == RenderMode.ScreenSpaceCamera && owner != drawing) continue;
             if (drawing != null && (drawing.cullingMask & (1 << entry.RenderLayer)) == 0) continue;

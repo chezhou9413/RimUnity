@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 namespace RimUnity.UI;
 
-//收集布局子节点并计算尺寸、对齐和位置。
+//收集布局子节点并计算尺寸、对齐和位置，对齐 UGUI 1.0.0 LayoutGroup.SetChildAlongAxisWithScale。
 public abstract class UguiLayoutGroup : LayoutGroup
 {
     protected RectTransform rectTransform => (RectTransform)transform;
@@ -36,23 +36,32 @@ public abstract class UguiLayoutGroup : LayoutGroup
         if (axis == 0) { minWidth = min; preferredWidth = preferred; flexibleWidth = flexible; }
         else { minHeight = min; preferredHeight = preferred; flexibleHeight = flexible; }
     }
-    //不控制尺寸时只调整位置。
     protected void SetChildAlongAxis(RectTransform child, int axis, float pos)
-        => Place(child, axis, pos, child.sizeDelta[axis]);
-    //控制尺寸时同时写入 sizeDelta。
-    protected void SetChildAlongAxis(RectTransform child, int axis, float pos, float size)
+        => SetChildAlongAxisWithScale(child, axis, pos, 1f);
+    protected void SetChildAlongAxisWithScale(RectTransform child, int axis, float pos, float scaleFactor)
     {
-        float scale = Scale(child, axis);
-        Vector2 delta = child.sizeDelta; delta[axis] = scale == 0 ? 0 : size / scale; child.sizeDelta = delta;
-        Place(child, axis, pos, delta[axis]);
-    }
-    //实际尺寸保留缩放，锚点统一到父节点左上角。
-    private void Place(RectTransform child, int axis, float pos, float size)
-    {
+        if (child == null) return;
         child.anchorMin = child.anchorMax = Vector2.up;
         Vector2 point = child.anchoredPosition;
-        point[axis] = axis == 0 ? pos + size * child.pivot[axis] * Scale(child, axis) : -pos - size * (1f - child.pivot[axis]) * Scale(child, axis);
+        point[axis] = axis == 0
+            ? pos + child.sizeDelta[axis] * child.pivot[axis] * scaleFactor
+            : -pos - child.sizeDelta[axis] * (1f - child.pivot[axis]) * scaleFactor;
         child.anchoredPosition = point;
     }
-    protected float Scale(RectTransform child, int axis) => (axis == 0 ? childScaleWidth : childScaleHeight) ? Mathf.Abs(child.localScale[axis]) : 1f;
+    protected void SetChildAlongAxis(RectTransform child, int axis, float pos, float size)
+        => SetChildAlongAxisWithScale(child, axis, pos, size, 1f);
+    //对齐 UGUI 1.0.0：sizeDelta 始终写入未缩放尺寸，scaleFactor 仅参与锚点位置换算。
+    protected void SetChildAlongAxisWithScale(RectTransform child, int axis, float pos, float size, float scaleFactor)
+    {
+        if (child == null) return;
+        child.anchorMin = child.anchorMax = Vector2.up;
+        Vector2 delta = child.sizeDelta;
+        delta[axis] = size;
+        child.sizeDelta = delta;
+        Vector2 point = child.anchoredPosition;
+        point[axis] = axis == 0
+            ? pos + size * child.pivot[axis] * scaleFactor
+            : -pos - size * (1f - child.pivot[axis]) * scaleFactor;
+        child.anchoredPosition = point;
+    }
 }

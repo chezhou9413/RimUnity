@@ -73,6 +73,10 @@ public class Transform : Component, IEnumerable<Transform>
         Matrix4x4 saved = localToWorldMatrix; Quaternion savedRotation = rotation;
         Runtime.NativeRuntime.NotifyChanged(this);
         parentTransform?.Children.Remove(this); parentTransform = value; value?.Children.Add(this);
+        if (value != null && !gameObject.IsAssetToken)
+        {
+            Runtime.NativeRuntime.SetSceneOwnershipRecursive(gameObject, value.gameObject.PersistAcrossScenes, value.gameObject.SceneOwner);
+        }
         if (worldPositionStays)
         {
             Matrix4x4 relative = value == null ? saved : value.worldToLocalMatrix * saved;

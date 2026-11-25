@@ -15,6 +15,13 @@ internal static class TmpRenderer
         if (input != null && input.textComponent == text && input.isFocused)
         {
             Rect decoration = input.Decoration(out bool selection, out bool visible);
+            if (!input.readOnly)
+            {
+                //RimWorld 1.7.5014 rev1195 的 UnityStubs.Internal.ImeComposition 已实现候选窗物理坐标上报（避免依赖可能未缩放的 GUI.matrix）。
+                Vector2 candidateGui = RectTransformUtility.ToGui(entry.Canvas,
+                    entry.Rect.TransformPoint(new Vector3(selection ? decoration.xMax : decoration.xMin, decoration.yMin, 0f)));
+                UnityStubs.Internal.ImeComposition.SetCandidatePos(new UnityEngine.Vector2(candidateGui.x * Verse.Prefs.UIScale, candidateGui.y * Verse.Prefs.UIScale));
+            }
             if (visible)
             {
                 Color color = selection ? input.selectionColor : input.customCaretColor ? input.caretColor : text.color;
@@ -44,7 +51,10 @@ internal static class TmpRenderer
                     visible.width / rect.width * uv.width, visible.height / rect.height * uv.height);
                 rect = visible;
             }
-            Color color = tint * glyph.color;
+            //对齐 TMP 3.0.6：<color> 标签替换基础文本色，不再与 text.color 相乘导致深色文本下富文本变黑。
+            Color color = glyph.hasColor
+                ? new Color(glyph.color.r, glyph.color.g, glyph.color.b, glyph.hasExplicitAlpha ? glyph.color.a * entry.Alpha : tint.a)
+                : tint;
             Add(entry, rect, uv, Vector2.zero, color, glyph.bottomShear); Add(entry, rect, uv, Vector2.up, color, glyph.topShear); Add(entry, rect, uv, Vector2.one, color, glyph.topShear);
             Add(entry, rect, uv, Vector2.zero, color, glyph.bottomShear); Add(entry, rect, uv, Vector2.one, color, glyph.topShear); Add(entry, rect, uv, Vector2.right, color, glyph.bottomShear);
         }

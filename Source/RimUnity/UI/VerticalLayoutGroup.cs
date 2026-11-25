@@ -1,18 +1,10 @@
-using RimUnity.UI;
-
 namespace RimUnity.UI;
 
-//计算纵向列表的尺寸与位置，横向子类使用相同算法和不同排列轴。
+//对齐 UGUI 1.0.0：直接继承 HorizontalOrVerticalLayoutGroup，沿垂直轴排列子节点。
 public class VerticalLayoutGroup : HorizontalOrVerticalLayoutGroup
 {
-    internal virtual bool Horizontal => false;
-
-    //横向测量时更新参与布局的节点。
-    public override void CalculateLayoutInputHorizontal() { CollectChildren(); CalcAlongAxis(0, !Horizontal); }
-    //纵向测量沿用当前子节点列表。
-    public override void CalculateLayoutInputVertical() => CalcAlongAxis(1, !Horizontal);
-    //安排横向位置和尺寸。
-    public override void SetLayoutHorizontal() => SetChildrenAlongAxis(0, !Horizontal);
-    //安排纵向位置和尺寸。
-    public override void SetLayoutVertical() => SetChildrenAlongAxis(1, !Horizontal);
+    public override void CalculateLayoutInputHorizontal() { CollectChildren(); CalcAlongAxis(0, true); }
+    public override void CalculateLayoutInputVertical() => CalcAlongAxis(1, true);
+    public override void SetLayoutHorizontal() => SetChildrenAlongAxis(0, true);
+    public override void SetLayoutVertical() => SetChildrenAlongAxis(1, true);
 }

@@ -24,7 +24,7 @@ internal static class UiMaskData
         var masks = Current?.Masks;
         int count = masks?.Length ?? 0;
         //先确定本次材质，再清空两类裁切计数，避免共用材质残留上一个控件的 RectMask2D。
-        if (material == null && (count > 0 || (Current?.RectMasks.Length ?? 0) > 0)) material = DefaultMaterial();
+        if (material == null && (count > 0 || UiRectMaskData.NeedsShader(Current))) material = DefaultMaterial();
         material = UiRectMaskData.Apply(material);
         //Unity 的默认裁剪范围不限制像素；实际 Mask 和 RectMask2D 由 RimUnity 的覆盖率入口处理。
         if (material != null && material.HasProperty("_ClipRect")) material.SetVector("_ClipRect", new Vector4(-32767, -32767, 32767, 32767));

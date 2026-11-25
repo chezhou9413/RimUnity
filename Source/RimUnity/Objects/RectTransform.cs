@@ -48,10 +48,14 @@ public class RectTransform : Transform
         }
     }
 
-    //把直接写入 Transform 的位移同步回锚点位置。
+    //把直接写入 Transform 的位移同步回锚点位置；新建节点首次挂父且 localPosition 为零时保留默认 anchoredPosition。
     private void CapturePosition()
     {
-        if (parent != lastParent) anchored = (Vector2)localPosition - AnchorOrigin();
+        if (parent != lastParent)
+        {
+            if (lastParent != null || localPosition != Vector3.zero)
+                anchored = (Vector2)localPosition - AnchorOrigin();
+        }
         else anchored += (Vector2)(localPosition - lastLocalPosition);
         lastParent = parent;
         lastLocalPosition = localPosition;

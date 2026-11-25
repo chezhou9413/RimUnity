@@ -49,9 +49,9 @@ internal sealed class ValueReader
         }
     }
 
-    //引用类型不匹配时直接指出需要调整的脚本引用。
+    //引用类型不匹配时直接指出需要调整的脚本引用；弱引用外层对象已销毁时返回 null。
     private static object Checked(RimUnity.Object value, Type type)
-        => type.IsInstanceOfType(value) ? value : throw new InvalidCastException($"导出引用 {value.GetType().FullName} 不能赋给 {type.FullName}；请使用 RimUnity 对应类型。");
+        => value == null ? null : type.IsInstanceOfType(value) ? value : throw new InvalidCastException($"导出引用 {value.GetType().FullName} 不能赋给 {type.FullName}；请使用 RimUnity 对应类型。");
 
     //常用 Unity 值类型保留原有 API 和内存布局。
     private static object Vector(float[] v, Type t)

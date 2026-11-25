@@ -7,7 +7,7 @@ public partial class ScrollRect
     private readonly Vector3[] corners = new Vector3[4];
     private Rect viewBounds, contentBounds;
     private Vector2 rawContentSize;
-    private RectTransform View => viewport ?? (RectTransform)transform;
+    private RectTransform View => viewport != null ? viewport : (RectTransform)transform;
 
     //小于视口的内容按 pivot 补足边界，保持顶部、居中或底部对齐。
     private void UpdateBounds()

@@ -16,6 +16,7 @@ public static partial class NativeRuntime
     private static bool draining;
     public static event Action<Transform> HierarchyChanged;
     public static event Action<Exception, Object> ExceptionRaised;
+    public static event Action<string> WarningRaised;
     public static Func<object> SceneOwnerProvider { get; set; }
 
     //由宿主在主线程显式初始化，类型首次加载不决定对象所属线程。
@@ -125,6 +126,26 @@ public static partial class NativeRuntime
         if (ExceptionRaised != null) ExceptionRaised(error, owner);
         else Console.Error.WriteLine($"[RimUnity] {owner?.name}: {error}");
     }
+    internal static void Warn(string message)
+    {
+        if (WarningRaised != null) WarningRaised(message);
+        else Console.Error.WriteLine($"[RimUnity] {message}");
+    }
+    //同步整棵子树的场景归属与跨场景常驻标志，与 Unity 场景层级规则保持一致。
+    internal static void SetSceneOwnershipRecursive(GameObject root, bool persistAcrossScenes, object sceneOwner)
+    {
+        if (root == null || root.IsAssetToken)
+        {
+            return;
+        }
+        root.PersistAcrossScenes = persistAcrossScenes;
+        root.SceneOwner = sceneOwner;
+        List<Transform> children = root.transform.Children;
+        for (int index = 0; index < children.Count; index++)
+        {
+            SetSceneOwnershipRecursive(children[index].gameObject, persistAcrossScenes, sceneOwner);
+        }
+    }
     internal static GameObject FindGameObject(string name)
     {
         AssertThread();
@@ -150,11 +171,11 @@ public static partial class NativeRuntime
         foreach (GameObject go in Objects.ToArray()) if (go && !go.IsAssetToken && go.transform.parent == null) Object.DestroyImmediate(go);
     }
 
-    //只清理指定场景的实例，保留同帧中已创建的新场景对象。
+    //只清理指定场景的实例，保留跨场景常驻对象与同帧中已创建的新场景对象。
     public static void ClearScene(object owner)
     {
         AssertThread();
         foreach (GameObject go in Objects.ToArray())
-            if (go && !go.IsAssetToken && go.transform.parent == null && ReferenceEquals(go.SceneOwner, owner)) Object.DestroyImmediate(go);
+            if (go && !go.IsAssetToken && !go.PersistAcrossScenes && go.transform.parent == null && ReferenceEquals(go.SceneOwner, owner)) Object.DestroyImmediate(go);
     }
 }
