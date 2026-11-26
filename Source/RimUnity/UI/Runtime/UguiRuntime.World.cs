@@ -32,14 +32,15 @@ internal static partial class UguiRuntime
                 if (entry.Particles != null) { entry.Particles.GetComponent<ParticleSystemRenderer>()?.DrawCameraUI(entry, drawing); continue; }
                 var graphic = entry.Graphic;
                 if (graphic == null || !graphic.isActiveAndEnabled) continue;
-                Color tint = graphic.color; tint.a *= entry.Alpha;
+                Color multiplier = new(1f, 1f, 1f, entry.Alpha);
                 var toggle = graphic.GetComponentInParent<Toggle>();
-                if (toggle != null && toggle.graphic == graphic) tint.a *= toggle.GraphicAlpha;
+                if (toggle != null && toggle.graphic == graphic) multiplier.a *= toggle.GraphicAlpha;
                 var selectable = graphic.GetComponentInParent<Selectable>();
-                if (selectable != null && selectable.targetGraphic == graphic) tint *= selectable.Tint;
+                if (selectable != null && selectable.targetGraphic == graphic) multiplier *= selectable.Tint;
+                Color tint = graphic.color * multiplier;
                 if (graphic is RimUnity.UI.Image image) UguiImageRenderer.Draw(entry, image, tint);
                 else if (graphic is RawImage raw) UguiImageRenderer.DrawRaw(entry, raw, tint);
-                else if (graphic is TextMeshProUGUI tmp) TmpRenderer.Draw(entry, tmp, tint);
+                else if (graphic is TextMeshProUGUI tmp) TmpRenderer.Draw(entry, tmp, tint, multiplier);
                 else if (graphic is MeshGraphic mesh) mesh.DrawMesh(entry, tint);
                 else if (graphic is RimUnity.UI.Text text)
                 {

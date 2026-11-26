@@ -28,7 +28,7 @@ internal sealed class LabEffect
         foreach (var mod in LoadedModManager.RunningModsListForReading)
         {
             string root = System.IO.Path.Combine(mod.RootDir, "1.7", "Data", "RimUnity");
-            if (!File.Exists(System.IO.Path.Combine(root, "catalog.json"))) continue;
+            if (!CatalogStoreRegistry.HasCatalog(root)) continue;
             AssetCatalog catalog;
             try { catalog = AssetLoader.GetCatalog(root); }
             catch (Exception ex) { Log.Error($"[RimUnity] 测试场无法读取 {mod.PackageIdPlayerFacing}：{ex}"); continue; }

@@ -308,7 +308,9 @@ internal static class PrefabBuilder
         }
     }
 
-    //构造扁平弱引用字典，自动剔除已销毁或已被回收的外层弱引用，避免跨次克隆堆积。
+    private static readonly WeakReference<RimUnity.Object> s_deadReference = new(null);
+
+    //构造扁平弱引用字典；保留已知外层 ID（目标已销毁时复用空弱引用），避免多代子树克隆误报 KeyNotFoundException。
     private static WeakObjectLookup _CreateWeakLookup(Dictionary<string, RimUnity.Object> local, WeakObjectLookup outer)
     {
         int capacity = local.Count + (outer != null ? outer.Count : 0);
@@ -317,10 +319,8 @@ internal static class PrefabBuilder
         {
             foreach (KeyValuePair<string, WeakReference<RimUnity.Object>> pair in outer.Entries)
             {
-                if (pair.Value.TryGetTarget(out RimUnity.Object target) && target != null)
-                {
-                    merged[pair.Key] = pair.Value;
-                }
+                bool alive = pair.Value.TryGetTarget(out RimUnity.Object target) && target != null;
+                merged[pair.Key] = alive ? pair.Value : s_deadReference;
             }
         }
         foreach (KeyValuePair<string, RimUnity.Object> pair in local)

@@ -166,38 +166,38 @@ internal static partial class UguiRuntime
                 NativeGuiHost.PushClip(entry.Clip);
                 try
                 {
-                Color tint = graphic.color;
-                tint.a *= entry.Alpha;
-                var toggle = graphic.GetComponentInParent<Toggle>();
-                if (toggle != null && toggle.graphic == graphic) tint.a *= toggle.GraphicAlpha;
-                Selectable button = graphic.GetComponentInParent<Selectable>();
-                if (button != null && button.targetGraphic == graphic) tint *= button.Tint;
-                if (graphic.material != null && (graphic.material.shader == null || !graphic.material.shader.isSupported))
-                {
-                    if (WarnedGraphics.Add(graphic)) Log.Error("[RimUnity] 自定义 UI 材质没有可用的 Waylith Shader：" + graphic.gameObject.name);
-                    continue;
-                }
-                if (graphic is RimUnity.UI.Image image) UguiImageRenderer.Draw(entry, image, tint);
-                else if (graphic is RawImage raw) UguiImageRenderer.DrawRaw(entry, raw, tint);
-                else if (graphic is TextMeshProUGUI tmp) TmpRenderer.Draw(entry, tmp, tint);
-                else if (graphic is MeshGraphic mesh) mesh.DrawMesh(entry, tint);
-                else if (graphic is RimUnity.UI.Text text)
-                {
-                    Matrix4x4 matrix = entry.Rect.localToWorldMatrix;
-                    if (Mathf.Abs(matrix.m01) > 0.0001f || Mathf.Abs(matrix.m10) > 0.0001f || matrix.m00 <= 0 || matrix.m11 <= 0)
+                    Color multiplier = new(1f, 1f, 1f, entry.Alpha);
+                    var toggle = graphic.GetComponentInParent<Toggle>();
+                    if (toggle != null && toggle.graphic == graphic) multiplier.a *= toggle.GraphicAlpha;
+                    Selectable button = graphic.GetComponentInParent<Selectable>();
+                    if (button != null && button.targetGraphic == graphic) multiplier *= button.Tint;
+                    Color tint = graphic.color * multiplier;
+                    if (graphic.material != null && (graphic.material.shader == null || !graphic.material.shader.isSupported))
                     {
-                        UguiTextRenderer.DrawLocal(entry, text, tint);
+                        if (WarnedGraphics.Add(graphic)) Log.Error("[RimUnity] 自定义 UI 材质没有可用的 Waylith Shader：" + graphic.gameObject.name);
                         continue;
                     }
-                    UiTextStyle style = TextStyle(text);
-                    float scale = entry.Canvas.scaleFactor / Prefs.UIScale * Mathf.Abs(entry.Rect.lossyScale.y);
-                    style.fontSize = Mathf.Max(1, Mathf.RoundToInt(text.fontSize * scale));
-                    Rect bounds = Bounds(entry, text is Text custom ? custom.ContentRect : entry.Rect.rect);
-                    var previousMaterial = text.material;
-                    if (previousMaterial == null && (entry.Masks.Length > 0 || UiRectMaskData.NeedsShader(entry))) text.material = UiMaskData.DefaultMaterial();
-                    try { UguiTextRenderer.Draw(entry, text, style, bounds, tint, scale); }
-                    finally { text.material = previousMaterial; }
-                }
+                    if (graphic is RimUnity.UI.Image image) UguiImageRenderer.Draw(entry, image, tint);
+                    else if (graphic is RawImage raw) UguiImageRenderer.DrawRaw(entry, raw, tint);
+                    else if (graphic is TextMeshProUGUI tmp) TmpRenderer.Draw(entry, tmp, tint, multiplier);
+                    else if (graphic is MeshGraphic mesh) mesh.DrawMesh(entry, tint);
+                    else if (graphic is RimUnity.UI.Text text)
+                    {
+                        Matrix4x4 matrix = entry.Rect.localToWorldMatrix;
+                        if (Mathf.Abs(matrix.m01) > 0.0001f || Mathf.Abs(matrix.m10) > 0.0001f || matrix.m00 <= 0 || matrix.m11 <= 0)
+                        {
+                            UguiTextRenderer.DrawLocal(entry, text, tint);
+                            continue;
+                        }
+                        UiTextStyle style = TextStyle(text);
+                        float scale = entry.Canvas.scaleFactor / Prefs.UIScale * Mathf.Abs(entry.Rect.lossyScale.y);
+                        style.fontSize = Mathf.Max(1, Mathf.RoundToInt(text.fontSize * scale));
+                        Rect bounds = Bounds(entry, text is Text custom ? custom.ContentRect : entry.Rect.rect);
+                        var previousMaterial = text.material;
+                        if (previousMaterial == null && (entry.Masks.Length > 0 || UiRectMaskData.NeedsShader(entry))) text.material = UiMaskData.DefaultMaterial();
+                        try { UguiTextRenderer.Draw(entry, text, style, bounds, tint, scale); }
+                        finally { text.material = previousMaterial; }
+                    }
                 }
                 finally { NativeGuiHost.PopClip(); }
             }
@@ -242,11 +242,12 @@ internal static partial class UguiRuntime
         return RectTransformUtility.RectangleContainsScreenPoint(entry.Rect, screen, eventCamera);
     }
 
-    //在宿主把鼠标/滚轮事件派发给 IMGUI 窗口之前，先处理顶层 Overlay 与已捕获的 UGUI 交互。
+    //在宿主把鼠标/滚轮事件派发给 IMGUI 窗口之前处理顶层 Overlay，之后对原版窗口上的捕获拖拽/释放做收尾。
     [HarmonyPatch(typeof(UnityEngine.GUI), nameof(UnityEngine.GUI.DispatchInputToWindows))]
     private static class GuiWindowInputPatch
     {
         private static void Prefix() => UguiPointer.ProcessPreWindow();
+        private static void Postfix() => UguiPointer.ProcessPostWindow();
     }
 
     //宿主在 Repaint 结束清理未绘制 IMGUI 文本焦点后同步 RimUnity 输入框焦点，确保 Waylith TextInputBridge 持续开启字符/IME 输入。

@@ -48,8 +48,8 @@ internal static class CustomShaderLoader
         //资源键包含 packageId 的点号；宿主的路径回退会把它当扩展名截断，只接受完整键命中。
         if (ShaderRegistry.TryResolve(data.key, out var cached) && string.Equals(cached.Key, data.key, StringComparison.Ordinal))
             return RestorePasses(catalog, data, Wrap(data, cached));
-        string vertexPath = catalog.Resolve(data.vertexFile), fragmentPath = catalog.Resolve(data.fragmentFile);
-        string vertex = File.ReadAllText(vertexPath), fragment = File.ReadAllText(fragmentPath);
+        string vertexPath = catalog.Describe(data.vertexFile), fragmentPath = catalog.Describe(data.fragmentFile);
+        string vertex = catalog.ReadAllText(data.vertexFile), fragment = catalog.ReadAllText(data.fragmentFile);
         ShaderBindingValidation.Validate(vertex, fragment);
         var layout = CustomShaderTextureLayout.BindTexelSizes(ShaderStorageLayout.Extract(fragment, data.key));
         var inputs = ShaderMetadataParser.ExtractVertexInputLayout(vertex, data.key);

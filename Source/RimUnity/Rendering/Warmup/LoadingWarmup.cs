@@ -40,7 +40,7 @@ internal static class LoadingWarmup
         {
             if (!CatalogLoadPolicy.HasLoadFolders(mod)) continue;
             string root = Path.Combine(mod.RootDir, "1.7/Data/RimUnity");
-            if (!File.Exists(Path.Combine(root, "catalog.json"))) continue;
+            if (!CatalogStoreRegistry.HasCatalog(root)) continue;
             try
             {
                 var catalog = AssetLoader.GetCatalog(root);

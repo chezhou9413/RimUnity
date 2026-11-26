@@ -7,7 +7,7 @@ namespace RimUnity.UI.Runtime;
 internal static class TmpRenderer
 {
     private static readonly List<GuiVertex> vertices = new();
-    internal static void Draw(UguiRuntime.Entry entry, TextMeshProUGUI text, Color tint)
+    internal static void Draw(UguiRuntime.Entry entry, TextMeshProUGUI text, Color tint, Color multiplier)
     {
         Rect content = entry.Rect.rect;
         content.xMin += text.margin.x; content.xMax -= text.margin.z; content.yMax -= text.margin.y; content.yMin += text.margin.w;
@@ -51,10 +51,17 @@ internal static class TmpRenderer
                     visible.width / rect.width * uv.width, visible.height / rect.height * uv.height);
                 rect = visible;
             }
-            //对齐 TMP 3.0.6：<color> 标签替换基础文本色，不再与 text.color 相乘导致深色文本下富文本变黑。
-            Color color = glyph.hasColor
-                ? new Color(glyph.color.r, glyph.color.g, glyph.color.b, glyph.hasExplicitAlpha ? glyph.color.a * entry.Alpha : tint.a)
-                : tint;
+            //对齐 TMP 3.0.6 SaveGlyphVertexInfo 与 UGUI CanvasRenderer：富文本替换 RGB，显式 Alpha 取 min(字体 Alpha, 标签 Alpha)，再乘外层淡出/状态系数。
+            Color color;
+            if (glyph.hasColor)
+            {
+                float glyphAlpha = glyph.hasExplicitAlpha ? Mathf.Min(text.color.a, glyph.color.a) : text.color.a;
+                color = new Color(glyph.color.r * multiplier.r, glyph.color.g * multiplier.g, glyph.color.b * multiplier.b, glyphAlpha * multiplier.a);
+            }
+            else
+            {
+                color = tint;
+            }
             Add(entry, rect, uv, Vector2.zero, color, glyph.bottomShear); Add(entry, rect, uv, Vector2.up, color, glyph.topShear); Add(entry, rect, uv, Vector2.one, color, glyph.topShear);
             Add(entry, rect, uv, Vector2.zero, color, glyph.bottomShear); Add(entry, rect, uv, Vector2.one, color, glyph.topShear); Add(entry, rect, uv, Vector2.right, color, glyph.bottomShear);
         }

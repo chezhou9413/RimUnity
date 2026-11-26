@@ -14,6 +14,7 @@ namespace RimUnity.RenderPipeline;
 public static class RenderPipelineManager
 {
     private static readonly List<FeatureRegistration> s_registrations = new();
+    private static readonly HashSet<ScriptableRendererFeature> s_retiringFeatures = new(ReferenceEqualityComparer.Instance);
     private static readonly List<Action> s_pendingAfterSubmit = new();
     private static readonly object s_submitLock = new();
     private static readonly Action<Action> s_enqueueAfterSubmit = _EnqueueAfterSubmit;
@@ -153,6 +154,7 @@ public static class RenderPipelineManager
             {
                 _owner.Passes.Clear();
                 _owner.DisposeFeatureOnce();
+                s_retiringFeatures.Remove(_owner.Feature);
             }
         }
 
@@ -226,7 +228,7 @@ public static class RenderPipelineManager
 
     public static bool IsReady => s_application != null && s_application.FrameRenderer != null;
 
-    //注册自定义渲染特性；可在 HostFrame 安装前或安装后调用，重复注册返回 false。
+    //注册自定义渲染特性；可在 HostFrame 安装前或安装后调用，重复注册或仍在等待宿主释放的实例返回 false。
     public static bool RegisterFeature(ScriptableRendererFeature feature)
     {
         if (feature == null)
@@ -240,10 +242,20 @@ public static class RenderPipelineManager
                 return false;
             }
         }
+        if (s_retiringFeatures.Contains(feature))
+        {
+            return false;
+        }
 
         FeatureRegistration registration = new(feature);
+        FrameRenderer renderer = s_application?.FrameRenderer;
+        if (renderer != null)
+        {
+            _EnsureFrameEndedSubscribed(renderer);
+            //先完成 Create、AddRenderPasses、阶段校验和宿主挂载再入表；失败时清理本次状态，避免阻塞后续扩展注册。
+            _AttachRegistration(registration, renderer);
+        }
         s_registrations.Add(registration);
-        _EnsureRendererAttached();
         return true;
     }
 
@@ -289,7 +301,7 @@ public static class RenderPipelineManager
             s_application = application;
             s_frameEndedSubscribed = false;
         }
-        _EnsureRendererAttached();
+        _AttachPendingRegistrations();
     }
 
     //BeforeGraphicsShutdown 阶段宿主已等待 GPU 空闲并先释放 FrameRenderer；补齐尚未释放的 Pass 与全部 Feature.Dispose。
@@ -319,6 +331,7 @@ public static class RenderPipelineManager
             registration.DisposeFeatureOnce();
         }
         s_registrations.Clear();
+        s_retiringFeatures.Clear();
         s_frameEndedSubscribed = false;
         lock (s_submitLock)
         {
@@ -327,65 +340,110 @@ public static class RenderPipelineManager
         s_application = null;
     }
 
-    private static void _EnsureRendererAttached()
+    private static void _EnsureFrameEndedSubscribed(FrameRenderer renderer)
+    {
+        if (!s_frameEndedSubscribed)
+        {
+            renderer.RenderThreadFrameEnded += _OnRenderThreadFrameEnded;
+            s_frameEndedSubscribed = true;
+        }
+    }
+
+    //安装时逐个挂载预注册扩展；单个扩展失败只移除自身并记错，不阻塞其他正常扩展。
+    private static void _AttachPendingRegistrations()
     {
         FrameRenderer renderer = s_application?.FrameRenderer;
         if (renderer == null)
         {
             return;
         }
-        if (!s_frameEndedSubscribed)
+        _EnsureFrameEndedSubscribed(renderer);
+        FeatureRegistration[] pending = s_registrations.ToArray();
+        for (int index = 0; index < pending.Length; index++)
         {
-            renderer.RenderThreadFrameEnded += _OnRenderThreadFrameEnded;
-            s_frameEndedSubscribed = true;
-        }
-        for (int index = 0; index < s_registrations.Count; index++)
-        {
-            _AttachRegistration(s_registrations[index], renderer);
+            FeatureRegistration registration = pending[index];
+            if (!s_registrations.Contains(registration) || registration.Bridges.Count > 0)
+            {
+                continue;
+            }
+            try
+            {
+                _AttachRegistration(registration, renderer, checkStillRegistered: true);
+            }
+            catch (Exception exception)
+            {
+                s_registrations.Remove(registration);
+                Log.Error($"[RimUnity.RenderPipeline] 挂载预注册 Feature 失败，已移除 {registration.Feature.GetType().FullName}：{exception}");
+            }
         }
     }
 
-    private static void _AttachRegistration(FeatureRegistration registration, FrameRenderer renderer)
+    private static void _AttachRegistration(FeatureRegistration registration, FrameRenderer renderer, bool checkStillRegistered = false)
     {
         if (renderer == null || registration.Bridges.Count > 0)
         {
             return;
         }
 
-        if (!registration.Created)
+        bool createdNow = false;
+        try
         {
-            registration.Feature.Create();
-            registration.Passes.Clear();
-            registration.Feature.AddRenderPasses(registration.Passes);
-            registration.Created = true;
-        }
+            if (!registration.Created)
+            {
+                createdNow = true;
+                registration.Feature.Create();
+                registration.Passes.Clear();
+                registration.Feature.AddRenderPasses(registration.Passes);
+                registration.Created = true;
+            }
+            if (checkStillRegistered && !s_registrations.Contains(registration))
+            {
+                _DisposeRegistration(registration);
+                registration.Created = false;
+                return;
+            }
 
-        Dictionary<RenderPassEvent, List<ScriptableRenderPass>> groupedPasses = new();
-        for (int index = 0; index < registration.Passes.Count; index++)
-        {
-            ScriptableRenderPass pass = registration.Passes[index];
-            if (pass == null)
+            Dictionary<RenderPassEvent, List<ScriptableRenderPass>> groupedPasses = new();
+            for (int index = 0; index < registration.Passes.Count; index++)
             {
-                continue;
+                ScriptableRenderPass pass = registration.Passes[index];
+                if (pass == null)
+                {
+                    continue;
+                }
+                if (!Enum.IsDefined(typeof(RenderPassEvent), pass.renderPassEvent))
+                {
+                    throw new NotSupportedException($"[RimUnity.RenderPipeline] 不支持的渲染阶段：{pass.renderPassEvent}");
+                }
+                if (!groupedPasses.TryGetValue(pass.renderPassEvent, out List<ScriptableRenderPass> bucket))
+                {
+                    bucket = new List<ScriptableRenderPass>();
+                    groupedPasses.Add(pass.renderPassEvent, bucket);
+                }
+                bucket.Add(pass);
             }
-            if (!Enum.IsDefined(typeof(RenderPassEvent), pass.renderPassEvent))
-            {
-                throw new NotSupportedException($"[RimUnity.RenderPipeline] 不支持的渲染阶段：{pass.renderPassEvent}");
-            }
-            if (!groupedPasses.TryGetValue(pass.renderPassEvent, out List<ScriptableRenderPass> bucket))
-            {
-                bucket = new List<ScriptableRenderPass>();
-                groupedPasses.Add(pass.renderPassEvent, bucket);
-            }
-            bucket.Add(pass);
-        }
 
-        foreach (KeyValuePair<RenderPassEvent, List<ScriptableRenderPass>> entry in groupedPasses)
+            foreach (KeyValuePair<RenderPassEvent, List<ScriptableRenderPass>> entry in groupedPasses)
+            {
+                FeatureBridge bridge = new(registration, entry.Key, entry.Value);
+                int insertIndex = _FindInsertIndex(renderer, entry.Key);
+                renderer.InsertFeature(insertIndex, bridge);
+                registration.Bridges.Add(bridge);
+            }
+        }
+        catch
         {
-            FeatureBridge bridge = new(registration, entry.Key, entry.Value);
-            int insertIndex = _FindInsertIndex(renderer, entry.Key);
-            renderer.InsertFeature(insertIndex, bridge);
-            registration.Bridges.Add(bridge);
+            for (int index = 0; index < registration.Bridges.Count; index++)
+            {
+                renderer.RemoveFeature(registration.Bridges[index], dispose: false);
+            }
+            registration.Bridges.Clear();
+            if (createdNow || registration.Created)
+            {
+                _DisposeRegistration(registration);
+                registration.Created = false;
+            }
+            throw;
         }
     }
 
@@ -413,6 +471,10 @@ public static class RenderPipelineManager
                 {
                     registration.PendingBridgeDisposals--;
                 }
+            }
+            if (dispose && deferredCount > 0)
+            {
+                s_retiringFeatures.Add(registration.Feature);
             }
         }
         registration.Bridges.Clear();

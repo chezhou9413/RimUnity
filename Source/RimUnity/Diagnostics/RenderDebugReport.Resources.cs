@@ -45,7 +45,17 @@ internal static partial class RenderDebugReport
         {
             object catalog = row.Value;
             string root = Read(catalog, "Root") as string;
-            b.AppendLine("CATALOG " + root); Fingerprint(b, Path.Combine(root, "catalog.json"));
+            var assetCatalog = catalog as Assets.AssetCatalog;
+            b.AppendLine("CATALOG " + root);
+            string catalogArtifact = assetCatalog?.Store?.TryGetFilePath(Serialization.ContentFiles.CATALOG_FILE_NAME);
+            if (!string.IsNullOrEmpty(catalogArtifact)) Fingerprint(b, catalogArtifact);
+            else if (assetCatalog?.Store != null)
+            {
+                string archivePath = Path.Combine(root, Serialization.ContentFiles.ARCHIVE_FILE_NAME);
+                if (File.Exists(archivePath)) Fingerprint(b, archivePath);
+                else b.AppendLine("STORE " + assetCatalog.Store.GetType().FullName + " (" + assetCatalog.Store.Describe(Serialization.ContentFiles.CATALOG_FILE_NAME) + ")");
+            }
+            else Fingerprint(b, Path.Combine(root, Serialization.ContentFiles.CATALOG_FILE_NAME));
             var manifest = Read(catalog, "Manifest"); Dump(b, "Manifest metadata", manifest);
             var resources = Read(catalog, "resources") as IDictionary;
             var records = Read(catalog, "records") as IDictionary;
@@ -57,19 +67,29 @@ internal static partial class RenderDebugReport
             {
                 string relative = Read(record.Value, "file") as string;
                 if (string.IsNullOrEmpty(relative) || relative.Contains("://")) continue;
-                string resourceRoot = root;
-                var shared = Read(manifest, "sharedFiles") as IDictionary;
-                if (shared != null && shared.Contains(relative))
+                try
                 {
-                    string owner = shared[relative]?.ToString();
-                    var source = LoadedModManager.RunningModsListForReading.FirstOrDefault(m => string.Equals(m.PackageIdPlayerFacing, owner, StringComparison.OrdinalIgnoreCase));
-                    if (source == null) { b.AppendLine("MISSING shared owner=" + owner + " for " + relative); missingDescriptions++; continue; }
-                    resourceRoot = Path.Combine(source.RootDir, "1.7", "Data", "RimUnity");
+                    checkedDescriptions++;
+                    if (assetCatalog != null)
+                    {
+                        if (!assetCatalog.Exists(relative))
+                        {
+                            missingDescriptions++;
+                            if (missingDescriptions <= 100) b.AppendLine("MISSING resource descriptor=" + relative);
+                        }
+                    }
+                    else
+                    {
+                        string full = Path.GetFullPath(Path.Combine(root, relative));
+                        if (!full.StartsWith(Path.GetFullPath(root) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) { b.AppendLine("Invalid descriptor path=" + relative); continue; }
+                        if (!File.Exists(full)) { missingDescriptions++; if (missingDescriptions <= 100) b.AppendLine("MISSING resource descriptor=" + relative); }
+                    }
                 }
-                string full = Path.GetFullPath(Path.Combine(resourceRoot, relative));
-                if (!full.StartsWith(Path.GetFullPath(resourceRoot) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) { b.AppendLine("Invalid descriptor path=" + relative); continue; }
-                checkedDescriptions++;
-                if (!File.Exists(full)) { missingDescriptions++; if (missingDescriptions <= 100) b.AppendLine("MISSING resource descriptor=" + relative + " (shared paths must be resolved by owner)"); }
+                catch (Exception ex)
+                {
+                    missingDescriptions++;
+                    if (missingDescriptions <= 100) b.AppendLine("MISSING resource descriptor=" + relative + " (" + ex.Message + ")");
+                }
             }
             b.AppendLine("Local descriptor existence checked=" + checkedDescriptions + "; absent=" + missingDescriptions + "; does not verify every transitive blob or GPU upload.");
             b.AppendLine("Declared resource types=" + string.Join(", ", types.Select(x => x.Key + ":" + x.Value)));

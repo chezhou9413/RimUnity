@@ -16,7 +16,7 @@ namespace RimUnity.Editor { public static class RimUnityWorkflow
     [Serializable] public sealed class Profile
     {
         public string repository, shaderTool, gameRoot;
-        public bool auditOnReload, disableCastShadows, disableReceiveShadows, disableLightProbes, disableReflectionProbes;
+        public bool auditOnReload, disableCastShadows, disableReceiveShadows, disableLightProbes, disableReflectionProbes, packCatalogZip;
         public Mapping[] mappings;
         public ResourceOwner[] resourceOwners = Array.Empty<ResourceOwner>();
     }
@@ -52,10 +52,19 @@ namespace RimUnity.Editor { public static class RimUnityWorkflow
         foreach (var mapping in profile.mappings)
         {
             if (string.IsNullOrWhiteSpace(mapping.mod)) continue;
-            string catalog = Path.Combine(profile.repository, mapping.mod, "1.7/Data/RimUnity/catalog.json");
-            if (!catalogs.ContainsKey(mapping.mod)) catalogs[mapping.mod] = File.Exists(catalog)
-                ? new HashSet<string>(((JArray)JObject.Parse(File.ReadAllText(catalog))["assets"]).Select(a => (string)a["path"]))
-                : new HashSet<string>();
+            string root = Path.Combine(profile.repository, mapping.mod, "1.7/Data/RimUnity");
+            if (!catalogs.ContainsKey(mapping.mod))
+            {
+                if (ExportStorage.HasCatalog(root))
+                {
+                    using var reader = ExportStorage.CatalogReader.OpenRoot(root);
+                    catalogs[mapping.mod] = new HashSet<string>(((JArray)reader.ReadJson(RimUnity.Serialization.ContentFiles.CATALOG_FILE_NAME)["assets"]).Select(a => (string)a["path"]));
+                }
+                else
+                {
+                    catalogs[mapping.mod] = new HashSet<string>();
+                }
+            }
         }
         var selected = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var mapping in profile.mappings)

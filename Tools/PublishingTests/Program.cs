@@ -168,3 +168,4 @@ ChangeTrackingCases.Run();
 ScanCases.Run();
 ExportHistoryCases.Run();
 GpuTextureCases.Run();
+CatalogArchiveCases.Run();

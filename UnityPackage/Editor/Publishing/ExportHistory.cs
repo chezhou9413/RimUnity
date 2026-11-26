@@ -27,7 +27,8 @@ namespace RimUnity.Editor
             var snapshot = new List<Output>();
             foreach (string target in targets)
             {
-                var catalog = JObject.Parse(File.ReadAllText(Path.Combine(target, "catalog.json")));
+                using var reader = ExportStorage.CatalogReader.OpenRoot(target);
+                var catalog = reader.ReadJson(RimUnity.Serialization.ContentFiles.CATALOG_FILE_NAME);
                 var shared = catalog["sharedFiles"] as JObject;
                 snapshot.Add(new Output {
                     target = target,
