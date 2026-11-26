@@ -110,7 +110,11 @@ internal static class ChangeTrackingCases
             new JObject { ["id"] = "root", ["path"] = item.logical, ["file"] = "root.json", ["dependencies"] = new JArray("dep") },
             new JObject { ["id"] = "dep", ["path"] = "__assets/dep", ["file"] = "dep.json", ["dependencies"] = new JArray() }) };
         File.WriteAllText(Path.Combine(item.target, "catalog.json"), catalog.ToString());
-        string Output() => new ExportChangeTracker.OutputReader(profile).Read(item);
+        string Output()
+        {
+            using var reader = new ExportChangeTracker.OutputReader(profile);
+            return reader.Read(item);
+        }
         string original = Output();
         File.WriteAllText(Path.Combine(item.target, "payload.bin"), "PIXELS");
         Check(Output() != original, "output byte changes detected even with same file length");

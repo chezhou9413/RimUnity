@@ -7,12 +7,36 @@ namespace RimUnity.Serialization
     //编辑器与运行时使用同一套文件编码和路径边界。
     public static class ContentFiles
     {
+        public const string CATALOG_FILE_NAME = "catalog.json";
+        public const string ARCHIVE_FILE_NAME = "catalog.zip";
+
         //压缩内容直接流式解码，不生成临时解压文件。
         public static Stream OpenJson(string path)
         {
-            var input = File.OpenRead(path);
-            return path.EndsWith(".json.gz", StringComparison.OrdinalIgnoreCase)
-                ? new GZipStream(input, CompressionMode.Decompress) : (Stream)input;
+            return OpenJson(File.OpenRead(path), path);
+        }
+
+        //压缩内容直接流式解码，同时适用于磁盘文件与归档条目流。
+        public static Stream OpenJson(Stream input, string name)
+        {
+            return name != null && name.EndsWith(".json.gz", StringComparison.OrdinalIgnoreCase)
+                ? new GZipStream(input, CompressionMode.Decompress) : input;
+        }
+
+        //统一校验并规范化清单内部相对路径，供散文件与 catalog.zip 共用。
+        public static string NormalizeRelativePath(string relative)
+        {
+            if (string.IsNullOrWhiteSpace(relative) || Path.IsPathRooted(relative))
+                throw new InvalidDataException("无效资源路径：" + relative);
+            string normalized = relative.Replace('\\', '/');
+            if (normalized[0] == '/' || normalized.IndexOf(':') >= 0)
+                throw new InvalidDataException("无效资源路径：" + relative);
+            foreach (string segment in normalized.Split('/'))
+            {
+                if (segment.Length == 0 || segment == "." || segment == "..")
+                    throw new InvalidDataException("资源路径越界或包含非法段：" + relative);
+            }
+            return normalized;
         }
 
         //禁止绝对路径、目录穿越及链接指向内容目录外部。

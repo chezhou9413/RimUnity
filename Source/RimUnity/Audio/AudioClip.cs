@@ -27,5 +27,13 @@ public sealed class AudioClip : Object
         var backend = AudioBackend.Current ?? throw new InvalidOperationException("宿主音频后端尚未初始化。");
         return new AudioClip(backend.LoadSound(Path.GetFullPath(path), streaming)) { name = Path.GetFileNameWithoutExtension(path) };
     }
+    //1.7.5014 rev1195 的 AudioBackend.LoadSoundFromMemory 已由 MiniAudioBackend 实现，供 catalog.zip 归档条目加载使用。
+    public static AudioClip LoadFromMemory(string name, byte[] data, bool streaming = false)
+    {
+        Runtime.NativeRuntime.AssertThread();
+        ArgumentNullException.ThrowIfNull(data);
+        var backend = AudioBackend.Current ?? throw new InvalidOperationException("宿主音频后端尚未初始化。");
+        return new AudioClip(backend.LoadSoundFromMemory(data, streaming)) { name = name ?? "" };
+    }
     protected override void Release() { if (ownsSound) Sound.Release(); GC.KeepAlive(hostOwner); hostOwner = null; }
 }

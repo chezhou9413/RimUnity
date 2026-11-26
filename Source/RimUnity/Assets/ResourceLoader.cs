@@ -32,13 +32,25 @@ internal static class ResourceLoader
                 result = script;
                 break;
             case "VideoClip":
-                result = new Video.VideoClip(catalog.Resolve(Get<string>("file")));
+            {
+                string videoFile = Get<string>("file");
+                string videoPath = catalog.TryGetFilePath(videoFile);
+                result = videoPath != null
+                    ? new Video.VideoClip(videoPath)
+                    : new Video.VideoClip(catalog.Describe(videoFile), () => catalog.ReadAllBytes(videoFile));
                 break;
+            }
             case "AudioClip":
-                result = AudioClip.LoadFromFile(catalog.Resolve(Get<string>("file")));
+            {
+                string audioFile = Get<string>("file");
+                string audioPath = catalog.TryGetFilePath(audioFile);
+                result = audioPath != null
+                    ? AudioClip.LoadFromFile(audioPath)
+                    : AudioClip.LoadFromMemory(data.name, catalog.ReadAllBytes(audioFile));
                 break;
+            }
             case "TextAsset":
-                result = new TextAsset(File.ReadAllBytes(catalog.Resolve(Get<string>("file"))));
+                result = new TextAsset(catalog.ReadAllBytes(Get<string>("file")));
                 break;
             case "RenderTexture":
                 result = new RenderTexture(Get<int>("width"), Get<int>("height"), Get<int>("depth"), Get<int>("graphicsFormat"), Get<int>("antiAliasing"))
@@ -55,7 +67,7 @@ internal static class ResourceLoader
             case "RuntimeAnimatorController":
                 var controller = new RuntimeAnimatorController(); reader.Apply(controller, data.members); result = controller; break;
             case "Cubemap":
-                var cube = Cubemap.Load(data.name, Get<int>("width"), Get<int>("mipCount"), File.ReadAllBytes(catalog.Resolve(Get<string>("file"))), Get<bool>("linear"));
+                var cube = Cubemap.Load(data.name, Get<int>("width"), Get<int>("mipCount"), catalog.ReadAllBytes(Get<string>("file")), Get<bool>("linear"));
                 cube.wrapMode = Get<TextureWrapMode>("wrapMode"); cube.filterMode = Get<FilterMode>("filterMode"); cube.anisoLevel = Get<int>("anisoLevel"); cube.mipMapBias = Get<float>("mipMapBias");
                 result = cube; break;
             case "Texture3D":
@@ -69,7 +81,7 @@ internal static class ResourceLoader
                     if (Get<string>("numericFormat") != "RGBAFloatLE") throw new InvalidDataException("Unknown numeric texture encoding: " + record.path);
                     int w = Get<int>("width"), h = Get<int>("height");
                     if (w <= 0 || h <= 0) throw new InvalidDataException("Invalid numeric texture dimensions: " + record.path);
-                    byte[] payload = File.ReadAllBytes(catalog.Resolve(Get<string>("file")));
+                    byte[] payload = catalog.ReadAllBytes(Get<string>("file"));
                     if (!BitConverter.IsLittleEndian || payload.Length != checked(w * h * 16)) throw new InvalidDataException("Invalid numeric texture payload: " + record.path);
                     var numeric = new Texture2D(w, h, TextureFormat.RGBAFloat, false, Get<bool>("linear"));
                     numeric.CoreTexture.ReplaceCpuData(w, h, Waylith.Rendering.LoadedTextureFormat.RgbaFloat, new[] { payload }, 1, Get<bool>("linear"));
@@ -78,12 +90,18 @@ internal static class ResourceLoader
                     if (fields.ContainsKey("mipMapBias")) numeric.mipMapBias = Get<float>("mipMapBias");
                     result = numeric; break;
                 }
-                string texturePath = catalog.Resolve(Get<string>("file"));
+                string textureFile = Get<string>("file");
+                bool textureLinear = Get<bool>("linear");
+                bool textureReadable = fields.ContainsKey("readable") && Get<bool>("readable");
                 FilterMode filterMode = Get<FilterMode>("filterMode");
                 //严格按导出清单中的 mipmapCount 决定是否生成 Mip 链，避免改变已有旧导出包（尤其是无边距 2D 精灵图集）的显存与采样行为。
                 bool generateMips = fields.ContainsKey("mipmapCount") && Get<int>("mipmapCount") > 1;
-                Texture2D texture = Texture2D.LoadFile(texturePath, Get<bool>("linear"),
-                    fields.ContainsKey("readable") && Get<bool>("readable"), generateMips);
+                ICatalogStore textureStore = catalog.ResolveStore(textureFile, out string textureEntry);
+                string texturePath = textureStore.TryGetFilePath(textureEntry);
+                Texture2D texture = texturePath != null
+                    ? Texture2D.LoadFile(texturePath, textureLinear, textureReadable, generateMips)
+                    : Texture2D.LoadSource(textureStore.Describe(textureEntry), textureEntry, textureStore.GetTextureCacheKey(textureEntry),
+                        () => textureStore.OpenRead(textureEntry), textureLinear, textureReadable, generateMips);
                 texture.wrapMode = Get<TextureWrapMode>("wrapMode");
                 texture.filterMode = filterMode;
                 if (fields.ContainsKey("anisoLevel")) texture.anisoLevel = Get<int>("anisoLevel");
@@ -104,7 +122,7 @@ internal static class ResourceLoader
                     result = new Font { GameFontIndex = 1 };
                 else
                 {
-                    int index = UI.Runtime.NativeGuiHost.RegisterFont(data.name, File.ReadAllBytes(catalog.Resolve(Get<string>("file"))), 32);
+                    int index = UI.Runtime.NativeGuiHost.RegisterFont(data.name, catalog.ReadAllBytes(Get<string>("file")), 32);
                     if (index < 0) throw new InvalidDataException($"Waylith 无法注册字体：{data.name}");
                     result = new Font { GameFontIndex = index };
                 }

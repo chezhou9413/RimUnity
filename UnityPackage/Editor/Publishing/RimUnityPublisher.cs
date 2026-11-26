@@ -65,7 +65,13 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
                 target.Prepared = Path.Combine(target.Stage, "1.7/Data/RimUnity");
                 Directory.CreateDirectory(Path.Combine(target.Stage, "About"));
                 File.Copy(about, Path.Combine(target.Stage, "About/About.xml"));
-                if (!rebuild && File.Exists(Path.Combine(target.Live, "catalog.json"))) CopyTree(target.Live, target.Prepared);
+                if (!rebuild && ExportStorage.HasCatalog(target.Live))
+                {
+                    if (ExportStorage.IsArchiveRoot(target.Live))
+                        ExportStorage.ExtractArchiveToDirectory(Path.Combine(target.Live, ContentFiles.ARCHIVE_FILE_NAME), target.Prepared);
+                    else
+                        CopyTree(target.Live, target.Prepared);
+                }
             }
             log("阶段：准备旧产物 " + timer.Elapsed.TotalSeconds.ToString("F2") + " 秒（直接复制，不重复解析压缩）。");
             EditorPrefs.SetString("RimUnity.ShaderTool", profile.shaderTool);
@@ -111,7 +117,8 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
                 Validate(target.Prepared);
                 //跨磁盘先复制到目标盘，再通过同盘重命名发布。
                 string data = Path.GetDirectoryName(target.Live);
-                if (!string.Equals(Path.GetPathRoot(target.Prepared), Path.GetPathRoot(data), StringComparison.OrdinalIgnoreCase))
+                if (!profile.packCatalogZip
+                    && !string.Equals(Path.GetPathRoot(target.Prepared), Path.GetPathRoot(data), StringComparison.OrdinalIgnoreCase))
                 {
                     target.Ready = Path.Combine(data, ".rimunity-ready-" + Guid.NewGuid().ToString("N"));
                     CopyTree(target.Prepared, target.Ready);
@@ -125,6 +132,24 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
             ResourceOwnership.Apply(profile, prepared, log);
             var preparedRoots = targets.ToDictionary(t => ExportSharing.Owner(t.Mod), t => t.Prepared, StringComparer.OrdinalIgnoreCase);
             foreach (var target in targets) Validate(target.Prepared, owner => preparedRoots[owner]);
+            if (profile.packCatalogZip)
+            {
+                long packStart = timer.ElapsedMilliseconds;
+                foreach (var target in targets)
+                {
+                    string data = Path.GetDirectoryName(target.Live);
+                    //先登记准备目录，写包失败也由同一条清理路径处理。
+                    target.Ready = Path.Combine(data, ".rimunity-ready-" + Guid.NewGuid().ToString("N"));
+                    ExportStorage.WriteArchiveFromDirectory(target.Prepared, Path.Combine(target.Ready, ContentFiles.ARCHIVE_FILE_NAME));
+                    target.Prepared = target.Ready;
+                }
+                var packedRoots = targets.ToDictionary(t => ExportSharing.Owner(t.Mod), t => t.Prepared, StringComparer.OrdinalIgnoreCase);
+                foreach (var target in targets)
+                {
+                    Validate(target.Prepared, owner => packedRoots[owner]);
+                }
+                log("阶段：封装 catalog.zip " + ((timer.ElapsedMilliseconds - packStart) / 1000d).ToString("F2") + " 秒。");
+            }
             //发布期间保留全部旧数据，任意目标失败时整体恢复。
             foreach (var target in targets)
             {
@@ -182,48 +207,61 @@ namespace RimUnity.Editor { public static class RimUnityPublisher
     public static void Validate(string root, Func<string, string> ownerRoot = null)
     {
         root = Path.GetFullPath(root);
-        var catalog = JObject.Parse(File.ReadAllText(Path.Combine(root, "catalog.json")));
-        var assets = (JArray)catalog["assets"];
-        if (((int)catalog["formatVersion"] != 1 && (int)catalog["formatVersion"] != 2) || assets == null || assets.Count == 0) throw new InvalidDataException("导出清单为空或格式无效。");
-        string ResolvePayload(string relative)
+        var ownerReaders = new Dictionary<string, ExportStorage.CatalogReader>(StringComparer.OrdinalIgnoreCase);
+        using var mainReader = ExportStorage.CatalogReader.OpenRoot(root);
+        try
         {
-            string directory = root;
-            if (catalog["sharedFiles"] is JObject shared && shared[relative] != null)
+            var catalog = mainReader.ReadJson(ContentFiles.CATALOG_FILE_NAME);
+            var assets = (JArray)catalog["assets"];
+            if (((int)catalog["formatVersion"] != 1 && (int)catalog["formatVersion"] != 2) || assets == null || assets.Count == 0) throw new InvalidDataException("导出清单为空或格式无效。");
+            ExportStorage.CatalogReader ResolvePayload(string relative)
             {
-                ContentFiles.RequireBlob(relative);
-                string owner = (string)shared[relative];
-                if (ownerRoot == null) throw new InvalidDataException("验证共享资源需要模组目录：" + owner);
-                directory = ownerRoot(owner);
+                ExportStorage.CatalogReader target = mainReader;
+                if (catalog["sharedFiles"] is JObject shared && shared[relative] != null)
+                {
+                    ContentFiles.RequireBlob(relative);
+                    string owner = (string)shared[relative];
+                    if (ownerRoot == null) throw new InvalidDataException("验证共享资源需要模组目录：" + owner);
+                    if (!ownerReaders.TryGetValue(owner, out target))
+                        ownerReaders.Add(owner, target = ExportStorage.CatalogReader.OpenRoot(ownerRoot(owner)));
+                }
+                if (!target.Exists(relative)) throw new FileNotFoundException("缺失资源附属文件", target.Describe(relative));
+                return target;
             }
-            CheckFile(directory, relative);
-            return Inside(directory, relative);
-        }
-        var ids = new HashSet<string>();
-        foreach (JObject asset in assets)
-            if (!ids.Add((string)asset["id"])) throw new InvalidDataException("重复资源 ID。");
-        foreach (JObject asset in assets)
-        {
-            string file = ResolvePayload((string)asset["file"]);
-            if (!File.Exists(file)) throw new FileNotFoundException("清单资源不存在", file);
-            foreach (string dependency in (asset["dependencies"] as JArray ?? new JArray()).Values<string>())
-                if (!ids.Contains(dependency)) throw new InvalidDataException("缺失依赖：" + dependency);
-            var json = ExportStorage.Read(file);
-            //附属文件路径以资源根目录为基准。
-            foreach (string name in new[] { "vertexFile", "fragmentFile", "descriptorFile" })
-                if (json[name]?.Type == JTokenType.String) ResolvePayload((string)json[name]);
-            if (json["members"] is JArray members)
+            var ids = new HashSet<string>();
+            foreach (JObject asset in assets)
+            {
+                if (!ids.Add((string)asset["id"])) throw new InvalidDataException("重复资源 ID。");
+            }
+            foreach (JObject asset in assets)
+            {
+                string relative = (string)asset["file"];
+                var reader = ResolvePayload(relative);
+                foreach (string dependency in (asset["dependencies"] as JArray ?? new JArray()).Values<string>())
+                {
+                    if (!ids.Contains(dependency)) throw new InvalidDataException("缺失依赖：" + dependency);
+                }
+                var json = reader.ReadJson(relative);
+                //附属文件路径以资源根目录为基准。
+                foreach (string field in new[] { "vertexFile", "fragmentFile", "descriptorFile" })
+                {
+                    if (json[field]?.Type == JTokenType.String) ResolvePayload((string)json[field]);
+                }
+                if (json["members"] is not JArray members) continue;
                 foreach (JObject member in members)
+                {
                     if ((string)member["name"] == "file") ResolvePayload((string)member["value"]?["text"]);
+                }
+            }
+        }
+        finally
+        {
+            foreach (var reader in ownerReaders.Values)
+            {
+                reader.Dispose();
+            }
         }
     }
-    private static void CheckFile(string root, string relative)
-    {
-        string file = Inside(root, relative);
-        if (!File.Exists(file)) throw new FileNotFoundException("缺失资源附属文件", file);
-    }
-
-    private static string Inside(string root, string relative)
-        => ContentFiles.Inside(root, relative);
     private static void EnsureNoLinks(string root)
     {
         if ((File.GetAttributes(root) & FileAttributes.ReparsePoint) != 0) throw new IOException("数据目录不可为链接：" + root);

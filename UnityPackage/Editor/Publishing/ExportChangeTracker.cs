@@ -123,6 +123,7 @@ namespace RimUnity.Editor
                         .OrderBy(f => f, StringComparer.Ordinal).Select(f => f + ":" + FileHash(f)).ToArray() : Array.Empty<string>(),
                 profile.disableCastShadows, profile.disableReceiveShadows,
                 profile.disableLightProbes, profile.disableReflectionProbes,
+                profile.packCatalogZip,
                 mappings = profile.mappings, owners = profile.resourceOwners,
                 processors = processorInputs
             });
@@ -144,7 +145,7 @@ namespace RimUnity.Editor
 
         internal static ExportChangeTracker Scan(RimUnityWorkflow.Profile profile, IEnumerable<RimUnityWorkflow.Entry> entries, IEnumerable<string> uiPaths)
         {
-            var output = new OutputReader(profile);
+            using var output = new OutputReader(profile);
             return new ExportChangeTracker(Load(), Capture(profile, entries, uiPaths), output.Read);
         }
 
@@ -175,7 +176,7 @@ namespace RimUnity.Editor
 
         internal static void RecordSuccess(RimUnityWorkflow.Profile profile, Snapshot[] snapshots, bool full)
         {
-            var output = new OutputReader(profile);
+            using var output = new OutputReader(profile);
             Commit(Load(), snapshots, output.Read, full);
         }
 
@@ -217,14 +218,21 @@ namespace RimUnity.Editor
         {
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
             { completed("missing:" + path); yield break; }
-            using var sha = SHA256.Create();
             using var input = File.OpenRead(path);
+            foreach (var step in _DigestStreamSteps(input, path, completed))
+            {
+                yield return step;
+            }
+        }
+        private static IEnumerable<string> _DigestStreamSteps(Stream input, string label, Action<string> completed)
+        {
+            using var sha = SHA256.Create();
             var buffer = new byte[128 * 1024];
             int count;
             while ((count = input.Read(buffer, 0, buffer.Length)) > 0)
             {
                 sha.TransformBlock(buffer, 0, count, buffer, 0);
-                yield return path;
+                yield return label;
             }
             sha.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
             completed(BitConverter.ToString(sha.Hash).Replace("-", "").ToLowerInvariant());
@@ -242,11 +250,14 @@ namespace RimUnity.Editor
         }
 
         //One scan owns file/JSON/hash caches, released on completion. Includes shared and gzip payloads.
-        internal sealed class OutputReader
+        internal sealed class OutputReader : IDisposable
         {
             private readonly Dictionary<string, string> owners;
             private readonly Dictionary<string, JObject> json = new Dictionary<string, JObject>(StringComparer.OrdinalIgnoreCase);
             private readonly Dictionary<string, string> hashes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            private readonly Dictionary<string, ExportStorage.CatalogReader> _readers =
+                new Dictionary<string, ExportStorage.CatalogReader>(StringComparer.OrdinalIgnoreCase);
+
             internal OutputReader(RimUnityWorkflow.Profile profile)
             {
                 owners = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -261,9 +272,10 @@ namespace RimUnity.Editor
                     catch (Exception) { } //Missing owner output is handled as changed by Read.
                 }
             }
-            private JObject Json(string file)
+            private JObject Json(ExportStorage.CatalogReader reader, string relative)
             {
-                if (!json.TryGetValue(file, out var value)) json[file] = value = ExportStorage.Read(file);
+                string key = reader.Describe(relative);
+                if (!json.TryGetValue(key, out var value)) json[key] = value = reader.ReadJson(relative);
                 return value;
             }
             internal string Read(Snapshot snapshot)
@@ -274,32 +286,37 @@ namespace RimUnity.Editor
             }
             internal IEnumerable<string> ReadSteps(Snapshot snapshot, Action<string> completed)
             {
-                var catalog = Json(Path.Combine(snapshot.target, "catalog.json"));
+                var targetReader = _GetReader(snapshot.target);
+                var catalog = Json(targetReader, ContentFiles.CATALOG_FILE_NAME);
                 var assets = ((JArray)catalog["assets"]).OfType<JObject>().ToDictionary(a => (string)a["id"]);
                 var root = assets.Values.Single(a => (string)a["path"] == snapshot.logical);
                 var visited = new HashSet<string>();
                 var parts = new List<string>();
-                string Resolve(string relative)
+                ExportStorage.CatalogReader ResolveReader(string relative)
                 {
-                    string directory = snapshot.target;
                     if (catalog["sharedFiles"] is JObject shared && shared[relative] != null)
                     {
                         ContentFiles.RequireBlob(relative);
-                        directory = owners[(string)shared[relative]];
+                        return _GetReader(owners[(string)shared[relative]]);
                     }
-                    return ContentFiles.Inside(directory, relative);
+                    return targetReader;
                 }
                 IEnumerable<string> FilePart(string relative)
                 {
-                    string file = Resolve(relative);
-                    if (!hashes.TryGetValue(file, out string hash))
+                    var reader = ResolveReader(relative);
+                    string label = reader.Describe(relative);
+                    if (!hashes.TryGetValue(label, out string hash))
                     {
-                        if (!File.Exists(file)) throw new FileNotFoundException("缺失导出载荷", file);
-                        foreach (var step in DigestSteps(file, value => hash = value)) yield return step;
-                        hashes[file] = hash;
+                        if (!reader.Exists(relative)) throw new FileNotFoundException("缺失导出载荷", label);
+                        using var input = reader.OpenRead(relative);
+                        foreach (var step in _DigestStreamSteps(input, label, value => hash = value))
+                        {
+                            yield return step;
+                        }
+                        hashes[label] = hash;
                     }
                     parts.Add(hash);
-                    yield return file;
+                    yield return label;
                 }
                 IEnumerable<string> Visit(string id)
                 {
@@ -309,19 +326,57 @@ namespace RimUnity.Editor
                     identity.Remove("file"); //Generation-directory relocation is not a content change.
                     parts.Add(identity.ToString(Formatting.None));
                     string relative = (string)asset["file"];
-                    foreach (var step in FilePart(relative)) yield return step;
-                    var data = Json(Resolve(relative));
+                    foreach (var step in FilePart(relative))
+                    {
+                        yield return step;
+                    }
+                    var data = Json(ResolveReader(relative), relative);
                     foreach (string field in new[] { "vertexFile", "fragmentFile", "descriptorFile" })
-                        if (data[field]?.Type == JTokenType.String)
-                            foreach (var step in FilePart((string)data[field])) yield return step;
+                    {
+                        if (data[field]?.Type != JTokenType.String) continue;
+                        foreach (var step in FilePart((string)data[field]))
+                        {
+                            yield return step;
+                        }
+                    }
                     foreach (var member in (data["members"] as JArray ?? new JArray()).OfType<JObject>())
-                        if ((string)member["name"] == "file")
-                            foreach (var step in FilePart((string)member["value"]?["text"])) yield return step;
-                    foreach (string dependency in (asset["dependencies"] as JArray ?? new JArray()).Values<string>().OrderBy(p => p, StringComparer.Ordinal))
-                        foreach (var step in Visit(dependency)) yield return step;
+                    {
+                        if ((string)member["name"] != "file") continue;
+                        foreach (var step in FilePart((string)member["value"]?["text"]))
+                        {
+                            yield return step;
+                        }
+                    }
+                    foreach (string dependency in (asset["dependencies"] as JArray ?? new JArray()).Values<string>().OrderBy(value => value, StringComparer.Ordinal))
+                    {
+                        foreach (var step in Visit(dependency))
+                        {
+                            yield return step;
+                        }
+                    }
                 }
-                foreach (var step in Visit((string)root["id"])) yield return step;
+                foreach (var step in Visit((string)root["id"]))
+                {
+                    yield return step;
+                }
                 completed(Hash(string.Join("\n", parts)));
+            }
+
+            //一次扫描只打开一次所属模组的 ZIP，避免为每个入口重读中央目录。
+            private ExportStorage.CatalogReader _GetReader(string directory)
+            {
+                if (!_readers.TryGetValue(directory, out var reader))
+                    _readers.Add(directory, reader = ExportStorage.CatalogReader.OpenRoot(directory));
+                return reader;
+            }
+
+            public void Dispose()
+            {
+                foreach (var reader in _readers.Values)
+                {
+                    reader.Dispose();
+                }
+                _readers.Clear();
             }
         }
     }

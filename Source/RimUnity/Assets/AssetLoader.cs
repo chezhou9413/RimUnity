@@ -10,6 +10,7 @@ namespace RimUnity.Assets;
 public static partial class AssetLoader
 {
     private static readonly Dictionary<string, AssetCatalog> Catalogs = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, ICatalogStore> s_stores = new(StringComparer.OrdinalIgnoreCase);
 
     //场景结束后释放模板间接持有的显存，下一次使用时从磁盘恢复。
     internal static void EvictTextures()
@@ -53,8 +54,33 @@ public static partial class AssetLoader
     internal static AssetCatalog GetCatalog(string dataDirectory)
     {
         string root = Path.GetFullPath(dataDirectory);
-        if (!Catalogs.TryGetValue(root, out AssetCatalog catalog)) Catalogs.Add(root, catalog = new AssetCatalog(root, ResolveOwner));
-        return catalog;
+        if (Catalogs.TryGetValue(root, out AssetCatalog catalog)) return catalog;
+        bool hadStore = s_stores.ContainsKey(root);
+        try
+        {
+            catalog = new AssetCatalog(root, ResolveOwner, _GetStore);
+            Catalogs.Add(root, catalog);
+            return catalog;
+        }
+        catch
+        {
+            //无效清单不能锁住自己的归档；其他清单已引用的存储继续有效。
+            if (!hadStore && s_stores.Remove(root, out ICatalogStore store))
+            {
+                store.Dispose();
+            }
+            throw;
+        }
+    }
+
+    //清单与跨模组共享读取共用同一存储实例，同一个 catalog.zip 只打开一次。
+    private static ICatalogStore _GetStore(string dataDirectory)
+    {
+        string root = Path.GetFullPath(dataDirectory);
+        if (s_stores.TryGetValue(root, out ICatalogStore store)) return store;
+        store = CatalogStoreRegistry.Open(root);
+        s_stores.Add(root, store);
+        return store;
     }
 
     //仅从已启用模组解析 packageId，缺失依赖直接给出可定位错误。

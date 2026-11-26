@@ -179,7 +179,7 @@ namespace RimUnity.Editor
             var snapshots = ExportChangeTracker.Capture(scanProfile, nextEntries, ui, dependencies,
                 path => hashes[path], path => dirty[path], path => fileHashes[path]);
             var baseline = ExportChangeTracker.Load();
-            var output = new ExportChangeTracker.OutputReader(scanProfile);
+            using var output = new ExportChangeTracker.OutputReader(scanProfile);
             var signatures = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < snapshots.Length; i++)
             {

@@ -19,7 +19,7 @@ public static partial class AssetLoader
         foreach (ModContentPack mod in LoadedModManager.RunningModsListForReading)
         {
             string root = Path.Combine(mod.RootDir, "1.7", "Data", "RimUnity");
-            if (!File.Exists(Path.Combine(root, "catalog.json"))) continue;
+            if (!CatalogStoreRegistry.HasCatalog(root)) continue;
             AssetCatalog catalog;
             try { catalog = GetCatalog(root); }
             catch (Exception ex)

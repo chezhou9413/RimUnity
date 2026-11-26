@@ -67,10 +67,19 @@ public sealed class VideoPlayer : MonoBehaviour
         }
         if (sourceDirty)
         {
-            string path = source == VideoSource.VideoClip ? videoClip?.FilePath : videoUrl;
-            if (string.IsNullOrWhiteSpace(path)) throw new InvalidOperationException("视频尚未指定文件：" + name);
-            if (path.StartsWith("file://", StringComparison.OrdinalIgnoreCase)) path = new Uri(path).LocalPath;
-            player.Media = new VideoMedia { Path = path, Label = name };
+            if (source == VideoSource.VideoClip && videoClip != null && videoClip.DataLoader != null)
+            {
+                //1.7.5014 rev1195 的 Waylith.VideoDecode.VideoMedia 支持通过 Data 内存流播放，供 catalog.zip 归档条目使用。
+                player.Media = new VideoMedia { Data = videoClip.DataLoader(), Label = name };
+            }
+            else
+            {
+                string path = videoUrl;
+                if (source == VideoSource.VideoClip) path = videoClip != null ? videoClip.FilePath : null;
+                if (string.IsNullOrWhiteSpace(path)) throw new InvalidOperationException("视频尚未指定文件：" + name);
+                if (path.StartsWith("file://", StringComparison.OrdinalIgnoreCase)) path = new Uri(path).LocalPath;
+                player.Media = new VideoMedia { Path = path, Label = name };
+            }
             sourceDirty = false;
         }
         ApplySettings();

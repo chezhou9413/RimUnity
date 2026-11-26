@@ -13,7 +13,7 @@ public static class PrefabInspector
     //编译及静态核对不能替代游戏生命周期和画面验收。
     public static int ValidateDirectory(string directory, string[] paths = null)
     {
-        var catalog = new AssetCatalog(directory);
+        using var catalog = new AssetCatalog(directory);
         Rendering.ShaderDepthComparisons.ValidateHost();
         int count = 0;
         var selected = paths == null ? null : new HashSet<string>(paths, StringComparer.Ordinal);

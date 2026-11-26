@@ -15,8 +15,12 @@ internal static class CatalogContentPatch
         if (__result) return;
         if (!CatalogLoadPolicy.HasLoadFolders(__instance)) return;
         string root = Path.Combine(__instance.RootDir, "1.7", "Data", "RimUnity");
-        if (!File.Exists(Path.Combine(root, "catalog.json"))) return;
-        try { __result = new AssetCatalog(root).Manifest.assets.Count > 0; }
+        if (!CatalogStoreRegistry.HasCatalog(root)) return;
+        try
+        {
+            using var catalog = new AssetCatalog(root);
+            __result = catalog.Manifest.assets.Count > 0;
+        }
         catch (Exception exception)
         {
             Log.Error($"[RimUnity] 模组 {__instance.PackageId} 的资源清单无效：{root}\n{exception}");

@@ -16,7 +16,7 @@ namespace RimUnity.Editor
             GUI.Label(new Rect(area.x + 16, area.y + 38, area.width - 32, 24), "配置 AB 包的输出目录、导出选项与工具链。修改后点击底部保存。", faintText);
             Rect viewport = new Rect(area.x, area.y + 72, area.width, Mathf.Max(1, area.height - 130));
             float width = viewport.width - 20;
-            float contentHeight = 734 + profile.mappings.Length * 164;
+            float contentHeight = 772 + profile.mappings.Length * 164;
             settingsScroll = GUI.BeginScrollView(viewport, settingsScroll, new Rect(0, 0, width, contentHeight));
             float left = 16, innerWidth = width - 32, y = 0;
             void Section(string title, string hint)
@@ -58,7 +58,10 @@ namespace RimUnity.Editor
             profile.disableCastShadows = GUI.Toggle(new Rect(left, y, innerWidth, 32), profile.disableCastShadows, "自动关闭投射阴影 / Cast Shadows", settingsToggle); y += 38;
             profile.disableReceiveShadows = GUI.Toggle(new Rect(left, y, innerWidth, 32), profile.disableReceiveShadows, "自动关闭接收阴影 / Receive Shadows", settingsToggle); y += 38;
             profile.disableLightProbes = GUI.Toggle(new Rect(left, y, innerWidth, 32), profile.disableLightProbes, "自动关闭光照探针 / Light Probes", settingsToggle); y += 38;
-            profile.disableReflectionProbes = GUI.Toggle(new Rect(left, y, innerWidth, 32), profile.disableReflectionProbes, "自动关闭反射探针 / Reflection Probes", settingsToggle); y += 52;
+            profile.disableReflectionProbes = GUI.Toggle(new Rect(left, y, innerWidth, 32), profile.disableReflectionProbes, "自动关闭反射探针 / Reflection Probes", settingsToggle); y += 38;
+            profile.packCatalogZip = GUI.Toggle(new Rect(left, y, innerWidth, 32), profile.packCatalogZip,
+                "发布时封装为单文件 catalog.zip", settingsToggle);
+            y += 52;
             Section("制作工具链", "内容仓库用于解析相对输出路径。自定义 Shader 导出需要有效的 RimWorld 安装目录与 ShaderTool。");
             profile.repository = SettingsPath(new Rect(left, y, innerWidth, 32), "内容仓库", profile.repository, false, profile.repository); y += 42;
             profile.gameRoot = SettingsPath(new Rect(left, y, innerWidth, 32), "RimWorld 1.7", profile.gameRoot, false, profile.gameRoot); y += 42;

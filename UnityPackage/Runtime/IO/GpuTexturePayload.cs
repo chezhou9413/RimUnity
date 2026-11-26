@@ -29,9 +29,14 @@ namespace RimUnity.IO
         public static Data Read(string path)
         {
             using var input = File.OpenRead(path);
-            if (path.EndsWith(".rutex.gz", StringComparison.OrdinalIgnoreCase))
+            return Read(input, path.EndsWith(".rutex.gz", StringComparison.OrdinalIgnoreCase));
+        }
+
+        public static Data Read(Stream input, bool compressed)
+        {
+            if (compressed)
             {
-                using var gzip = new GZipStream(input, CompressionMode.Decompress);
+                using var gzip = new GZipStream(input, CompressionMode.Decompress, true);
                 return Read(gzip);
             }
             return Read(input);
