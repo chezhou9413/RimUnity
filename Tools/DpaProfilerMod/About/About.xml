@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ModMetaData>
+  <name>RimUnity DPA Profiles</name>
+  <author>RimUnity</author>
+  <packageId>Chezhou.RimUnity.DpaProfiler</packageId>
+  <supportedVersions><li>1.7</li></supportedVersions>
+  <modDependencies>
+    <li>
+      <packageId>Dubwise.DubsPerformanceAnalyzer.steam</packageId>
+      <displayName>Dubs Performance Analyzer</displayName>
+      <steamWorkshopUrl>steam://url/CommunityFilePage/2038874626</steamWorkshopUrl>
+    </li>
+  </modDependencies>
+  <loadAfter><li>Dubwise.DubsPerformanceAnalyzer.steam</li></loadAfter>
+  <description>Adds RimUnity CPU profiles to DPA's Modder tab after the embedded runtime is loaded.</description>
+</ModMetaData>

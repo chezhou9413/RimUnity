@@ -30,7 +30,6 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
     private readonly List<Vector3> sortingWorldPositions = new();
     private Vector3 sortingPosition, sortingForward;
     private readonly List<ParticleSystemVertexStream> streams = new();
-    private float particleRandom;
     private Mesh sourceMesh;
     private Vector3[] sourcePositions;
     private Vector2[] sourceUV;
@@ -66,6 +65,18 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
             streams.Clear(); streams.AddRange(value);
             particleStreamPlan = layout.Particle; vertexStreamPlan = layout.Vertex;
             streamPacking = SelectStreamPacking(value.Length, particleStreamPlan, vertexStreamPlan);
+            streamUsesVelocity = false;
+            streamCustomChannels = value.Length == 0 ? 3 : 0;
+            foreach (var element in particleStreamPlan)
+            {
+                var stream = element.Stream;
+                if (stream is ParticleSystemVertexStream.Velocity or ParticleSystemVertexStream.Speed)
+                    streamUsesVelocity = true;
+                else if (stream is >= ParticleSystemVertexStream.Custom1X and <= ParticleSystemVertexStream.Custom1XYZW)
+                    streamCustomChannels |= 1;
+                else if (stream is >= ParticleSystemVertexStream.Custom2X and <= ParticleSystemVertexStream.Custom2XYZW)
+                    streamCustomChannels |= 2;
+            }
             preparedStreamValues = default; streamValuesPrepared = false;
         }
     }
@@ -89,11 +100,13 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
         {
             var cameraState = new ParticleCameraState(camera, uiEntry?.Canvas, allowRoll);
             var drawSpace = new ParticleSystem.DrawSpace(system);
-            ClearMesh(); order.Clear();
-            for (int i = 0; i < system.count; i++) order.Add(i);
-            if (sortMode != ParticleSystemSortMode.None)
+            ClearMesh();
+            bool sorted = sortMode != ParticleSystemSortMode.None;
+            if (sorted)
             {
                 using var sortCpu = LabCpuMetrics.Measure(LabCpuStage.ParticleSort);
+                order.Clear();
+                for (int i = 0; i < system.count; i++) order.Add(i);
                 try
                 {
                     PrepareSorting(system, in cameraState, in drawSpace);
@@ -102,7 +115,7 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
                 }
                 finally { ClearSorting(); }
             }
-            DrawParticleBatches(system, camera, in cameraState, in drawSpace);
+            DrawParticleBatches(system, camera, in cameraState, in drawSpace, sorted);
         }
         if (system.trails.enabled && trailMaterial != null) DrawTrails(system, camera);
         TrimSpriteBatches();
@@ -137,7 +150,6 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
         using var detailAttributes = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Attributes);
 #endif
 
-            particleRandom = ParticleSystem.Random(p.randomSeed, 97);
 #if RIMUNITY_PARTICLE_ANALYSIS
             using (Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Space))
 #endif
@@ -153,11 +165,21 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
 #if RIMUNITY_PARTICLE_ANALYSIS
             using (Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Custom))
 #endif
-            { c1 = s.CustomAt(p, 0); c2 = s.CustomAt(p, 1); }
-            streamParticle = p; streamSize = size; streamVelocity = drawSpace.WorldVelocity(p); streamCenter = center;
+            {
+                c1 = (streamCustomChannels & 1) != 0 ? s.CustomAt(p, 0) : default;
+                c2 = (streamCustomChannels & 2) != 0 ? s.CustomAt(p, 1) : default;
+            }
+            if (streamPacking == StreamPacking.General)
+            {
+                streamParticle = p;
+                streamSize = size;
+                streamCenter = center;
+            }
+            streamVelocity = streamUsesVelocity || alignment == ParticleSystemRenderSpace.Velocity
+                || renderMode == ParticleSystemRenderMode.Stretch ? drawSpace.WorldVelocity(p) : default;
             rect = UV(s, p);
-            if (ParticleSystem.Random(p.randomSeed, 80) < flip.x) { rect.x += rect.width; rect.width = -rect.width; }
-            if (ParticleSystem.Random(p.randomSeed, 81) < flip.y) { rect.y += rect.height; rect.height = -rect.height; }
+            if (flip.x > 0 && ParticleSystem.Random(p.randomSeed, 80) < flip.x) { rect.x += rect.width; rect.width = -rect.width; }
+            if (flip.y > 0 && ParticleSystem.Random(p.randomSeed, 81) < flip.y) { rect.y += rect.height; rect.height = -rect.height; }
         }
         if (renderMode == ParticleSystemRenderMode.Mesh)
         {
@@ -188,7 +210,7 @@ public sealed partial class ParticleSystemRenderer : MonoBehaviour
         Vertex(center + x - y, new Vector2(rect.xMax, rect.yMin), color, c1, c2);
         Quad(start);
     }
-    private void ClearMesh() { packedBillboards = false; billboardVertices.Clear(); vertices.Clear(); uv.Clear(); packedUV.Clear(); colors.Clear(); custom1.Clear(); custom2.Clear(); indices.Clear(); normals.Clear(); tangents.Clear(); particleRandom = 0; streamValuesPrepared = false; streamNormal = Vector3.forward; streamTangent = new Vector4(1, 0, 0, 1); }
+    private void ClearMesh() { packedBillboards = false; billboardVertices.Clear(); vertices.Clear(); uv.Clear(); packedUV.Clear(); colors.Clear(); custom1.Clear(); custom2.Clear(); indices.Clear(); normals.Clear(); tangents.Clear(); streamValuesPrepared = false; streamNormal = Vector3.forward; streamTangent = new Vector4(1, 0, 0, 1); }
     private void Vertex(Vector3 p, Vector2 t, Color32 c, Vector4 c1 = default, Vector4 c2 = default)
     {
 #if RIMUNITY_PARTICLE_ANALYSIS

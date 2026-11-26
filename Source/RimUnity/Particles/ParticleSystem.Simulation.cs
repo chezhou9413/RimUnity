@@ -4,7 +4,7 @@ namespace RimUnity;
 //模块求值仅使用当前实例状态和粒子种子。
 public sealed partial class ParticleSystem
 {
-    private void Integrate(ref Particle p, float dt)
+    private void Integrate(ref Particle p, float dt, Vector3? systemGravity)
     {
 #if RIMUNITY_PARTICLE_ANALYSIS
         using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Integrate);
@@ -15,8 +15,8 @@ public sealed partial class ParticleSystem
         Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.Integrations, 1);
 #endif
         float age = Age(p), r = Random(p.randomSeed, 20);
-        Vector3 force = new(0, -9.81f * main.gravityModifier.Evaluate(age, r), 0);
-        force = ConvertSpace(force, ParticleSystemSimulationSpace.World, p.eventSpace);
+        Vector3 force = systemGravity ?? ConvertSpace(new Vector3(0, -9.81f * main.gravityModifier.Evaluate(age, r), 0),
+            ParticleSystemSimulationSpace.World, p.eventSpace);
         if (forceOverLifetime.enabled)
         {
 #if RIMUNITY_PARTICLE_ANALYSIS

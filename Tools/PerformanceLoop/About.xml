@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ModMetaData>
+  <name>RimUnity Performance Loop</name>
+  <author>RimUnity</author>
+  <packageId>Chezhou.RimUnity.PerformanceLoop</packageId>
+  <supportedVersions><li>1.7</li></supportedVersions>
+  <loadAfter><li>brrainz.harmony</li></loadAfter>
+  <description>Runs the RimUnity performance lab in an isolated command-line test session.</description>
+</ModMetaData>

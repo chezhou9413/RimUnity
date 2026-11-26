@@ -1,7 +1,9 @@
+using System.Runtime.Intrinsics;
+
 namespace RimUnity;
 
 //以解析 Perlin 梯度构造连续 Curl 噪声；不依赖 Unity 原生噪声表。
-internal static class ParticleNoise
+internal static partial class ParticleNoise
 {
     private const float InverseSqrtTwo = .7071067811865475f;
     // Fixed numeric constants, copied out by value. No writable view or scene
@@ -31,6 +33,9 @@ internal static class ParticleNoise
         Vector3 fade = new(Fade(offset.x), Fade(offset.y), Fade(offset.z));
         Vector3 derivative = new(FadeDerivative(offset.x), FadeDerivative(offset.y), FadeDerivative(offset.z));
         bool high = quality == ParticleSystemNoiseQuality.High;
+        if (Vector128.IsHardwareAccelerated && offset.x is >= 0 and <= 1
+            && offset.y is >= 0 and <= 1 && offset.z is >= 0 and <= 1)
+            return CurlCorners(ix, iy, iz, offset, fade, derivative, seed, high);
         float xy = 0, xz = 0, yx = 0, yz = 0, zx = 0, zy = 0;
         for (int z = 0; z < 2; z++)
         {

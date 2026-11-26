@@ -87,6 +87,8 @@ public sealed partial class ParticleSystem
         // are read again at every emission/physics checkpoint, never cached across Steps.
         bool physics = collision.enabled || trigger.enabled;
         bool recordTrails = trails.enabled && trails.mode != ParticleSystemTrailMode.Ribbon;
+        bool constantGravity = main.gravityModifier.mode == ParticleSystemCurveMode.Constant;
+        Vector3? systemGravity = null;
         for (int i = count - 1; i >= 0; i--)
         {
 
@@ -106,7 +108,11 @@ public sealed partial class ParticleSystem
             p.elapsedAge += aliveDt;
             p.remainingLifetime -= particleDt;
             if (ring) UpdateRingAge(ref p);
-            Integrate(ref p, aliveDt);
+            bool useSystemGravity = constantGravity && p.eventSpace is not { local: true };
+            if (useSystemGravity && !systemGravity.HasValue)
+                systemGravity = ConvertSpace(new Vector3(0, -9.81f * main.gravityModifier.constant, 0),
+                    ParticleSystemSimulationSpace.World, null);
+            Integrate(ref p, aliveDt, useSystemGravity ? systemGravity : null);
             if (physics) ApplyParticlePhysics(ref p, fromPosition, aliveDt, birthOffset);
             if (recordTrails) RecordTrail(p);
             if (subEmissionEvents.Count != 0) CaptureParentMotion(p, fromPosition, aliveDt);

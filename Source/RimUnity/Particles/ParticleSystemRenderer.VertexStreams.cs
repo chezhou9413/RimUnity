@@ -26,6 +26,8 @@ public sealed partial class ParticleSystemRenderer
     private bool streamValuesPrepared;
     private enum StreamPacking { Default, UVOnly, Zero, General }
     private StreamPacking streamPacking;
+    private bool streamUsesVelocity;
+    private int streamCustomChannels = 3;
 
     // Only numeric streams occupy TEXCOORD0..2. Position/normal/tangent/color
     // remain separate attributes; their presence or order cannot change this route.

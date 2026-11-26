@@ -14,7 +14,7 @@ foreach ($name in $runtimeFiles) {
     }
 }
 #部署与压缩包复用清单；独立版的 DLL、Def、Shader 由原版正常加载。
-$files = @('About\About.xml', 'About\PublishedFileId.txt', 'About\Preview.png', 'About\ModIcon.png', 'LoadFolders.xml', 'LICENSE', 'README.md', 'README.en.md', '1.6\README.txt')
+$files = @('About\About.xml', 'About\PublishedFileId.txt', 'About\Preview.png', 'About\ModIcon.png', 'LoadFolders.xml', 'Analyzer.xml', 'LICENSE', 'README.md', 'README.en.md', '1.6\README.txt')
 foreach ($directory in @('1.6\Languages', '1.7\Defs', '1.7\Shaders', '1.7\Languages', 'Docs\zh-CN', 'Docs\en', 'Docs\Images', 'ThirdParty')) {
     $root = Join-Path $repo $directory
     if (Test-Path -LiteralPath $root) {

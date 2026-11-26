@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using Simd = System.Numerics.Vector;
 
 namespace RimUnity;
 
@@ -45,8 +46,10 @@ public sealed partial class Mesh
                 || singleRange && activeSubmeshes != 1))
                 throw new InvalidOperationException("只能追加到相同布局的粒子几何。");
             if (indices.Count % 3 != 0) throw new ArgumentException("粒子三角形索引数量必须是三的倍数。", nameof(indices));
-            foreach (int index in CollectionsMarshal.AsSpan(indices)) if ((uint)index >= count) throw new ArgumentOutOfRangeException(nameof(indices));
+            ValidateParticleIndices(CollectionsMarshal.AsSpan(indices), count);
             if (count == 0) return;
+            // After validation, every rebased index is below this checked vertex count.
+            _ = checked(offset + count);
         }
         bool emptyRange;
 #if RIMUNITY_PARTICLE_ANALYSIS
@@ -93,8 +96,7 @@ public sealed partial class Mesh
             // The source is validated above; fill only the newly owned destination slice.
             CollectionsMarshal.SetCount(triangles, end);
             var targetIndices = CollectionsMarshal.AsSpan(triangles).Slice(start, indices.Count);
-            var sourceIndices = CollectionsMarshal.AsSpan(indices);
-            for (int i = 0; i < sourceIndices.Length; i++) targetIndices[i] = checked(sourceIndices[i] + offset);
+            RebaseParticleIndices(CollectionsMarshal.AsSpan(indices), targetIndices, offset);
         }
 #if RIMUNITY_PARTICLE_ANALYSIS
         using (ParticleMeshProbe.Measure(ParticleMeshStage.Bounds))
@@ -119,5 +121,39 @@ public sealed partial class Mesh
             min = emptyRange ? min : Vector3.Min(range.min, min); max = emptyRange ? max : Vector3.Max(range.max, max);
             range.SetMinMax(min, max); particleSubmeshBounds[submesh] = range; particleBoundsValid = true;
         }
+    }
+
+    private static void ValidateParticleIndices(ReadOnlySpan<int> indices, int count)
+    {
+        if (Simd.IsHardwareAccelerated && indices.Length >= System.Numerics.Vector<int>.Count)
+        {
+            var limit = new System.Numerics.Vector<uint>((uint)count);
+            var vectors = MemoryMarshal.Cast<int, System.Numerics.Vector<uint>>(indices);
+            foreach (var vector in vectors)
+                if (Simd.GreaterThanOrEqualAny(vector, limit)) throw new ArgumentOutOfRangeException(nameof(indices));
+            indices = indices.Slice(vectors.Length * System.Numerics.Vector<uint>.Count);
+        }
+        foreach (int index in indices)
+            if ((uint)index >= count) throw new ArgumentOutOfRangeException(nameof(indices));
+    }
+
+    private static void RebaseParticleIndices(ReadOnlySpan<int> source, Span<int> target, int offset)
+    {
+        if (offset == 0)
+        {
+            source.CopyTo(target);
+            return;
+        }
+        if (Simd.IsHardwareAccelerated && source.Length >= System.Numerics.Vector<int>.Count)
+        {
+            var add = new System.Numerics.Vector<int>(offset);
+            var input = MemoryMarshal.Cast<int, System.Numerics.Vector<int>>(source);
+            var output = MemoryMarshal.Cast<int, System.Numerics.Vector<int>>(target);
+            for (int i = 0; i < input.Length; i++) output[i] = input[i] + add;
+            int processed = input.Length * System.Numerics.Vector<int>.Count;
+            source = source.Slice(processed);
+            target = target.Slice(processed);
+        }
+        for (int i = 0; i < source.Length; i++) target[i] = source[i] + offset;
     }
 }

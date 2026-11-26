@@ -38,6 +38,14 @@ instance.transform.position = new RimUnity.Vector3(x, y, z);
 
 `contentMod` 是资源所属模组。导出资源位于该模组的 `1.7/Data/RimUnity`，加载时使用导出窗口中填写的逻辑路径。
 
+## 使用 Dubs Performance Analyzer 分析 CPU 耗时
+
+在 RimWorld 1.7 启用 Steam 版 **Dubs Performance Analyzer** 和 RimUnity，重启游戏，在分析器的 **Modder（模组作者）** 页选择 `RimUnity主循环` 或 `RimUnityHDR与Bloom收集`。复现卡顿后暂停采样。对比 HDR 关闭、Legacy 和 Experiment 时，使用相同地图、视角和 Bloom 设置。
+
+`RimUnityHDR快照细项` 可查看绘制筛选、材质绑定刷新、命令复制和工作区回收。`RimUnityHDR与后处理录制` 统计录制渲染指令的 CPU 时间。父方法耗时已包含子方法。`RimUnityHDR快照细项` 和 `RimUnity逐粒子细项` 可能增加测量开销，适合短时间采样。
+
+独立模组包会将 `Analyzer.xml` 放在模组根目录。仅使用内置运行时的模组列表需要启用开发用模组 **RimUnity DPA Profiles**，由它在运行时载入后注册采样项。DPA 会跳过当前 RimUnity 版本没有的方法，因此不同版本显示的采样项会有差异。 [内置运行时的采样模组构建方法](Tools/DpaProfilerMod/README.md)
+
 ## 从源码构建
 
 只使用框架或安装发行版时无需编译。修改框架源码则需要 RimWorld 1.7 安装目录、Harmony 的 `0Harmony.dll` 和 .NET 10 SDK。

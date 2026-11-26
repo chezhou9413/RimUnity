@@ -39,7 +39,7 @@ internal static class Packages
         string stage = Path.Combine(root, "artifacts/Packaging", Guid.NewGuid().ToString("N"));
         string mod = Path.Combine(stage, "RimUnity"), container = Path.Combine(stage, "RimUnity.Embedded"), package = Path.Combine(stage, "package");
         foreach (string file in new[] { "About/About.xml", "About/PublishedFileId.txt", "About/Preview.png", "About/ModIcon.png",
-            "LoadFolders.xml", "LICENSE", "README.md", "README.en.md", "1.6/README.txt" }) Copy(Path.Combine(root, file), Path.Combine(mod, file));
+            "LoadFolders.xml", "Analyzer.xml", "LICENSE", "README.md", "README.en.md", "1.6/README.txt" }) Copy(Path.Combine(root, file), Path.Combine(mod, file));
         foreach (string folder in new[] { "1.6/Languages", "1.7/Defs", "1.7/Shaders", "1.7/Languages", "Docs/zh-CN", "Docs/en", "Docs/Images", "ThirdParty" })
             CopyFolder(Path.Combine(root, folder), Path.Combine(mod, folder), file => Path.GetFileName(file) != "PreviewOpaque.frag.glsl");
         foreach (string name in Program.RuntimeFiles) Copy(Path.Combine(runtime, name), Path.Combine(mod, "1.7/Assemblies", name));

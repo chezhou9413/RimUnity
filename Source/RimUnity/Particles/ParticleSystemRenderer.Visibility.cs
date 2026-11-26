@@ -34,8 +34,8 @@ public sealed partial class ParticleSystemRenderer
             alignment == ParticleSystemRenderSpace.Velocity || renderMode == ParticleSystemRenderMode.Stretch ? s.WorldVelocity(p) : default,
             out x, out y);
 
-    // Rendering already evaluated this velocity for vertex streams. Visibility
-    // computes it once only when alignment/stretch actually needs it.
+    // Drawing shares the prepared velocity with the selected vertex streams.
+    // Visibility computes it only for velocity alignment or stretch.
     private void BillboardAxesPrepared(ParticleSystem s, in ParticleSystem.Particle p, in ParticleCameraState cameraState, Vector3 center, Vector3 size,
         Vector3 worldVelocity, out Vector3 x, out Vector3 y)
     {

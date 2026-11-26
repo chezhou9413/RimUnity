@@ -17,6 +17,7 @@
 - `Verify-Embedded.ps1`：离线验证版本选择、程序集身份及延迟内容加载。可用 `-WorkshopRoot` 指定实际工坊运行时，验证本地版存在但未启用的组合。
 - `Test-EmbeddedInGame.ps1`：启动隔离存档目录的真实游戏测试，临时安装测试模组，结束后恢复原独立版。指定 `-WorkshopRoot` 时额外验证游戏实际生成的 `_steam` 副本标识。
 - `Deploy.ps1`：备份并替换游戏中的独立版。
+- `PerformanceLoop/Run.ps1`：用隔离配置启动特效测试场、自动采样和导出，支持运行时 A/B 对照及帧尾等待拆分。
 - `Pack.ps1`：生成独立版、内置版与 Unity UPM 发布包。
 - `Sync-Manual.ps1`：同步原始文档到 Unity 包；`-Check` 仅核对。
 - `ModsSwap.ps1`：崩溃安全的 `Mods/RimUnity` 交换（`-Action Status|Move|Repair`）。状态目录在 `<游戏目录>/.rimunity-ci`，用只增不改的 journal 记录每一步，进程被强杀后 `-Action Repair` 能把原模组还原。

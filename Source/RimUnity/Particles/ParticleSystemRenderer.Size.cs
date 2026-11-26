@@ -14,9 +14,7 @@ public sealed partial class ParticleSystemRenderer
 #endif
 
         if (uiEntry == null && !cameraState.HasCamera) return;
-        Vector2 horizontal = cameraState.ViewportPoint(center + x) - cameraState.ViewportPoint(center - x);
-        Vector2 vertical = cameraState.ViewportPoint(center + y) - cameraState.ViewportPoint(center - y);
-        float extent = Mathf.Max(Mathf.Abs(horizontal.x) + Mathf.Abs(vertical.x), Mathf.Abs(horizontal.y) + Mathf.Abs(vertical.y));
+        float extent = cameraState.BillboardExtent(center, x, y);
         if (extent <= 0) return;
         float maximum = Mathf.Max(0, maxParticleSize);
         float minimum = Mathf.Clamp(minParticleSize, 0, maximum);

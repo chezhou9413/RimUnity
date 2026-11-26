@@ -1,3 +1,5 @@
+using System.Runtime.Intrinsics;
+
 namespace RimUnity;
 
 //一次粒子绘制共用相机快照，不在每个面片角点重新求逆矩阵和读取父级变换。
@@ -63,5 +65,40 @@ public sealed partial class ParticleSystemRenderer
             }
             return new Vector2(screen.x / screenSize.x, screen.y / screenSize.y);
         }
+
+        // Each lane projects one endpoint with the same arithmetic and near-zero w rule.
+        internal float BillboardExtent(Vector3 center, Vector3 x, Vector3 y)
+        {
+            Vector2 horizontal, vertical;
+            if (!overlay && Vector128.IsHardwareAccelerated)
+            {
+                var px = Vector128.Create(center.x + x.x, center.x - x.x, center.x + y.x, center.x - y.x);
+                var py = Vector128.Create(center.y + x.y, center.y - x.y, center.y + y.y, center.y - y.y);
+                var pz = Vector128.Create(center.z + x.z, center.z - x.z, center.z + y.z, center.z - y.z);
+                ref readonly Matrix4x4 m = ref viewProjection;
+                var w = ProjectRow(px, py, pz, m.m30, m.m31, m.m32, m.m33);
+                var invalid = Vector128.LessThan(Vector128.Abs(w), Vector128.Create(1e-7f));
+                var one = Vector128.Create(1f);
+                var half = Vector128.Create(.5f);
+                var normalizedX = ProjectRow(px, py, pz, m.m00, m.m01, m.m02, m.m03) / w;
+                var normalizedY = ProjectRow(px, py, pz, m.m10, m.m11, m.m12, m.m13) / w;
+                var screenX = Vector128.Create(viewport.x) + (normalizedX + one) * half * Vector128.Create(viewport.width);
+                var screenY = Vector128.Create(viewport.y) + (one - normalizedY) * half * Vector128.Create(viewport.height);
+                screenX = Vector128.ConditionalSelect(invalid, Vector128<float>.Zero, screenX / Vector128.Create(screenSize.x));
+                screenY = Vector128.ConditionalSelect(invalid, Vector128<float>.Zero, screenY / Vector128.Create(screenSize.y));
+                horizontal = new(screenX.GetElement(0) - screenX.GetElement(1), screenY.GetElement(0) - screenY.GetElement(1));
+                vertical = new(screenX.GetElement(2) - screenX.GetElement(3), screenY.GetElement(2) - screenY.GetElement(3));
+            }
+            else
+            {
+                horizontal = ViewportPoint(center + x) - ViewportPoint(center - x);
+                vertical = ViewportPoint(center + y) - ViewportPoint(center - y);
+            }
+            return Mathf.Max(Mathf.Abs(horizontal.x) + Mathf.Abs(vertical.x), Mathf.Abs(horizontal.y) + Mathf.Abs(vertical.y));
+        }
+
+        private static Vector128<float> ProjectRow(Vector128<float> x, Vector128<float> y, Vector128<float> z,
+            float a, float b, float c, float d)
+            => Vector128.Create(a) * x + Vector128.Create(b) * y + Vector128.Create(c) * z + Vector128.Create(d * 1);
     }
 }

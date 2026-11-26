@@ -21,7 +21,8 @@ public sealed partial class ParticleSystemRenderer
     }
 
     //连续纹理段独立提交，不重排透明粒子来压低绘制调用。
-    private void DrawParticleBatches(ParticleSystem system, Camera camera, in ParticleCameraState cameraState, in ParticleSystem.DrawSpace drawSpace)
+    private void DrawParticleBatches(ParticleSystem system, Camera camera, in ParticleCameraState cameraState,
+        in ParticleSystem.DrawSpace drawSpace, bool sorted)
     {
 #if RIMUNITY_PARTICLE_ANALYSIS
         using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Geometry, system.GetInstanceID());
@@ -29,16 +30,23 @@ public sealed partial class ParticleSystemRenderer
 
         using var cpu = Diagnostics.LabCpuMetrics.Measure(Diagnostics.LabCpuStage.ParticleGeometry);
         packedBillboards = CanPackBillboards(system);
+        int count = system.count;
         if (!system.textureSheetAnimation.enabled || system.textureSheetAnimation.mode != ParticleSystemAnimationMode.Sprites)
         {
-            foreach (int i in order) { streamParticleIndex = i; AppendParticle(system, system.particles[i], in cameraState, in drawSpace); }
+            for (int index = 0; index < count; index++)
+            {
+                int particleIndex = sorted ? order[index] : index;
+                streamParticleIndex = particleIndex;
+                AppendParticle(system, system.particles[particleIndex], in cameraState, in drawSpace);
+            }
             Submit(ref batch, sharedMaterial, camera); return;
         }
         if (spriteSource != sharedMaterial) { ReleaseSpriteBatches(); spriteSource = sharedMaterial; }
         preparedSpriteTextures.Clear();
         Material current = null; int group = 0;
-        foreach (int i in order)
+        for (int index = 0; index < count; index++)
         {
+            int i = sorted ? order[index] : index;
             var particle = system.particles[i];
             UV(system, particle);
             Sprite[] frames = system.textureSheetAnimation.sprites;

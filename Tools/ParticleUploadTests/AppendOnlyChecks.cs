@@ -84,6 +84,18 @@ internal static class AppendOnlyChecks
                 catch (ArgumentException) { rejected = true; }
                 Check(rejected && before.SequenceEqual(Snapshot(mesh)), "invalid input must not mutate mesh data");
             }
+            foreach (int invalidIndex in new[] { 0, 101 })
+            foreach (int value in new[] { -1, 68 })
+            {
+                var data = new Data(17, 1);
+                data.Indices[invalidIndex] = value;
+                var before = Snapshot(mesh);
+                bool rejected = false;
+                try { data.Append(mesh, 0); }
+                catch (ArgumentOutOfRangeException) { rejected = true; }
+                Check(rejected && before.SequenceEqual(Snapshot(mesh)),
+                    "both vector and tail validation must reject out of range indices before mutation");
+            }
             Console.WriteLine($"APPEND DIGEST {Convert.ToHexString(digest.GetHashAndReset())}");
             foreach (int quads in new[] { 800, 3000, 5400 }) Benchmark(mesh, quads);
             Console.WriteLine($"PASS {checks} real Core append checks: channels, offsets, ranges/bounds, clear/reuse, numeric edges, invalid input, source independence and warmed allocations. No GPU.");

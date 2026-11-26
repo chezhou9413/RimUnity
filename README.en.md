@@ -38,6 +38,14 @@ instance.transform.position = new RimUnity.Vector3(x, y, z);
 
 `contentMod` is the mod that owns the assets. Exported resources live in its `1.7/Data/RimUnity` directory. Load them using the logical path entered in the export window.
 
+## CPU profiling with Dubs Performance Analyzer
+
+Enable the Steam version of **Dubs Performance Analyzer** and RimUnity in RimWorld 1.7, then restart. Under **Modder**, select `RimUnity主循环` (main loop) or `RimUnityHDR与Bloom收集` (HDR and Bloom capture). Reproduce the hitch and pause sampling. Keep the map, camera and Bloom settings fixed when comparing the three HDR modes.
+
+`RimUnityHDR快照细项` measures draw filtering, binding refresh, command copying and workspace recycling. `RimUnityHDR与后处理录制` measures CPU time spent recording rendering commands. Parent timings include their children. Keep the per-draw HDR and per-particle captures short to limit sampling overhead.
+
+The standalone package includes `Analyzer.xml` at the mod root. For embedded-only profiling, enable the **RimUnity DPA Profiles** developer mod. It registers the profiles after the runtime is loaded. DPA skips methods absent from the loaded RimUnity version. [Build the developer mod](Tools/DpaProfilerMod/README.md)
+
 ## Build from source
 
 Use the .NET 10 SDK, a RimWorld 1.7 installation and Harmony:

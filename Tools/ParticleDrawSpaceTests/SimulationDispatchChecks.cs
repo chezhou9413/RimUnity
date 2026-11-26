@@ -33,6 +33,7 @@ internal static class SimulationDispatchChecks
         using var buffer = new MemoryStream(); using var writer = new BinaryWriter(buffer);
         CheckRetainedSubEmission(writer, false);
         CheckRetainedSubEmission(writer, true);
+        CheckGravitySnapshots(writer);
         int frames = 0;
         foreach (bool fixedStep in new[] { false, true })
         for (int kind = 0; kind < 12; kind++)
@@ -70,6 +71,47 @@ internal static class SimulationDispatchChecks
         writer.Flush();
         File.WriteAllText(destination, Convert.ToHexString(SHA256.HashData(buffer.GetBuffer().AsSpan(0, (int)buffer.Length))));
         Console.WriteLine($"PASS captured {frames} frames: 12 recipes, both timestep modes, module toggles, pending events/trails, transforms; {buffer.Length} snapshot bytes.");
+    }
+
+    private static void CheckGravitySnapshots(BinaryWriter writer)
+    {
+        foreach (var space in new[] { ParticleSystemSimulationSpace.Local, ParticleSystemSimulationSpace.World,
+            ParticleSystemSimulationSpace.Custom })
+        {
+            var root = Create(0);
+            var custom = new GameObject("gravity custom simulation space");
+            try
+            {
+                var system = root.GetComponent<ParticleSystem>();
+                system.main.simulationSpace = space;
+                system.main.customSimulationSpace = custom.transform;
+                system.main.startLifetime = 10;
+                system.emission.enabled = false;
+                system.Simulate(0, false, true, false);
+                system.Emit(12);
+                for (int frame = 0; frame < 24; frame++)
+                {
+                    root.transform.rotation = Quaternion.Euler(12 + frame, frame * 9, 60 - frame);
+                    custom.transform.rotation = Quaternion.Euler(frame * 7, 6 - frame, -30);
+                    system.main.gravityModifier = (frame % 4) switch
+                    {
+                        0 => -0f,
+                        1 => -.4f,
+                        2 => new ParticleSystem.MinMaxCurve(-.2f, .7f),
+                        _ => new ParticleSystem.MinMaxCurve(.7f, AnimationCurve.Linear(0, -.2f, 1, 2))
+                    };
+                    system.Simulate(.013f, false, false, false);
+                    if (system.particleCount != 12) throw new Exception("Gravity fixture lost particles");
+                    Snapshot(writer, system);
+                }
+            }
+            finally
+            {
+                RimUnity.Object.DestroyImmediate(root);
+                RimUnity.Object.DestroyImmediate(custom);
+            }
+        }
+        Console.WriteLine("PASS gravity snapshots: Local, World and Custom simulation spaces, changing transforms and curve modes.");
     }
 
     private static IList Events(ParticleSystem system) =>
