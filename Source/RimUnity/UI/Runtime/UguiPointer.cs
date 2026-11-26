@@ -23,8 +23,10 @@ internal static class UguiPointer
 
     private static Vector2 s_lastMousePosition;
     private static bool s_hasLastMousePosition;
-    //宿主 ImguiDispatch 复用单个 passEvent 实例，按单次派发轮次标记是否已被处理。
+    //宿主 ImguiDispatch 复用单个 passEvent 实例，按单次派发轮次标记是否已被处理；并缓存窗口派发前的事件类型（1.7.5014 rev1195 的 Event.Use 会连同 rawType 一并改写为 Used）。
     private static bool s_handledInCurrentPass;
+    private static EventType s_preWindowEventType = EventType.Ignore;
+    private static int s_preWindowButton = -1;
 
     private sealed class ButtonSlot
     {
@@ -63,6 +65,8 @@ internal static class UguiPointer
     internal static void ProcessPreWindow()
     {
         s_handledInCurrentPass = false;
+        s_preWindowEventType = EventType.Ignore;
+        s_preWindowButton = -1;
         Event currentEvent = Event.current;
         if (currentEvent == null)
         {
@@ -98,19 +102,14 @@ internal static class UguiPointer
             return;
         }
 
+        s_preWindowEventType = currentEvent.type;
+        s_preWindowButton = currentEvent.button;
         UguiRuntime.Prepare();
         //GUI.DispatchInputToWindows 执行于 UI.ApplyUIScaling() 之前（GUI.matrix 为单位阵），mousePosition 为物理像素，需换算为 GUI 单位。
         float inverseScale = Prefs.UIScale > 0f ? 1f / Prefs.UIScale : 1f;
         Vector2 guiPoint = new(currentEvent.mousePosition.x * inverseScale, currentEvent.mousePosition.y * inverseScale);
 
-        Canvas capturedCanvas = _GetCapturedCanvas(currentEvent);
-        if (IsCapturing)
-        {
-            _ProcessCore(currentEvent, guiPoint, filterCanvas: capturedCanvas, overlayOnly: false);
-            s_handledInCurrentPass = true;
-            return;
-        }
-
+        //顶层 Overlay 画布始终高于原版宿主窗口，按当前位置命中全部 Overlay 画布，避免单键捕获拦住其他键或跨画布 Drop。
         RaycastResult overlayHit = _HitTest(guiPoint, filterCanvas: null, overlayOnly: true);
         if (overlayHit.gameObject == null)
         {
@@ -128,6 +127,52 @@ internal static class UguiPointer
 
         _ProcessCore(currentEvent, guiPoint, filterCanvas: null, overlayOnly: true);
         s_handledInCurrentPass = true;
+    }
+
+    //在宿主 GUI.DispatchInputToWindows 结束后补收尾：鼠标落在原版宿主窗口上时继续驱动拖拽或结束原拖拽，但不把 Drop 穿透给被遮住的内嵌 UGUI。
+    internal static void ProcessPostWindow()
+    {
+        if (s_handledInCurrentPass)
+        {
+            return;
+        }
+        Event currentEvent = Event.current;
+        if (currentEvent == null)
+        {
+            return;
+        }
+        EventType rawType = s_preWindowEventType;
+        if (rawType is not (EventType.MouseDrag or EventType.MouseUp))
+        {
+            return;
+        }
+        int buttonIndex = s_preWindowButton;
+        if (buttonIndex < 0 || buttonIndex >= BUTTON_COUNT)
+        {
+            return;
+        }
+        ButtonSlot slot = s_slots[buttonIndex];
+        if (!slot.Captured)
+        {
+            return;
+        }
+
+        float inverseScale = Prefs.UIScale > 0f ? 1f / Prefs.UIScale : 1f;
+        Vector2 guiPoint = new(currentEvent.mousePosition.x * inverseScale, currentEvent.mousePosition.y * inverseScale);
+        //1.7.5014 rev1195 的 Waylith 会在窗口派发后依据 GuiBackend.Current.InlineControlsObscured 吞掉事件（含未入 WindowStack 的 GUI.Window）。
+        bool hostObscured = UnityStubs.Gui.GuiBackend.Current?.InlineControlsObscured ?? false;
+        if (currentEvent.type != EventType.Used && !hostObscured)
+        {
+            return;
+        }
+
+        UguiRuntime.Prepare();
+        _ProcessCapturedWithoutHit(rawType, slot, guiPoint, currentEvent);
+        s_handledInCurrentPass = true;
+        if (currentEvent.type != EventType.Used)
+        {
+            currentEvent.Use();
+        }
     }
 
     //由承载 UGUI 画布的 Verse.Window 在其成为顶层窗口并收到宿主派发事件时调用。
@@ -161,8 +206,8 @@ internal static class UguiPointer
 
         Vector2 guiPoint = new(currentEvent.mousePosition.x + windowOffset.x, currentEvent.mousePosition.y + windowOffset.y);
         _ProcessCore(currentEvent, guiPoint, filterCanvas: canvas.rootCanvas, overlayOnly: false);
-        //仅在当前窗口画布实际消费事件或正处于捕获状态时拦截后续窗口，避免空窗口阻塞同帧其他 UGUI 窗口。
-        if (currentEvent.type == EventType.Used || IsCapturing)
+        //仅在当前窗口画布实际消费事件时拦截后续窗口，避免另一按键的捕获状态阻挡其他键在当前或后续窗口生效。
+        if (currentEvent.type == EventType.Used)
         {
             s_handledInCurrentPass = true;
         }
@@ -181,7 +226,7 @@ internal static class UguiPointer
             s_handledInCurrentPass = false;
             return;
         }
-        if (s_handledInCurrentPass || currentEvent.type is EventType.Used or EventType.Ignore)
+        if ((s_handledInCurrentPass && currentEvent.type != EventType.Repaint) || currentEvent.type is EventType.Used or EventType.Ignore)
         {
             return;
         }
@@ -200,37 +245,36 @@ internal static class UguiPointer
         }
     }
 
-    private static Canvas _GetCapturedCanvas(Event currentEvent)
+    private static void _ProcessCapturedWithoutHit(EventType rawType, ButtonSlot slot, Vector2 guiPoint, Event currentEvent)
     {
-        int buttonIndex = currentEvent.button;
-        if (buttonIndex >= 0 && buttonIndex < BUTTON_COUNT && s_slots[buttonIndex].Captured)
+        PointerEventData leftData = _PreparePointerState(rawType, guiPoint, currentEvent, default, null);
+        _CleanupInvalidCaptures();
+        _HandlePointerExitAndEnter(leftData, null);
+        _SyncHoveredToOtherSlots(leftData);
+        if (!slot.Captured)
         {
-            return s_slots[buttonIndex].CapturedCanvas;
+            return;
         }
-        for (int index = 0; index < BUTTON_COUNT; index++)
+        if (rawType == EventType.MouseDrag)
         {
-            if (s_slots[index].Captured)
-            {
-                return s_slots[index].CapturedCanvas;
-            }
+            _ProcessDrag(slot.Data);
         }
-        return null;
+        else if (rawType == EventType.MouseUp)
+        {
+            _ReleaseMouse(slot, currentOverObject: null);
+        }
     }
 
-    private static void _ProcessCore(Event currentEvent, Vector2 guiPoint, Canvas filterCanvas, bool overlayOnly)
+    private static PointerEventData _PreparePointerState(EventType eventType, Vector2 guiPoint, Event currentEvent, RaycastResult hitResult, Camera enterCamera)
     {
         Vector2 screenPosition = new(guiPoint.x * Prefs.UIScale, Screen.height - guiPoint.y * Prefs.UIScale);
         Vector2 pointerDelta = s_hasLastMousePosition ? screenPosition - s_lastMousePosition : Vector2.zero;
-        if (currentEvent.type == EventType.MouseDrag && pointerDelta.sqrMagnitude == 0f && currentEvent.delta.sqrMagnitude > 0f)
+        if (eventType == EventType.MouseDrag && pointerDelta.sqrMagnitude == 0f && currentEvent.delta.sqrMagnitude > 0f)
         {
             pointerDelta = new Vector2(currentEvent.delta.x, -currentEvent.delta.y);
         }
         s_lastMousePosition = screenPosition;
         s_hasLastMousePosition = true;
-
-        RaycastResult hitResult = _HitTest(guiPoint, filterCanvas, overlayOnly);
-        GameObject currentOverObject = hitResult.gameObject;
-        Camera enterCamera = _GetCameraFor(currentOverObject);
 
         //与 StandaloneInputModule 一致：Left 槽位维护当前指针位置、射线结果与悬停链。
         PointerEventData leftData = LeftSlot.EnsureData();
@@ -239,7 +283,7 @@ internal static class UguiPointer
         leftData.delta = pointerDelta;
         leftData.pointerCurrentRaycast = hitResult;
         leftData.enterEventCamera = enterCamera;
-        leftData.scrollDelta = currentEvent.type == EventType.ScrollWheel
+        leftData.scrollDelta = eventType == EventType.ScrollWheel
             ? new Vector2(-currentEvent.delta.x, -currentEvent.delta.y) / SCROLL_EVENT_UNITS_PER_NOTCH
             : Vector2.zero;
 
@@ -250,8 +294,12 @@ internal static class UguiPointer
             otherData.Reset();
             _CopyFromTo(leftData, otherData);
         }
+        return leftData;
+    }
 
-        //若已捕获目标所属画布已停用或被销毁，立即按 UGUI 释放流程收尾，防止捕获卡死。
+    //若捕获目标所属画布停用，或实际按压/拖拽处理器已失效，则仅清理捕获状态，不合成 Click 或 Drop。
+    private static void _CleanupInvalidCaptures()
+    {
         for (int index = 0; index < BUTTON_COUNT; index++)
         {
             ButtonSlot slot = s_slots[index];
@@ -260,12 +308,35 @@ internal static class UguiPointer
                 continue;
             }
             bool invalidCanvas = slot.CapturedCanvas == null || !slot.CapturedCanvas.isActiveAndEnabled;
-            bool invalidPress = slot.Data.rawPointerPress == null || !slot.Data.rawPointerPress.activeInHierarchy;
-            if (invalidCanvas || (invalidPress && !slot.Data.dragging))
+            bool hasAlivePress = slot.Data.pointerPress != null
+                && slot.Data.pointerPress.activeInHierarchy
+                && (ExecuteEvents.CanHandleEvent<IPointerDownHandler>(slot.Data.pointerPress)
+                    || ExecuteEvents.CanHandleEvent<IPointerUpHandler>(slot.Data.pointerPress)
+                    || ExecuteEvents.CanHandleEvent<IPointerClickHandler>(slot.Data.pointerPress));
+            bool hasAliveDrag = slot.Data.pointerDrag != null
+                && slot.Data.pointerDrag.activeInHierarchy
+                && ExecuteEvents.CanHandleEvent<IDragHandler>(slot.Data.pointerDrag);
+            bool hasAliveRaw = slot.Data.rawPointerPress != null && slot.Data.rawPointerPress.activeInHierarchy;
+            bool hasHandlerTarget = slot.Data.pointerPress != null || slot.Data.pointerDrag != null;
+            bool captureInvalid = invalidCanvas
+                || (slot.Data.dragging
+                    ? !hasAliveDrag
+                    : (hasHandlerTarget ? (!hasAlivePress && !hasAliveDrag) : !hasAliveRaw));
+            if (captureInvalid)
             {
-                _ReleaseMouse(slot, currentOverObject);
+                _CancelCapture(slot);
             }
         }
+    }
+
+    private static void _ProcessCore(Event currentEvent, Vector2 guiPoint, Canvas filterCanvas, bool overlayOnly)
+    {
+        RaycastResult hitResult = _HitTest(guiPoint, filterCanvas, overlayOnly);
+        GameObject currentOverObject = hitResult.gameObject;
+        Camera enterCamera = _GetCameraFor(currentOverObject);
+
+        PointerEventData leftData = _PreparePointerState(currentEvent.type, guiPoint, currentEvent, hitResult, enterCamera);
+        _CleanupInvalidCaptures();
 
         int buttonIndex = currentEvent.button;
         bool validButton = buttonIndex >= 0 && buttonIndex < BUTTON_COUNT;
@@ -446,7 +517,10 @@ internal static class UguiPointer
             ExecuteEvents.Execute(pointerEvent.pointerClick, pointerEvent, ExecuteEvents.pointerClickHandler);
         }
 
-        if (pointerEvent.pointerDrag != null && pointerEvent.dragging)
+        if (pointerEvent.pointerDrag != null
+            && pointerEvent.dragging
+            && pointerEvent.pointerDrag.activeInHierarchy
+            && ExecuteEvents.CanHandleEvent<IDragHandler>(pointerEvent.pointerDrag))
         {
             ExecuteEvents.ExecuteHierarchy(currentOverObject, pointerEvent, ExecuteEvents.dropHandler);
         }
@@ -472,6 +546,31 @@ internal static class UguiPointer
             _HandlePointerExitAndEnter(pointerEvent, currentOverObject);
             _SyncHoveredToOtherSlots(pointerEvent);
         }
+    }
+
+    //捕获目标失效时单独收尾：清理按压与拖拽状态，绝不触发 Click 或 Drop。
+    private static void _CancelCapture(ButtonSlot slot)
+    {
+        PointerEventData pointerEvent = slot.Data;
+        if (pointerEvent.pointerPress != null)
+        {
+            ExecuteEvents.Execute(pointerEvent.pointerPress, pointerEvent, ExecuteEvents.pointerUpHandler);
+        }
+
+        pointerEvent.eligibleForClick = false;
+        _SetPointerPress(pointerEvent, null);
+        pointerEvent.rawPointerPress = null;
+        pointerEvent.pointerClick = null;
+
+        if (pointerEvent.pointerDrag != null && pointerEvent.dragging)
+        {
+            ExecuteEvents.Execute(pointerEvent.pointerDrag, pointerEvent, ExecuteEvents.endDragHandler);
+        }
+
+        pointerEvent.dragging = false;
+        pointerEvent.pointerDrag = null;
+        slot.Captured = false;
+        slot.CapturedCanvas = null;
     }
 
     //同步更新 lastPress，保持与 UGUI PointerEventData.pointerPress setter 相同语义且不破坏字段二进制兼容。

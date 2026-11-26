@@ -48,13 +48,36 @@ public class RectTransform : Transform
         }
     }
 
-    //把直接写入 Transform 的位移同步回锚点位置；新建节点首次挂父且 localPosition 为零时保留默认 anchoredPosition。
+    //挂接新父节点前，仅在 worldPositionStays=false 时先同步旧锚点偏移，确保换父节点后保留原有 anchoredPosition。
+    protected override void OnBeforeParentChange(bool worldPositionStays)
+    {
+        if (!worldPositionStays)
+        {
+            CapturePosition();
+        }
+    }
+
+    //挂接当下立即按 worldPositionStays 同步锚点偏移与局部坐标，避免依赖首次布局时靠 localPosition 是否为零猜测意图。
+    protected override void OnAfterParentChange(bool worldPositionStays)
+    {
+        if (worldPositionStays)
+        {
+            anchored = (Vector2)localPosition - AnchorOrigin();
+            lastLocalPosition = localPosition;
+            lastParent = parent;
+        }
+        else
+        {
+            WritePosition();
+        }
+    }
+
+    //把直接写入 Transform 的位移同步回锚点位置。
     private void CapturePosition()
     {
         if (parent != lastParent)
         {
-            if (lastParent != null || localPosition != Vector3.zero)
-                anchored = (Vector2)localPosition - AnchorOrigin();
+            anchored = (Vector2)localPosition - AnchorOrigin();
         }
         else anchored += (Vector2)(localPosition - lastLocalPosition);
         lastParent = parent;

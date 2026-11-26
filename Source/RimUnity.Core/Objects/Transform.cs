@@ -70,6 +70,7 @@ public class Transform : Component, IEnumerable<Transform>
         if (ReferenceEquals(parentTransform, value)) return;
         if (value != null && value.IsChildOf(this)) throw new InvalidOperationException("Transform 层级不能包含循环。");
         if (value != null && value.gameObject.IsAssetToken != gameObject.IsAssetToken) throw new InvalidOperationException("资源模板不能挂到场景对象，场景对象也不能挂到资源模板。");
+        OnBeforeParentChange(worldPositionStays);
         Matrix4x4 saved = localToWorldMatrix; Quaternion savedRotation = rotation;
         Runtime.NativeRuntime.NotifyChanged(this);
         parentTransform?.Children.Remove(this); parentTransform = value; value?.Children.Add(this);
@@ -85,8 +86,13 @@ public class Transform : Component, IEnumerable<Transform>
             Matrix4x4 unrotated = Matrix4x4.Rotate(Quaternion.Inverse(localRot)) * relative;
             localSize = new(unrotated.m00, unrotated.m11, unrotated.m22);
         }
-        Invalidate(true); Runtime.NativeRuntime.RefreshTree(gameObject);
+        MarkDirty();
+        OnAfterParentChange(worldPositionStays);
+        Runtime.NativeRuntime.NotifyChanged(this);
+        Runtime.NativeRuntime.RefreshTree(gameObject);
     }
+    protected virtual void OnBeforeParentChange(bool worldPositionStays) { }
+    protected virtual void OnAfterParentChange(bool worldPositionStays) { }
     public void SetPositionAndRotation(Vector3 p, Quaternion q) { position = p; rotation = q; }
     public void SetLocalPositionAndRotation(Vector3 p, Quaternion q) { localPosition = p; localRotation = q; }
     public int GetSiblingIndex() => parent == null ? 0 : parent.Children.IndexOf(this);
