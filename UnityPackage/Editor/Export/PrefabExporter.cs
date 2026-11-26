@@ -23,6 +23,8 @@ namespace RimUnity.Editor
             string owner = XDocument.Load(about).Root.Element("packageId")?.Value;
             if (string.IsNullOrWhiteSpace(owner)) throw new InvalidDataException("目标目录必须含有效 About/About.xml 和 packageId。");
             string root = Path.Combine(modDirectory, "1.7", "Data", "RimUnity");
+            if (ExportStorage.IsArchiveRoot(root))
+                throw new InvalidOperationException("目标模组当前使用 catalog.zip 单文件打包格式，请改用 RimUnity 构建窗口执行增量更新：" + root);
             Directory.CreateDirectory(root);
             string generation = "exports/" + Guid.NewGuid().ToString("N");
             string directory = Path.Combine(root, generation);

@@ -18,6 +18,10 @@ public static partial class AssetLoader
         foreach (var catalog in Catalogs.Values) catalog.EvictTextures();
     }
 
+    //为指定模组打开独立的只读存储实例，由调用方负责 Dispose，不与内部缓存共享句柄。
+    public static ICatalogStore OpenStore(ModContentPack mod)
+        => CatalogStoreRegistry.Open(CatalogLoadPolicy.RequireRoot(mod));
+
     //列出本模组指定资源类型的公开路径，供内容侧建立明确且无歧义的索引。
     public static string[] GetPaths(ModContentPack mod, string resourceType)
         => GetCatalog(CatalogLoadPolicy.RequireRoot(mod)).Manifest.assets
@@ -56,18 +60,26 @@ public static partial class AssetLoader
         string root = Path.GetFullPath(dataDirectory);
         if (Catalogs.TryGetValue(root, out AssetCatalog catalog)) return catalog;
         bool hadStore = s_stores.ContainsKey(root);
+        ICatalogStore openedStore = null;
         try
         {
-            catalog = new AssetCatalog(root, ResolveOwner, _GetStore);
+            catalog = new AssetCatalog(root, ResolveOwner, dir =>
+            {
+                ICatalogStore store = _GetStore(dir);
+                if (!hadStore && openedStore == null && string.Equals(Path.GetFullPath(dir), root, StringComparison.OrdinalIgnoreCase))
+                    openedStore = store;
+                return store;
+            });
             Catalogs.Add(root, catalog);
             return catalog;
         }
         catch
         {
-            //无效清单不能锁住自己的归档；其他清单已引用的存储继续有效。
-            if (!hadStore && s_stores.Remove(root, out ICatalogStore store))
+            //无效清单不能锁住自己刚打开的归档；其他清单已引用的存储继续有效。
+            if (openedStore != null && s_stores.TryGetValue(root, out ICatalogStore current) && ReferenceEquals(current, openedStore))
             {
-                store.Dispose();
+                s_stores.Remove(root);
+                openedStore.Dispose();
             }
             throw;
         }

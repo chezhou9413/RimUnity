@@ -186,12 +186,35 @@ internal static class CatalogArchiveCases
                 using (var writer = new StreamWriter(archive.CreateEntry("CATALOG.JSON").Open())) writer.Write("{}");
             }
             _ExpectFailure(() => RimUnityPublisher.Validate(badDuplicate), "archive entry with case-insensitive collision rejected");
+
+            //5. 打包输出不得落入源目录内部；派生 CatalogReader 覆写 OpenRead 后 ReadAllBytes 与 ReadJson 一致
+            _ExpectFailure(() => ExportStorage.WriteArchiveFromDirectory(stageA, Path.Combine(stageA, ContentFiles.ARCHIVE_FILE_NAME)),
+                "WriteArchiveFromDirectory rejects output inside source directory");
+            using (var customReader = new _OverrideCatalogReader(stageA))
+            {
+                _ExpectFailure(() => customReader.Exists("sub/../catalog.json"), "directory CatalogReader rejects parent-segment relative path");
+                byte[] overriddenBytes = customReader.ReadAllBytes("catalog.json");
+                JObject overriddenJson = customReader.ReadJson("catalog.json");
+                _Check(System.Text.Encoding.UTF8.GetString(overriddenBytes).Contains("\"overridden\"", StringComparison.Ordinal)
+                    && (bool)overriddenJson["overridden"],
+                    "CatalogReader ReadAllBytes and ReadJson both route through overridden OpenRead");
+            }
+            _Check(ContentFiles.IsBlob("blobs/" + new string('a', 64) + ".png") && !ContentFiles.IsBlob("blobs/icon.png"),
+                "ContentFiles.IsBlob distinguishes SHA256 blobs from plain blobs/* names");
         }
         finally
         {
             Directory.SetCurrentDirectory(previousCwd);
             if (Directory.Exists(root)) Directory.Delete(root, true);
         }
+    }
+
+    private sealed class _OverrideCatalogReader : ExportStorage.CatalogReader
+    {
+        internal _OverrideCatalogReader(string root) : base(root, null) { }
+
+        public override Stream OpenRead(string relative)
+            => new MemoryStream(System.Text.Encoding.UTF8.GetBytes("{\"overridden\":true}"));
     }
 
     private static void _Check(bool condition, string name)

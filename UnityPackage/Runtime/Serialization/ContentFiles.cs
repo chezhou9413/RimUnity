@@ -53,14 +53,20 @@ namespace RimUnity.Serialization
             return full;
         }
 
+        //判断相对路径是否为规范的内容寻址 SHA256 载荷文件。
+        public static bool IsBlob(string relative)
+        {
+            if (string.IsNullOrEmpty(relative) || relative.IndexOf('\\') >= 0) return false;
+            bool compressed = relative.EndsWith(".json.gz", StringComparison.OrdinalIgnoreCase) || relative.EndsWith(".rutex.gz", StringComparison.OrdinalIgnoreCase);
+            string name = Path.GetFileNameWithoutExtension(compressed ? relative.Substring(0, relative.Length - 3) : relative);
+            return relative.StartsWith("blobs/", StringComparison.Ordinal) && relative.IndexOf('/', 6) < 0
+                && name.Length == 64 && IsHex(name);
+        }
+
         //只有内容寻址载荷允许跨模组共享，资源描述迁移时也需先转换为内容寻址文件。
         public static void RequireBlob(string relative)
         {
-            bool compressed = relative.EndsWith(".json.gz", StringComparison.OrdinalIgnoreCase) || relative.EndsWith(".rutex.gz", StringComparison.OrdinalIgnoreCase);
-            string name = Path.GetFileNameWithoutExtension(compressed ? relative.Substring(0, relative.Length - 3) : relative);
-            if (!relative.StartsWith("blobs/", StringComparison.Ordinal) || relative.IndexOf('/', 6) >= 0
-                || name.Length != 64
-                || !IsHex(name))
+            if (!IsBlob(relative))
                 throw new InvalidDataException("共享资源必须使用 SHA256 文件名：" + relative);
         }
 

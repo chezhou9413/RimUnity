@@ -362,13 +362,13 @@ public static class RenderPipelineManager
         for (int index = 0; index < pending.Length; index++)
         {
             FeatureRegistration registration = pending[index];
-            if (registration.Bridges.Count > 0)
+            if (!s_registrations.Contains(registration) || registration.Bridges.Count > 0)
             {
                 continue;
             }
             try
             {
-                _AttachRegistration(registration, renderer);
+                _AttachRegistration(registration, renderer, checkStillRegistered: true);
             }
             catch (Exception exception)
             {
@@ -378,7 +378,7 @@ public static class RenderPipelineManager
         }
     }
 
-    private static void _AttachRegistration(FeatureRegistration registration, FrameRenderer renderer)
+    private static void _AttachRegistration(FeatureRegistration registration, FrameRenderer renderer, bool checkStillRegistered = false)
     {
         if (renderer == null || registration.Bridges.Count > 0)
         {
@@ -395,6 +395,12 @@ public static class RenderPipelineManager
                 registration.Passes.Clear();
                 registration.Feature.AddRenderPasses(registration.Passes);
                 registration.Created = true;
+            }
+            if (checkStillRegistered && !s_registrations.Contains(registration))
+            {
+                _DisposeRegistration(registration);
+                registration.Created = false;
+                return;
             }
 
             Dictionary<RenderPassEvent, List<ScriptableRenderPass>> groupedPasses = new();

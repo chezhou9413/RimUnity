@@ -13,4 +13,18 @@ public sealed class VideoClip : Object
         FilePath = label;
         DataLoader = dataLoader;
     }
+
+    public static VideoClip LoadFromMemory(string name, byte[] data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        if (data.Length == 0)
+            throw new ArgumentException("视频数据不能为空。", nameof(data));
+        return new VideoClip(name ?? "", () => data) { name = name ?? "" };
+    }
+
+    public static VideoClip LoadFromMemory(string name, Func<byte[]> dataLoader)
+    {
+        ArgumentNullException.ThrowIfNull(dataLoader);
+        return new VideoClip(name ?? "", dataLoader) { name = name ?? "" };
+    }
 }

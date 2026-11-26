@@ -33,7 +33,7 @@ public interface ICatalogStore : IDisposable
     }
 }
 
-//按资源目录匹配并打开对应的只读存储实现。
+//按资源目录匹配并打开对应的只读存储实现；每次 Open 必须返回可独立释放的存储实例。
 public interface ICatalogStoreProvider
 {
     string Name { get; }
@@ -125,125 +125,176 @@ public static class CatalogStoreRegistry
             return s_providers.ToArray();
         }
     }
+}
 
-    private sealed class DirectoryCatalogStoreProvider : ICatalogStoreProvider
+//散文件目录提供程序，识别包含 catalog.json 的资源目录。
+public class DirectoryCatalogStoreProvider : ICatalogStoreProvider
+{
+    public virtual string Name => ContentFiles.CATALOG_FILE_NAME;
+    public virtual bool CanOpen(string root) => File.Exists(Path.Combine(root, ContentFiles.CATALOG_FILE_NAME));
+    public virtual ICatalogStore Open(string root) => new DirectoryCatalogStore(root);
+}
+
+//单文件归档提供程序，识别包含 catalog.zip 的资源目录。
+public class ZipCatalogStoreProvider : ICatalogStoreProvider
+{
+    public virtual string Name => ContentFiles.ARCHIVE_FILE_NAME;
+    public virtual bool CanOpen(string root) => File.Exists(Path.Combine(root, ContentFiles.ARCHIVE_FILE_NAME));
+    public virtual ICatalogStore Open(string root) => new ZipCatalogStore(root, ContentFiles.Inside(root, ContentFiles.ARCHIVE_FILE_NAME));
+}
+
+//基于散文件目录的只读资源存储实现，可供下游模组直接复用或继承包装；派生类若覆写 OpenRead 变换内容，应同步覆写 TryGetFilePath 返回 null。
+public class DirectoryCatalogStore : ICatalogStore
+{
+    public string Root { get; }
+
+    public DirectoryCatalogStore(string root)
     {
-        public string Name => ContentFiles.CATALOG_FILE_NAME;
-        public bool CanOpen(string root) => File.Exists(Path.Combine(root, ContentFiles.CATALOG_FILE_NAME));
-        public ICatalogStore Open(string root) => new DirectoryCatalogStore(root);
+        if (string.IsNullOrWhiteSpace(root))
+            throw new ArgumentException("资源根目录不能为空。", nameof(root));
+        Root = Path.GetFullPath(root);
     }
 
-    private sealed class ZipCatalogStoreProvider : ICatalogStoreProvider
+    private string _ResolvePath(string relative)
+        => ContentFiles.Inside(Root, ContentFiles.NormalizeRelativePath(relative));
+
+    public virtual string TryGetFilePath(string relative) => _ResolvePath(relative);
+    public virtual string Describe(string relative) => _ResolvePath(relative);
+    public virtual bool Exists(string relative) => File.Exists(_ResolvePath(relative));
+    public virtual Stream OpenRead(string relative) => File.OpenRead(_ResolvePath(relative));
+
+    public virtual byte[] ReadAllBytes(string relative)
     {
-        public string Name => ContentFiles.ARCHIVE_FILE_NAME;
-        public bool CanOpen(string root) => File.Exists(Path.Combine(root, ContentFiles.ARCHIVE_FILE_NAME));
-        public ICatalogStore Open(string root) => new ZipCatalogStore(root, ContentFiles.Inside(root, ContentFiles.ARCHIVE_FILE_NAME));
+        using Stream stream = OpenRead(relative);
+        using MemoryStream buffer = new();
+        stream.CopyTo(buffer);
+        return buffer.ToArray();
     }
 
-    private sealed class DirectoryCatalogStore : ICatalogStore
+    public virtual string ReadAllText(string relative)
     {
-        public string Root { get; }
-
-        internal DirectoryCatalogStore(string root) => Root = Path.GetFullPath(root);
-
-        public string TryGetFilePath(string relative) => ContentFiles.Inside(Root, relative);
-        public string Describe(string relative) => ContentFiles.Inside(Root, relative);
-        public bool Exists(string relative) => File.Exists(ContentFiles.Inside(Root, relative));
-        public Stream OpenRead(string relative) => File.OpenRead(ContentFiles.Inside(Root, relative));
-        public byte[] ReadAllBytes(string relative) => File.ReadAllBytes(ContentFiles.Inside(Root, relative));
-        public string ReadAllText(string relative) => File.ReadAllText(ContentFiles.Inside(Root, relative));
-        public string GetTextureCacheKey(string relative) => ContentFiles.Inside(Root, relative);
-        public void Dispose() { }
+        using StreamReader reader = new(OpenRead(relative), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        return reader.ReadToEnd();
     }
 
-    private sealed class ZipCatalogStore : ICatalogStore
+    public virtual string GetTextureCacheKey(string relative) => _ResolvePath(relative);
+    public virtual void Dispose() { }
+}
+
+//基于 ZIP 归档的只读资源存储实现，支持自定义归档路径或由下游模组继承扩展。
+public class ZipCatalogStore : ICatalogStore
+{
+    private readonly object _gate = new();
+    private readonly ZipArchive _archive;
+    private readonly Dictionary<string, ZipArchiveEntry> _entries = new(StringComparer.OrdinalIgnoreCase);
+    private bool _disposed;
+
+    public string Root { get; }
+    public string ArchivePath { get; }
+
+    public ZipCatalogStore(string root, string archivePath)
     {
-        private readonly object _gate = new();
-        private readonly string _archivePath;
-        private readonly ZipArchive _archive;
-        private readonly Dictionary<string, ZipArchiveEntry> _entries = new(StringComparer.OrdinalIgnoreCase);
-        private bool _disposed;
-
-        public string Root { get; }
-
-        internal ZipCatalogStore(string root, string archivePath)
+        if (string.IsNullOrWhiteSpace(root))
+            throw new ArgumentException("资源根目录不能为空。", nameof(root));
+        if (string.IsNullOrWhiteSpace(archivePath))
+            throw new ArgumentException("资源归档路径不能为空。", nameof(archivePath));
+        Root = Path.GetFullPath(root);
+        ArchivePath = Path.GetFullPath(archivePath);
+        FileStream stream = new(ArchivePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        try
         {
-            Root = Path.GetFullPath(root);
-            _archivePath = archivePath;
-            FileStream stream = new(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-            try
+            _archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
+            foreach (ZipArchiveEntry entry in _archive.Entries)
             {
-                _archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
-                foreach (ZipArchiveEntry entry in _archive.Entries)
-                {
-                    if (string.IsNullOrEmpty(entry.Name)
-                        && (entry.FullName.EndsWith("/", StringComparison.Ordinal) || entry.FullName.EndsWith("\\", StringComparison.Ordinal)))
-                        continue;
-                    string normalized = ContentFiles.NormalizeRelativePath(entry.FullName);
-                    if (!_entries.TryAdd(normalized, entry))
-                        throw new InvalidDataException($"资源归档包含重复条目：{entry.FullName}（{archivePath}）");
-                }
-            }
-            catch
-            {
-                if (_archive != null) _archive.Dispose();
-                else stream.Dispose();
-                throw;
+                if (string.IsNullOrEmpty(entry.Name)
+                    && (entry.FullName.EndsWith("/", StringComparison.Ordinal) || entry.FullName.EndsWith("\\", StringComparison.Ordinal)))
+                    continue;
+                string normalized = ContentFiles.NormalizeRelativePath(entry.FullName);
+                if (!_entries.TryAdd(normalized, entry))
+                    throw new InvalidDataException($"资源归档包含重复条目：{entry.FullName}（{ArchivePath}）");
             }
         }
-
-        public string TryGetFilePath(string relative)
+        catch
         {
-            ContentFiles.NormalizeRelativePath(relative);
-            return null;
+            if (_archive != null) _archive.Dispose();
+            else stream.Dispose();
+            throw;
         }
+    }
 
-        public string Describe(string relative)
-            => _archivePath + "!" + ContentFiles.NormalizeRelativePath(relative);
+    public virtual string TryGetFilePath(string relative)
+    {
+        ContentFiles.NormalizeRelativePath(relative);
+        return null;
+    }
 
-        public bool Exists(string relative)
-            => _entries.ContainsKey(ContentFiles.NormalizeRelativePath(relative));
+    public virtual string Describe(string relative)
+        => ArchivePath + "!" + ContentFiles.NormalizeRelativePath(relative);
 
-        public Stream OpenRead(string relative)
-            => new MemoryStream(ReadAllBytes(relative), writable: false);
+    public virtual bool Exists(string relative)
+        => _entries.ContainsKey(ContentFiles.NormalizeRelativePath(relative));
 
-        public byte[] ReadAllBytes(string relative)
+    public virtual Stream OpenRead(string relative)
+    {
+        byte[] bytes = _ReadEntryBytes(relative);
+        return new MemoryStream(bytes, 0, bytes.Length, writable: false, publiclyVisible: true);
+    }
+
+    public virtual byte[] ReadAllBytes(string relative)
+    {
+        using Stream stream = OpenRead(relative);
+        if (stream is MemoryStream memory && memory.TryGetBuffer(out ArraySegment<byte> segment)
+            && memory.Position == 0 && segment.Offset == 0 && segment.Count == segment.Array.Length)
         {
-            string normalized = ContentFiles.NormalizeRelativePath(relative);
-            if (!_entries.TryGetValue(normalized, out ZipArchiveEntry entry))
-                throw new FileNotFoundException($"资源归档缺少条目：{normalized}", Describe(normalized));
-            if (entry.Length > int.MaxValue)
-                throw new InvalidDataException($"资源归档条目过大：{Describe(normalized)}");
-            lock (_gate)
-            {
-                ObjectDisposedException.ThrowIf(_disposed, this);
-                using Stream stream = entry.Open();
-                byte[] buffer = new byte[(int)entry.Length];
-                stream.ReadExactly(buffer);
-                if (stream.ReadByte() != -1)
-                    throw new InvalidDataException($"资源归档条目长度超出声明：{Describe(normalized)}");
-                return buffer;
-            }
+            return segment.Array;
         }
+        using MemoryStream buffer = new();
+        stream.CopyTo(buffer);
+        return buffer.ToArray();
+    }
 
-        public string GetTextureCacheKey(string relative)
+    public virtual string ReadAllText(string relative)
+    {
+        using StreamReader reader = new(OpenRead(relative), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        return reader.ReadToEnd();
+    }
+
+    private byte[] _ReadEntryBytes(string relative)
+    {
+        string normalized = ContentFiles.NormalizeRelativePath(relative);
+        if (!_entries.TryGetValue(normalized, out ZipArchiveEntry entry))
+            throw new FileNotFoundException($"资源归档缺少条目：{normalized}", Describe(normalized));
+        if (entry.Length > int.MaxValue)
+            throw new InvalidDataException($"资源归档条目过大：{Describe(normalized)}");
+        lock (_gate)
         {
-            string normalized = ContentFiles.NormalizeRelativePath(relative);
-            if (!_entries.TryGetValue(normalized, out ZipArchiveEntry entry))
-                throw new FileNotFoundException($"资源归档缺少条目：{normalized}", Describe(normalized));
-            if (normalized.StartsWith("blobs/", StringComparison.Ordinal))
-                return "rimunity:v1:blob:" + normalized;
-            return $"rimunity:v1:zip:{_archivePath}|{normalized}|{entry.Crc32:x8}|{entry.Length}";
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            using Stream stream = entry.Open();
+            byte[] buffer = new byte[(int)entry.Length];
+            stream.ReadExactly(buffer);
+            if (stream.ReadByte() != -1)
+                throw new InvalidDataException($"资源归档条目长度超出声明：{Describe(normalized)}");
+            return buffer;
         }
+    }
 
-        public void Dispose()
+    public virtual string GetTextureCacheKey(string relative)
+    {
+        string normalized = ContentFiles.NormalizeRelativePath(relative);
+        if (!_entries.TryGetValue(normalized, out ZipArchiveEntry entry))
+            throw new FileNotFoundException($"资源归档缺少条目：{normalized}", Describe(normalized));
+        if (ContentFiles.IsBlob(normalized))
+            return "rimunity:v1:blob:" + normalized;
+        return $"rimunity:v1:zip:{ArchivePath}|{normalized}|{entry.Crc32:x8}|{entry.Length}";
+    }
+
+    public virtual void Dispose()
+    {
+        lock (_gate)
         {
-            lock (_gate)
-            {
-                if (_disposed) return;
-                _disposed = true;
-                _archive.Dispose();
-            }
+            if (_disposed) return;
+            _disposed = true;
+            _archive.Dispose();
         }
     }
 }

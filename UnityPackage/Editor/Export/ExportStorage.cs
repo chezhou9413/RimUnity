@@ -43,14 +43,19 @@ namespace RimUnity.Editor
         //把已整理好的目录写成确定性 catalog.zip：已压缩载荷按 Store 存储，小 JSON 与明文文本按 Optimal 压缩。
         public static void WriteArchiveFromDirectory(string sourceDirectory, string archivePath)
         {
-            sourceDirectory = Path.GetFullPath(sourceDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            sourceDirectory = _NormalizeRoot(sourceDirectory);
             archivePath = Path.GetFullPath(archivePath);
+            string sourcePrefix = sourceDirectory.EndsWith(Path.DirectorySeparatorChar.ToString(), StringComparison.Ordinal)
+                ? sourceDirectory : sourceDirectory + Path.DirectorySeparatorChar;
+            if (archivePath.Equals(sourceDirectory, StringComparison.OrdinalIgnoreCase)
+                || archivePath.StartsWith(sourcePrefix, StringComparison.OrdinalIgnoreCase))
+                throw new IOException("归档输出路径不能位于源目录内部：" + archivePath);
             if (!File.Exists(Inside(sourceDirectory, ContentFiles.CATALOG_FILE_NAME)))
                 throw new FileNotFoundException("打包目录缺少清单：" + ContentFiles.CATALOG_FILE_NAME, Path.Combine(sourceDirectory, ContentFiles.CATALOG_FILE_NAME));
             string parent = Path.GetDirectoryName(archivePath);
             if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
             var files = Directory.GetFiles(sourceDirectory, "*", SearchOption.AllDirectories)
-                .Select(file => new { Full = file, Relative = ContentFiles.NormalizeRelativePath(file.Substring(sourceDirectory.Length + 1)) })
+                .Select(file => new { Full = file, Relative = ContentFiles.NormalizeRelativePath(file.Substring(sourcePrefix.Length)) })
                 .OrderBy(item => item.Relative, StringComparer.Ordinal)
                 .ToArray();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -159,21 +164,55 @@ namespace RimUnity.Editor
                     CatalogReader reader = ResolveReader(relative);
                     string key = reader.Describe(relative);
                     if (payloads.TryGetValue(key, out var cached)) return cached;
-                    byte[] raw = reader.ReadAllBytes(relative);
-                    byte[] packed = relative.EndsWith(".rutex", StringComparison.OrdinalIgnoreCase)
-                        ? RimUnity.IO.GpuTexturePayload.CompressIfUseful(raw) : null;
-                    byte[] bytes = packed ?? raw;
-                    string hash;
-                    using (var algorithm = SHA256.Create())
-                        hash = BitConverter.ToString(algorithm.ComputeHash(bytes)).Replace("-", "").ToLowerInvariant();
-                    string extension = packed != null || relative.EndsWith(".rutex.gz", StringComparison.OrdinalIgnoreCase)
-                        ? ".rutex.gz" : Path.GetExtension(relative).ToLowerInvariant();
-                    string target = "blobs/" + hash + extension;
-                    string output = Inside(destination, target);
-                    Directory.CreateDirectory(Path.GetDirectoryName(output));
-                    if (!File.Exists(output)) File.WriteAllBytes(output, bytes);
-                    payloads.Add(key, target);
-                    return target;
+                    string blobsDir = Inside(destination, "blobs");
+                    Directory.CreateDirectory(blobsDir);
+                    if (relative.EndsWith(".rutex", StringComparison.OrdinalIgnoreCase))
+                    {
+                        byte[] raw = reader.ReadAllBytes(relative);
+                        byte[] packed = RimUnity.IO.GpuTexturePayload.CompressIfUseful(raw);
+                        byte[] bytes = packed ?? raw;
+                        string hash;
+                        using (var algorithm = SHA256.Create())
+                            hash = BitConverter.ToString(algorithm.ComputeHash(bytes)).Replace("-", "").ToLowerInvariant();
+                        string extension = packed != null ? ".rutex.gz" : ".rutex";
+                        string target = "blobs/" + hash + extension;
+                        string output = Inside(destination, target);
+                        if (!File.Exists(output)) File.WriteAllBytes(output, bytes);
+                        payloads.Add(key, target);
+                        return target;
+                    }
+                    string pending = Path.Combine(blobsDir, "." + Guid.NewGuid().ToString("N") + ".tmp");
+                    try
+                    {
+                        string hash;
+                        using (var algorithm = SHA256.Create())
+                        using (var input = reader.OpenRead(relative))
+                        using (var temp = new FileStream(pending, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                        {
+                            var buffer = new byte[128 * 1024];
+                            int count;
+                            while ((count = input.Read(buffer, 0, buffer.Length)) > 0)
+                            {
+                                algorithm.TransformBlock(buffer, 0, count, buffer, 0);
+                                temp.Write(buffer, 0, count);
+                            }
+                            algorithm.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+                            hash = BitConverter.ToString(algorithm.Hash).Replace("-", "").ToLowerInvariant();
+                        }
+                        string extension = relative.EndsWith(".rutex.gz", StringComparison.OrdinalIgnoreCase)
+                            ? ".rutex.gz" : Path.GetExtension(relative).ToLowerInvariant();
+                        string target = "blobs/" + hash + extension;
+                        string output = Inside(destination, target);
+                        if (File.Exists(output)) File.Delete(pending);
+                        else File.Move(pending, output);
+                        payloads.Add(key, target);
+                        return target;
+                    }
+                    catch
+                    {
+                        if (File.Exists(pending)) File.Delete(pending);
+                        throw;
+                    }
                 }
                 var kept = new JArray();
                 foreach (var record in records.Values.Where(a => reachable.Contains((string)a["id"])))
@@ -251,20 +290,22 @@ namespace RimUnity.Editor
             return JObject.Load(reader);
         }
 
-        //统一读取散文件目录或 catalog.zip，供发布校验、变更追踪和离线打包共用。
-        internal sealed class CatalogReader : IDisposable
+        //统一读取散文件目录或 catalog.zip，供发布校验、变更追踪、离线打包及自定义编辑器工具共用。
+        public class CatalogReader : IDisposable
         {
             private readonly string _root;
             private readonly string _archivePath;
             private readonly ZipArchive _archive;
             private readonly Dictionary<string, ZipArchiveEntry> _entries;
 
-            private CatalogReader(string root, string archivePath)
+            protected CatalogReader(string root, string archivePath)
             {
-                _root = root;
-                _archivePath = archivePath;
+                _root = _NormalizeRoot(root);
                 if (archivePath == null) return;
-                var stream = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                if (string.IsNullOrWhiteSpace(archivePath))
+                    throw new ArgumentException("资源归档路径不能为空。", nameof(archivePath));
+                _archivePath = Path.GetFullPath(archivePath);
+                var stream = new FileStream(_archivePath, FileMode.Open, FileAccess.Read, FileShare.Read);
                 try
                 {
                     _archive = new ZipArchive(stream, ZipArchiveMode.Read, false);
@@ -288,66 +329,83 @@ namespace RimUnity.Editor
                 }
             }
 
-            internal static CatalogReader OpenRoot(string root)
+            public static CatalogReader OpenRoot(string root)
             {
-                root = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                root = _NormalizeRoot(root);
                 if (IsArchiveRoot(root)) return new CatalogReader(root, Inside(root, ContentFiles.ARCHIVE_FILE_NAME));
                 return new CatalogReader(root, null);
             }
 
-            internal static CatalogReader OpenArchive(string archivePath)
+            public static CatalogReader OpenArchive(string archivePath)
             {
+                if (string.IsNullOrWhiteSpace(archivePath))
+                    throw new ArgumentException("资源归档路径不能为空。", nameof(archivePath));
                 archivePath = Path.GetFullPath(archivePath);
-                string parent = Path.GetDirectoryName(archivePath) ?? "";
+                string parent = Path.GetDirectoryName(archivePath) ?? Path.GetPathRoot(archivePath);
                 return new CatalogReader(parent, archivePath);
             }
 
-            internal string Describe(string relative)
-                => _archive != null
-                    ? _archivePath + "!" + ContentFiles.NormalizeRelativePath(relative)
-                    : Inside(_root, relative);
-
-            internal bool Exists(string relative)
+            public virtual string Describe(string relative)
             {
-                if (_archive != null) return _entries.ContainsKey(ContentFiles.NormalizeRelativePath(relative));
-                return File.Exists(Inside(_root, relative));
+                string normalized = ContentFiles.NormalizeRelativePath(relative);
+                return _archive != null ? _archivePath + "!" + normalized : Inside(_root, normalized);
             }
 
-            internal Stream OpenRead(string relative)
+            public virtual bool Exists(string relative)
             {
-                if (_archive == null) return File.OpenRead(Inside(_root, relative));
                 string normalized = ContentFiles.NormalizeRelativePath(relative);
+                if (_archive != null) return _entries.ContainsKey(normalized);
+                return File.Exists(Inside(_root, normalized));
+            }
+
+            //归档模式直接返回条目流，请先释放条目流再释放 CatalogReader；并行任务请各自打开独立实例。
+            public virtual Stream OpenRead(string relative)
+            {
+                string normalized = ContentFiles.NormalizeRelativePath(relative);
+                if (_archive == null) return File.OpenRead(Inside(_root, normalized));
                 if (!_entries.TryGetValue(normalized, out var entry))
                     throw new FileNotFoundException("资源归档缺少条目：" + normalized, Describe(normalized));
                 return entry.Open();
             }
 
-            internal byte[] ReadAllBytes(string relative)
+            public virtual byte[] ReadAllBytes(string relative)
             {
-                if (_archive == null) return File.ReadAllBytes(Inside(_root, relative));
                 using var stream = OpenRead(relative);
                 using var buffer = new MemoryStream();
                 stream.CopyTo(buffer);
                 return buffer.ToArray();
             }
 
-            internal JObject ReadJson(string relative)
+            public virtual JObject ReadJson(string relative)
             {
                 using var stream = OpenRead(relative);
                 return Read(stream, relative);
             }
 
-            internal string[] ListEntries()
+            public virtual string[] ListEntries()
             {
                 if (_archive != null)
                     return _entries.Keys.OrderBy(k => k, StringComparer.Ordinal).ToArray();
                 if (!Directory.Exists(_root)) return Array.Empty<string>();
+                int prefixLength = _root.EndsWith(Path.DirectorySeparatorChar.ToString(), StringComparison.Ordinal)
+                    ? _root.Length : _root.Length + 1;
                 return Directory.GetFiles(_root, "*", SearchOption.AllDirectories)
-                    .Select(f => f.Substring(_root.Length + 1).Replace('\\', '/'))
+                    .Select(f => f.Substring(prefixLength).Replace('\\', '/'))
                     .OrderBy(f => f, StringComparer.Ordinal).ToArray();
             }
 
-            public void Dispose() => _archive?.Dispose();
+            public virtual void Dispose() => _archive?.Dispose();
+        }
+
+        private static string _NormalizeRoot(string root)
+        {
+            if (string.IsNullOrWhiteSpace(root))
+                throw new ArgumentException("资源根目录不能为空。", nameof(root));
+            string full = Path.GetFullPath(root);
+            string driveRoot = Path.GetPathRoot(full);
+            if (!string.IsNullOrEmpty(driveRoot) && full.Length > driveRoot.Length)
+                full = full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return full;
         }
 
         //引用只能落在本资源根目录，拒绝通过链接跳出目录。

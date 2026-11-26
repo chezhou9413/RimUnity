@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using Waylith.VideoDecode;
 
 namespace RimUnity.Video;
@@ -12,10 +13,11 @@ public sealed class VideoPlayer : MonoBehaviour
     private string videoUrl;
     private VideoSource videoSource;
     private bool sourceDirty = true;
+    private bool sourceFailed;
     private float speed = 1;
-    public VideoClip clip { get => videoClip; set { videoClip = value; videoSource = VideoSource.VideoClip; sourceDirty = true; } }
-    public string url { get => videoUrl; set { videoUrl = value; videoSource = VideoSource.Url; sourceDirty = true; } }
-    public VideoSource source { get => videoSource; set { videoSource = value; sourceDirty = true; } }
+    public VideoClip clip { get => videoClip; set { videoClip = value; videoSource = VideoSource.VideoClip; sourceDirty = true; sourceFailed = false; } }
+    public string url { get => videoUrl; set { videoUrl = value; videoSource = VideoSource.Url; sourceDirty = true; sourceFailed = false; } }
+    public VideoSource source { get => videoSource; set { videoSource = value; sourceDirty = true; sourceFailed = false; } }
     public VideoRenderMode renderMode { get; set; } = VideoRenderMode.RenderTexture;
     public VideoAspectRatio aspectRatio { get; set; } = VideoAspectRatio.FitHorizontally;
     public VideoAudioOutputMode audioOutputMode { get; set; } = VideoAudioOutputMode.Direct;
@@ -29,7 +31,7 @@ public sealed class VideoPlayer : MonoBehaviour
     public float directAudioVolume { get; set; } = 1;
     public bool directAudioMute { get; set; }
     public AudioSource targetAudioSource { get; set; }
-    public bool isPrepared => !sourceDirty && player?.IsPrepared == true;
+    public bool isPrepared => !sourceDirty && !sourceFailed && player?.IsPrepared == true;
     public bool isPlaying => player?.IsPlaying == true;
     public bool isPaused => player?.IsPaused == true;
     public Texture texture => renderMode == VideoRenderMode.RenderTexture && targetTexture ? targetTexture : ownTexture;
@@ -67,10 +69,33 @@ public sealed class VideoPlayer : MonoBehaviour
         }
         if (sourceDirty)
         {
+            sourceFailed = false;
             if (source == VideoSource.VideoClip && videoClip != null && videoClip.DataLoader != null)
             {
                 //1.7.5014 rev1195 的 Waylith.VideoDecode.VideoMedia 支持通过 Data 内存流播放，供 catalog.zip 归档条目使用。
-                player.Media = new VideoMedia { Data = videoClip.DataLoader(), Label = name };
+                sourceDirty = false;
+                string label = !string.IsNullOrWhiteSpace(videoClip.FilePath) ? videoClip.FilePath : videoClip.name;
+                string displayLabel = string.IsNullOrWhiteSpace(label) ? name : label;
+                byte[] data;
+                try
+                {
+                    data = videoClip.DataLoader();
+                }
+                catch (Exception error)
+                {
+                    sourceFailed = true;
+                    player.Stop();
+                    player.Media = default;
+                    throw new InvalidDataException($"读取视频数据失败（{displayLabel}）：{error.Message}", error);
+                }
+                if (data == null || data.Length == 0)
+                {
+                    sourceFailed = true;
+                    player.Stop();
+                    player.Media = default;
+                    throw new InvalidDataException("视频数据为空：" + displayLabel);
+                }
+                player.Media = new VideoMedia { Data = data, Label = string.IsNullOrWhiteSpace(videoClip.name) ? name : videoClip.name };
             }
             else
             {
@@ -79,15 +104,15 @@ public sealed class VideoPlayer : MonoBehaviour
                 if (string.IsNullOrWhiteSpace(path)) throw new InvalidOperationException("视频尚未指定文件：" + name);
                 if (path.StartsWith("file://", StringComparison.OrdinalIgnoreCase)) path = new Uri(path).LocalPath;
                 player.Media = new VideoMedia { Path = path, Label = name };
+                sourceDirty = false;
             }
-            sourceDirty = false;
         }
         ApplySettings();
     }
 
     //播放与准备由主线程发起，推进使用宿主实时时钟。
-    public void Prepare() { EnsurePlayer(); player.Prepare(); }
-    public void Play() { EnsurePlayer(); player.Play(UnityEngine.Time.realtimeSinceStartupAsDouble); }
+    public void Prepare() { if (sourceFailed && !sourceDirty) return; EnsurePlayer(); player.Prepare(); }
+    public void Play() { if (sourceFailed && !sourceDirty) return; EnsurePlayer(); player.Play(UnityEngine.Time.realtimeSinceStartupAsDouble); }
     public void Pause() => player?.Pause();
     public void Stop() => player?.Stop();
     //页面再次启用时也恢复自动播放，隐藏时 Stop 已经释放了上一次解码会话。
