@@ -73,7 +73,7 @@ internal static partial class ParticleSpikeCapture
         b.AppendLine("6. 探针安装和状态快照在计时之外，但 Harmony 安装/JIT 本身会影响冷启动条件；不预加载资源、不主动生成或重播特效、不清空缓存、不强制 GC、不等待设备空闲。");
         b.AppendLine("7. 每个 stage+detail 统计全部已完成调用，保留最早 3 次、>=2ms 的慢调用和异常；其余普通调用只有聚合记录。子事件可能未保留，parent ID 不保证在事件表中。");
         b.AppendLine("8. Capture 前/后资源与活动系统配置是状态证据；冷加载是否真正触发还要看事件。打开菜单/切换窗口的帧也可能变慢，触发前可空等几秒取得基线。");
-        b.AppendLine("9. Host.MainFrame/Host.RenderFrame 使用宿主事件、是 detached 外层时间段，其 self 等于 inclusive，不扣除其中独立记录的子阶段。停止时的 partial main frame 不能作为完整帧比较。");
+        b.AppendLine("9. Host.MainFrame 由宿主事件划定，是独立的外层时间段，self 等于 duration。停止时记录的 partial main frame 只覆盖部分主线程帧。Host.RenderFrame 测量宿主 RenderThread.RenderFrame 调用，self 扣除同一渲染线程上已测量的子阶段。");
         b.AppendLine("\n采集完整性");
         b.AppendLine("groups=" + s.Groups.Length + "/" + SpikeCaptureData.MaxGroups + "; events=" + s.Events.Length + "/" + SpikeCaptureData.MaxEvents
             + "; frames=" + s.Frames.Length + "/" + SpikeCaptureData.MaxFrames + "; closed=" + s.Closed);

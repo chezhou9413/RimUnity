@@ -80,8 +80,9 @@ internal static partial class ParticleSpikeCapture
         Native("Waylith.Rendering.TextureResidency", "MakeRoom", "GPU.ResidencyMakeRoom");
         Native("Waylith.Graphics.Meshes.MeshUploader", "UploadCore", "GPU.MeshUpload");
         Native("Waylith.Graphics.Meshes.MeshUploader", "UploadBatch", "GPU.MeshUploadBatch");
-        coverage.Add("EVENT Host.MainFrame: PrePollEvents -> FrameEnqueued; Host.RenderFrame: RenderThreadFrameStarting -> RenderThreadFrameEnded. Detached spans: overlap nested probes, not exclusive times.");
-        coverage.Add("NOT PATCHED: FrameRenderer.CaptureFrame/RecordFrame, CompositePass.Record, GpuTextureService.CreateTexture2D: current Harmony cannot preserve required readonly-reference call signatures. Frame events plus texture residency/upload/allocation provide enclosing timings.");
+        coverage.Add("EVENT Host.MainFrame: PrePollEvents -> FrameEnqueued. Detached spans: overlap nested probes, not exclusive times.");
+        coverage.Add("NOT PATCHED: FrameRenderer.CaptureFrame/RecordFrame, CompositePass.Record, GpuTextureService.CreateTexture2D: current Harmony cannot preserve required readonly-reference call signatures. Host.MainFrame and Host.RenderFrame provide enclosing timings.");
+        coverage.Add("DIRECT Host.RenderFrame is measured by the render pipeline frame hook.");
         coverage.Add("DIRECT Asset.OpenJson / Asset.DeserializeJson / Bloom.Prepare / HDR.Record: source scopes, including generic JSON loading without Harmony generic detours.");
     }
     private static string PrefabName(PrefabData data) => data.nodes.FirstOrDefault(n => n.parent == null)?.name ?? "<empty>";
@@ -197,6 +198,7 @@ internal static partial class ParticleSpikeCapture
     {
         private readonly SpikeCaptureData.Token token;
         internal MeasureScope(SpikeCaptureData.Token token) => this.token = token;
+        internal void End(Exception error) => ProbeFinalizer(error, token);
         public void Dispose() { if (token != null) token.Owner.End(token); }
     }
 }
