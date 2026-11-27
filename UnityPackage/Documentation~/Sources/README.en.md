@@ -8,9 +8,9 @@ RimUnity is a Unity asset exporter and runtime framework for RimWorld 1.7. Creat
 
 ## Quick start
 
-**The current version is 0.1.26. Download the standalone mod, embedded runtime and Unity exporter from [Releases](https://github.com/chezhou9413/RimUnity/releases/tag/v0.1.26).**
+**The current source version is 0.1.27. Published builds of the standalone mod, embedded runtime and Unity exporter are available from [Releases](https://github.com/chezhou9413/RimUnity/releases).**
 
-Version 0.1.26 fixes typing, keyboard shortcuts and text display in affected mod windows on RimWorld 1.7.5014. Mods can add custom screen effects, and frames without bloom or screen effects take less work to render.
+Version 0.1.27 fixes a startup error caused by a Waylith render callback change in RimWorld 1.7.5021.
 
 | Integration | Usage |
 | --- | --- |
@@ -19,7 +19,7 @@ Version 0.1.26 fixes typing, keyboard shortcuts and text display in affected mod
 
 **Both modes require Harmony.** Since 0.1.13, standalone runtime DLLs load early again to support ordinary C# mods. Enabled standalone always supplies the runtime; dependent mods load after it. Without standalone, the highest compatible embedded version satisfying content requirements wins. References are compile-only. Selection works offline without automatic updates.
 
-RimUnity provides compatibility APIs on Waylith and **does not include or load a separate, real Unity engine**. See the [release notes](Docs/en/Release-0.1.26.md) for this version's changes.
+RimUnity provides compatibility APIs on Waylith and **does not include or load a separate, real Unity engine**. See the [release notes](Docs/en/Release-0.1.27.md) for this version's changes.
 
 Players only need Harmony, RimUnity and the relevant content mod; the Unity Editor is not required. Asset authors should start with [installing the exporter and exporting a first prefab](Docs/en/ExporterSetup.md).
 
