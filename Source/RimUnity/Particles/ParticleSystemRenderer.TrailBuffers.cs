@@ -43,37 +43,42 @@ public sealed partial class ParticleSystemRenderer
         CollectionsMarshal.SetCount(indices, indexCount);
     }
 
-    // Fetch short-lived spans only while writing one quad. No span-bearing state
-    // enters the shared segment loop or the general-stream fallback.
-    private void WriteReservedTrailQuad(int v, int i, Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3,
-        float u0, float u1, Color32 c0, Color32 c1)
+    // Only constructed after reservation. The output lists stay unchanged in size
+    // until the synchronous segment loop finishes or unwinds to rollback.
+    private readonly ref struct ReservedTrailWriter(ParticleSystemRenderer renderer)
     {
-#if RIMUNITY_PARTICLE_ANALYSIS
-        using (Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.VertexWrite))
-#endif
+        private readonly Span<Vector3> positions = CollectionsMarshal.AsSpan(renderer.vertices);
+        private readonly Span<Vector2> coordinates = CollectionsMarshal.AsSpan(renderer.uv);
+        private readonly Span<Vector4> packed = CollectionsMarshal.AsSpan(renderer.packedUV);
+        private readonly Span<Color32> tint = CollectionsMarshal.AsSpan(renderer.colors);
+        private readonly Span<int> triangles = CollectionsMarshal.AsSpan(renderer.indices);
+        private readonly bool writePackedUV = renderer.streamPacking != StreamPacking.Zero;
+
+        internal void WriteQuad(int v, int i, Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3,
+            float u0, float u1, Color32 c0, Color32 c1)
         {
-            var positions = CollectionsMarshal.AsSpan(vertices);
-            var coordinates = CollectionsMarshal.AsSpan(uv);
-            var packed = CollectionsMarshal.AsSpan(packedUV);
-            var tint = CollectionsMarshal.AsSpan(colors);
-            positions[v] = p0; positions[v + 1] = p1; positions[v + 2] = p2; positions[v + 3] = p3;
-            coordinates[v] = new(u0, 0); coordinates[v + 1] = new(u0, 1);
-            coordinates[v + 2] = new(u1, 1); coordinates[v + 3] = new(u1, 0);
-            if (streamPacking != StreamPacking.Zero)
+#if RIMUNITY_PARTICLE_ANALYSIS
+            using (Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.VertexWrite))
+#endif
             {
-                packed[v] = new(u0, 0, 0, 0); packed[v + 1] = new(u0, 1, 0, 0);
-                packed[v + 2] = new(u1, 1, 0, 0); packed[v + 3] = new(u1, 0, 0, 0);
+                positions[v] = p0; positions[v + 1] = p1; positions[v + 2] = p2; positions[v + 3] = p3;
+                coordinates[v] = new(u0, 0); coordinates[v + 1] = new(u0, 1);
+                coordinates[v + 2] = new(u1, 1); coordinates[v + 3] = new(u1, 0);
+                if (writePackedUV)
+                {
+                    packed[v] = new(u0, 0, 0, 0); packed[v + 1] = new(u0, 1, 0, 0);
+                    packed[v + 2] = new(u1, 1, 0, 0); packed[v + 3] = new(u1, 0, 0, 0);
+                }
+                tint[v] = c0; tint[v + 1] = c0; tint[v + 2] = c1; tint[v + 3] = c1;
             }
-            tint[v] = c0; tint[v + 1] = c0; tint[v + 2] = c1; tint[v + 3] = c1;
-        }
 #if RIMUNITY_PARTICLE_ANALYSIS
-        using (Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.IndexWrite))
+            using (Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.IndexWrite))
 #endif
-        {
-            var triangles = CollectionsMarshal.AsSpan(indices);
-            int start = v;
-            triangles[i] = start; triangles[i + 1] = start + 1; triangles[i + 2] = start + 2;
-            triangles[i + 3] = start; triangles[i + 4] = start + 2; triangles[i + 5] = start + 3;
+            {
+                int start = v;
+                triangles[i] = start; triangles[i + 1] = start + 1; triangles[i + 2] = start + 2;
+                triangles[i + 3] = start; triangles[i + 4] = start + 2; triangles[i + 5] = start + 3;
+            }
         }
     }
 }

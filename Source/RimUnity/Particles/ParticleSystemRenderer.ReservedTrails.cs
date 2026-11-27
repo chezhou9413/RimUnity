@@ -1,3 +1,6 @@
+using System;
+using System.Runtime.InteropServices;
+
 namespace RimUnity;
 
 public sealed partial class ParticleSystemRenderer
@@ -14,96 +17,113 @@ public sealed partial class ParticleSystemRenderer
 #endif
         var module = system.trails;
         bool world = ribbon || module.worldSpace;
-        var points = trail.points;
-        if (points.Count < 2) return;
+        var points = CollectionsMarshal.AsSpan(trail.points);
+        if (points.Length < 2) return;
         trailWorldPoints.Clear(); trailDistances.Clear();
+        var textureMode = module.textureMode;
         float totalDistance = 0;
-        bool needsDistance = module.textureMode != ParticleSystemTrailTextureMode.DistributePerSegment
-            && module.textureMode != ParticleSystemTrailTextureMode.RepeatPerSegment && module.textureMode != ParticleSystemTrailTextureMode.Static;
+        bool needsDistance = textureMode != ParticleSystemTrailTextureMode.DistributePerSegment
+            && textureMode != ParticleSystemTrailTextureMode.RepeatPerSegment && textureMode != ParticleSystemTrailTextureMode.Static;
 
+        Span<Vector3> worldPoints = default;
+        Span<float> distances = default;
 #if RIMUNITY_PARTICLE_ANALYSIS
         using (Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.TrailPositions))
 #endif
         {
-            for (int i = 0; i < points.Count; i++)
+            if (!world) worldPoints = AppendSlots(trailWorldPoints, points.Length);
+            if (needsDistance) distances = AppendSlots(trailDistances, points.Length);
+            if (!world || needsDistance)
             {
-                Vector3 position = world ? points[i].position : drawSpace.WorldPosition(points[i].position, trail.space);
-                if (needsDistance && i > 0) totalDistance += Vector3.Distance(trailWorldPoints[i - 1], position);
-                trailWorldPoints.Add(position); trailDistances.Add(totalDistance);
+                Vector3 previous = default;
+                for (int i = 0; i < points.Length; i++)
+                {
+                    Vector3 position = world ? points[i].position : drawSpace.WorldPosition(points[i].position, trail.space);
+                    if (!world) worldPoints[i] = position;
+                    if (needsDistance)
+                    {
+                        if (i > 0) totalDistance += Vector3.Distance(previous, position);
+                        distances[i] = totalDistance;
+                    }
+                    previous = position;
+                }
             }
         }
 #if RIMUNITY_PARTICLE_ANALYSIS
-        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.TrailSegments, points.Count - 1);
-        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.TrailPointVisits, points.Count);
-        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.TrailDistanceSteps, needsDistance ? points.Count - 1 : 0);
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.TrailSegments, points.Length - 1);
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.TrailPointVisits, points.Length);
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.TrailDistanceSteps, needsDistance ? points.Length - 1 : 0);
 #endif
         int vertexStart = vertices.Count, indexStart = indices.Count;
         bool complete = false;
         try
         {
-            ReserveTrail(points.Count - 1);
+            int segments = points.Length - 1;
+            ReserveTrail(segments);
+            Vector3 p0 = world ? points[0].position : worldPoints[0];
+            var writer = new ReservedTrailWriter(this);
             // Shared segment endpoints have identical curve inputs. Carry the previous
             // endpoint only within this draw; no state survives edits or another camera.
-            float previousWidth; Color previousColor;
+            float previousWidth; Color32 previousTint;
 #if RIMUNITY_PARTICLE_ANALYSIS
             using (Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.TrailAppearance))
 #endif
             {
                 previousWidth = module.widthOverTrail.Evaluate(0) * (ribbon ? points[0].width : trail.width) * .5f;
                 var first = points[0];
-                previousColor = (ribbon ? first.color : trail.color) * module.colorOverTrail.Evaluate(0)
+                previousTint = (ribbon ? first.color : trail.color) * module.colorOverTrail.Evaluate(0)
                     * module.colorOverLifetime.Evaluate(float.IsPositiveInfinity(first.lifetime) ? 0 : 1 - first.remaining / first.lifetime);
             }
-            for (int i = 1; i < points.Count; i++)
+            for (int i = 1; i < points.Length; i++)
             {
-                var a = points[i - 1]; var b = points[i];
-                Vector3 p0 = trailWorldPoints[i - 1], p1 = trailWorldPoints[i];
+                ref readonly var b = ref points[i];
+                Vector3 p1 = world ? b.position : worldPoints[i];
                 //按相机前向与轨迹方向生成横轴，让三角形正面朝向相机。
-                Vector3 side; float t0, t1;
+                Vector3 side; float t1;
 #if RIMUNITY_PARTICLE_ANALYSIS
                 using (Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.TrailDirections))
 #endif
                 {
                     side = Vector3.Cross(forward, p1 - p0).normalized;
-                    t0 = (i - 1f) / (points.Count - 1); t1 = i / (float)(points.Count - 1);
+                    t1 = i / (float)segments;
                 }
                 float width0 = previousWidth, width1;
-                Color c0 = previousColor, c1;
+                Color32 nextTint;
 
 #if RIMUNITY_PARTICLE_ANALYSIS
             using (Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.TrailAppearance))
 #endif
                 {
                     width1 = module.widthOverTrail.Evaluate(t1) * (ribbon ? b.width : trail.width) * .5f;
-                    c1 = (ribbon ? b.color : trail.color) * module.colorOverTrail.Evaluate(t1) * module.colorOverLifetime.Evaluate(float.IsPositiveInfinity(b.lifetime) ? 0 : 1 - b.remaining / b.lifetime);
+                    nextTint = (ribbon ? b.color : trail.color) * module.colorOverTrail.Evaluate(t1) * module.colorOverLifetime.Evaluate(float.IsPositiveInfinity(b.lifetime) ? 0 : 1 - b.remaining / b.lifetime);
                 }
-                float startDistance = trailDistances[i - 1], distance = trailDistances[i];
                 float u0, u1;
 #if RIMUNITY_PARTICLE_ANALYSIS
             using (Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.TrailUv))
 #endif
                 {
-                    switch (module.textureMode)
+                    switch (textureMode)
                     {
-                        case ParticleSystemTrailTextureMode.Tile: u0 = startDistance; u1 = distance; break;
-                        case ParticleSystemTrailTextureMode.DistributePerSegment: u0 = t0; u1 = t1; break;
+                        case ParticleSystemTrailTextureMode.Tile: u0 = distances[i - 1]; u1 = distances[i]; break;
+                        case ParticleSystemTrailTextureMode.DistributePerSegment: u0 = (i - 1f) / segments; u1 = t1; break;
                         case ParticleSystemTrailTextureMode.RepeatPerSegment: u0 = 0; u1 = 1; break;
-                        case ParticleSystemTrailTextureMode.Static: u0 = a.distance; u1 = b.distance; break;
-                        default: u0 = totalDistance > 0 ? startDistance / totalDistance : 0; u1 = totalDistance > 0 ? distance / totalDistance : 0; break;
+                        case ParticleSystemTrailTextureMode.Static: u0 = points[i - 1].distance; u1 = b.distance; break;
+                        default: u0 = totalDistance > 0 ? distances[i - 1] / totalDistance : 0; u1 = totalDistance > 0 ? distances[i] / totalDistance : 0; break;
                     }
                 }
-                Vector3 q0, q1, q2, q3; Color32 tint0, tint1;
+                Vector3 q0, q1, q2, q3;
 #if RIMUNITY_PARTICLE_ANALYSIS
             using (Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.TrailCorners))
 #endif
                 {
-                    q0 = p0 - side * width0; q1 = p0 + side * width0;
-                    q2 = p1 + side * width1; q3 = p1 - side * width1;
-                    tint0 = c0; tint1 = c1;
+                    Vector3 startSide = side * width0, endSide = side * width1;
+                    q0 = p0 - startSide; q1 = p0 + startSide;
+                    q2 = p1 + endSide; q3 = p1 - endSide;
                 }
-                WriteReservedTrailQuad(vertexStart + (i - 1) * 4, indexStart + (i - 1) * 6,
-                    q0, q1, q2, q3, u0, u1, tint0, tint1);
-                previousWidth = width1; previousColor = c1;
+                writer.WriteQuad(vertexStart + (i - 1) * 4, indexStart + (i - 1) * 6,
+                    q0, q1, q2, q3, u0, u1, previousTint, nextTint);
+                p0 = p1;
+                previousWidth = width1; previousTint = nextTint;
             }
             complete = true;
         }
