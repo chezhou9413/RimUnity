@@ -78,14 +78,17 @@ def read_run(result):
             "BloomEnabled", "BloomLayerMask", "BloomIntensity", "BloomThreshold", "BloomSoftKnee",
             "BloomScatter", "MapSize", "CameraRootSize", "Resolution", "CpuMode",
             "RequestedSeconds", "WarmupSeconds", "RandomSeed", "RuntimeIsStandalone", "GameVersion",
-            "ParticleUploadMode")
+            "ParticleUploadMode", "ParticleAnalysisBuild", "CpuStageSchema")
+    settings = {key: report["Configuration"].get(key) for key in keys}
+    settings["MapHdrMode"] = completion.get("MapHdrMode")
+    settings["RenderTrace"] = completion.get("RenderTrace")
     return {
         "report": str(prefix),
         "runtime": report["Configuration"]["RimUnityVersion"],
         "runtime_file_version": report["Configuration"].get("RuntimeVersion"),
         "runtime_sha256": runtime_hashes.get("RimUnity") if isinstance(runtime_hashes, dict) else completion.get("RuntimeHash"),
         "runtime_hashes": runtime_hashes,
-        "settings": {key: report["Configuration"].get(key) for key in keys},
+        "settings": settings,
         "frames": len(complete),
         "wait_probe_frames": len(coverage),
         "wait_probe_boundary_mismatches": inconsistent,
@@ -137,6 +140,13 @@ def compare(runs):
     if names not in ({"A1", "A2"}, {"A1", "A2", "B1", "B2"}):
         return {"status": "incomplete", "completed": sorted(names)}
     all_runs = list(runs.values())
+    required_settings = {"MapHdrMode": str, "RenderTrace": bool, "ParticleAnalysisBuild": bool, "CpuStageSchema": int}
+    for name, run in runs.items():
+        settings = run["settings"]
+        for key, value_type in required_settings.items():
+            value = settings.get(key)
+            if type(value) is not value_type or (key in {"MapHdrMode", "CpuStageSchema"} and not value):
+                return {"status": "measurement_settings_missing", "run": name, "setting": key}
     if any(run["settings"] != all_runs[0]["settings"] for run in all_runs[1:]):
         return {"status": "settings_mismatch"}
     for key in all_runs[0]["workload"]:
@@ -186,7 +196,9 @@ def compare(runs):
     measured_families = set.intersection(*(set(run["family_simulation_self_ms"]) for run in all_runs))
     for family in sorted(measured_families):
         add_comparison(f"family_self_ms/{family}", lambda run: run["family_simulation_self_ms"][family])
-    return {"status": "compared" if b else "baseline_repeat", "waits_complete": waits_complete, "metrics": rows}
+    return {"status": "compared" if b else "baseline_repeat",
+            "diagnostic_only": all_runs[0]["settings"]["ParticleAnalysisBuild"],
+            "waits_complete": waits_complete, "metrics": rows}
 
 
 def main(root):

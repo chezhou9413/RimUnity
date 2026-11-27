@@ -18,6 +18,7 @@ internal static class RunLab
     private static Request request = null!;
     private static Type? labType;
     private static Dictionary<string, string>? runtimeHashes;
+    private static string? mapHdrMode;
     private static object? lab, sampler;
     private static Func<object, int> sampleCount = null!;
     private static Func<object, bool> sampling = null!;
@@ -59,7 +60,10 @@ internal static class RunLab
             if (!opened)
             {
                 var runtime = AppDomain.CurrentDomain.GetAssemblies().Single(a => a.GetName().Name == "RimUnity");
-                if (!(bool)runtime.GetType("RimUnity.RimUnityMod", true)!.GetProperty("IsRuntimeReady")!.GetValue(null)!) return;
+                var modType = runtime.GetType("RimUnity.RimUnityMod", true)!;
+                if (!(bool)modType.GetProperty("IsRuntimeReady")!.GetValue(null)!) return;
+                var bloomSettings = modType.GetProperty("Bloom")?.GetValue(null);
+                mapHdrMode = bloomSettings?.GetType().GetField("mapHdrMode")?.GetValue(bloomSettings)?.ToString();
                 runtimeHashes = CaptureRuntimeHashes();
                 labType = runtime.GetType("RimUnity.Diagnostics.PerformanceLab", true)!;
                 Invoke(labType, null, "Open");
@@ -156,7 +160,11 @@ internal static class RunLab
         }
         catch (Exception exception) { error ??= exception; }
         string path = Path.Combine(GenFilePaths.SaveDataFolderPath, ResultFile);
-        File.WriteAllText(path + ".tmp", JsonSerializer.Serialize(new { Passed = error == null, Report = report, RuntimeHashes = runtimeHashes, Error = error?.ToString() }));
+        File.WriteAllText(path + ".tmp", JsonSerializer.Serialize(new
+        {
+            Passed = error == null, Report = report, RuntimeHashes = runtimeHashes,
+            MapHdrMode = mapHdrMode, RenderTrace = renderTrace, Error = error?.ToString()
+        }));
         File.Move(path + ".tmp", path, true);
         if (error != null) Log.Error("[RimUnity Performance Loop] " + error);
         else Log.Message("[RimUnity Performance Loop] Exported " + report);

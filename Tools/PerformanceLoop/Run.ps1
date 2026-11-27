@@ -10,7 +10,8 @@ param(
     [bool]$Bloom = $true,
     [switch]$RenderTrace,
     [switch]$Inspect,
-    [string]$Output
+    [string]$Output,
+    [string]$RimUnitySettingsFile
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
@@ -27,6 +28,7 @@ if ([bool]$Baseline -ne [bool]($Candidate -or $BuildCandidate)) {
     throw 'A/B requires Baseline and either Candidate or BuildCandidate.'
 }
 if ($Inspect -and $Baseline) { throw 'Inspect accepts the profile runtime. Omit Inspect for A/B.' }
+if ($RimUnitySettingsFile -and !$Baseline) { throw 'RimUnitySettingsFile applies only to staged A/B runs.' }
 if (!$Output) { $Output = Join-Path $repo ('artifacts/PerformanceLoop/' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N').Substring(0,8)) }
 $outputRoot = [IO.Path]::GetFullPath($Output)
 if (Test-Path -LiteralPath $outputRoot) { throw "Output already exists: $outputRoot" }
@@ -37,6 +39,19 @@ Get-ChildItem -LiteralPath (Join-Path $profileRoot 'Config') -File -Filter '*.xm
     Copy-Item -Destination $configSnapshot
 if (!(Test-Path -LiteralPath (Join-Path $configSnapshot 'ModsConfig.xml') -PathType Leaf)) {
     throw 'ModsConfig.xml is missing from the source profile.'
+}
+$runtimeSettings = $null
+if ($Baseline) {
+    $settingsFiles = @(Get-ChildItem -LiteralPath $configSnapshot -File -Filter 'Mod_*_RimUnityMod.xml')
+    if ($RimUnitySettingsFile) {
+        $runtimeSettings = $settingsFiles | Where-Object Name -EQ $RimUnitySettingsFile
+        if (!$runtimeSettings) { throw "RimUnity settings file is not in the frozen profile: $RimUnitySettingsFile" }
+    } elseif ($settingsFiles.Count -eq 1) {
+        $runtimeSettings = $settingsFiles[0]
+    } elseif ($settingsFiles.Count -gt 1) {
+        throw "Multiple RimUnity settings files. Select one with -RimUnitySettingsFile: $($settingsFiles.Name -join ', ')"
+    }
+    if ($runtimeSettings) { Write-Output "A/B RimUnity settings: $($runtimeSettings.Name)" }
 }
 $nuget = Join-Path $outputRoot 'NuGet.Config'
 '<configuration><packageSources><clear /></packageSources></configuration>' | Set-Content -LiteralPath $nuget -Encoding utf8
@@ -74,7 +89,7 @@ function Stage-Runtime([string]$source, [string]$name) {
     $target = New-TestMod $name
     $null = New-Item -ItemType Directory -Path (Join-Path $target 'About')
     $metadata = [xml](Get-Content -LiteralPath $about -Raw)
-    $id = "chezhou.rimunity.performance.$tag.$name".ToLowerInvariant()
+    $id = "chezhou.rimunity.perf.$tag.$name".ToLowerInvariant()
     $metadata.ModMetaData.packageId = $id
     $metadata.Save((Join-Path $target 'About/About.xml'))
     Copy-Item -LiteralPath (Join-Path $source 'LoadFolders.xml'),(Join-Path $source '1.7') -Destination $target -Recurse
@@ -82,7 +97,8 @@ function Stage-Runtime([string]$source, [string]$name) {
     foreach ($assemblyName in $runtimeAssemblyNames) {
         $hashes[$assemblyName] = (Get-FileHash -LiteralPath (Join-Path $target "1.7/Assemblies/$assemblyName.dll")).Hash
     }
-    [pscustomobject]@{ Id=$id; Hashes=$hashes }
+    # Verse.Mod.GetSettings keys on the mod folder name. This generated name is already filename-safe.
+    [pscustomobject]@{ Id=$id; Hashes=$hashes; SettingsFile="Mod_$([IO.Path]::GetFileName($target))_RimUnityMod.xml" }
 }
 
 try {
@@ -109,6 +125,9 @@ try {
         $mods = [xml](Get-Content -LiteralPath $modConfig -Raw)
         $active = $mods.SelectSingleNode('/ModsConfigData/activeMods')
         if ($runs[$run]) {
+            if ($runtimeSettings) {
+                Copy-Item -LiteralPath $runtimeSettings.FullName -Destination (Join-Path $config $runs[$run].SettingsFile)
+            }
             foreach ($item in @($active.SelectNodes('li'))) {
                 if ($item.InnerText -in 'chezhou.rimunity','chezhou.rimunity_steam') { $null = $active.RemoveChild($item) }
             }
