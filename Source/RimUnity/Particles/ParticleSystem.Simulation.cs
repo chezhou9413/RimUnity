@@ -4,6 +4,21 @@ namespace RimUnity;
 //模块求值仅使用当前实例状态和粒子种子。
 public sealed partial class ParticleSystem
 {
+    private static void IntegrateGravityOnly(ref Particle p, float dt, Vector3 gravity)
+    {
+#if RIMUNITY_PARTICLE_ANALYSIS
+        using var particleDetailScope = Diagnostics.LabParticleDetail.Measure(Diagnostics.ParticleDetailStage.Integrate);
+        Diagnostics.LabParticleDetail.Work(Diagnostics.ParticleDetailWork.Integrations, 1);
+#endif
+        // Keep the same zero-vector additions and subtraction as Integrate.
+        // Signed zeros and nonfinite input retain their existing behavior.
+        p.velocity += (gravity + Vector3.zero) * dt;
+        Vector3 velocity = p.velocity + Vector3.zero;
+        p.moduleVelocity = velocity - p.velocity;
+        p.position += velocity * dt;
+        p.rotation3D += p.angularVelocity3D * dt;
+    }
+
     private void Integrate(ref Particle p, float dt, Vector3? systemGravity)
     {
 #if RIMUNITY_PARTICLE_ANALYSIS

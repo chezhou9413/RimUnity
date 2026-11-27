@@ -89,8 +89,17 @@ internal static class SimulationDispatchChecks
                 system.emission.enabled = false;
                 system.Simulate(0, false, true, false);
                 system.Emit(12);
+                var particles = new ParticleSystem.Particle[12];
+                if (system.GetParticles(particles) != particles.Length) throw new Exception("Gravity fixture did not emit");
+                particles[0].velocity = new Vector3(-0f, 0f, -0f);
+                particles[1].velocity = new Vector3(float.PositiveInfinity, 0f, -0f);
+                system.SetParticles(particles, particles.Length);
                 for (int frame = 0; frame < 24; frame++)
                 {
+                    // Toggle one module at a time on constant-gravity checkpoints.
+                    system.externalForces.enabled = frame % 12 == 0;
+                    system.inheritVelocity.enabled = frame % 12 == 1;
+                    system.rotationBySpeed.enabled = frame % 12 == 4;
                     root.transform.rotation = Quaternion.Euler(12 + frame, frame * 9, 60 - frame);
                     custom.transform.rotation = Quaternion.Euler(frame * 7, 6 - frame, -30);
                     system.main.gravityModifier = (frame % 4) switch

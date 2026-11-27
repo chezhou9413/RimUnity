@@ -28,6 +28,7 @@ internal sealed class SpikeCaptureData
         internal Token Parent;
         internal long Id, Start, Bytes, Children;
         internal int Thread, Frame;
+        internal int? RenderFrame;
         internal string Stage, Detail;
         internal string Notes = "", Outcome = "ok";
         internal bool Ended;
@@ -41,13 +42,17 @@ internal sealed class SpikeCaptureData
     private bool closed;
     internal readonly long Origin = Stopwatch.GetTimestamp();
 
-    internal Token Begin(string stage, string detail, int frame, bool detached = false)
+    internal Token Begin(string stage, string detail, int frame, bool detached = false, int? renderFrame = null)
     {
         lock (gate)
         {
             if (closed) return null;
-            var token = new Token { Owner = this, Parent = !detached && top?.Owner == this ? top : null, Id = ++sequence,
-                Thread = Environment.CurrentManagedThreadId, Frame = frame, Stage = stage, Detail = detail };
+            Token parent = !detached && top?.Owner == this ? top : null;
+            // Render packets keep their own frame number as the main thread advances.
+            int? packetFrame = renderFrame ?? parent?.RenderFrame;
+            var token = new Token { Owner = this, Parent = parent, Id = ++sequence,
+                Thread = Environment.CurrentManagedThreadId, Frame = packetFrame ?? frame, RenderFrame = packetFrame,
+                Stage = stage, Detail = detail };
             if (!detached) top = token;
             inFlight++;
             // Metadata construction is outside the measured span; nested probe overhead remains visible in parents.

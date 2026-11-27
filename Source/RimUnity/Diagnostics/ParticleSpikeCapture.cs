@@ -26,7 +26,7 @@ internal static partial class ParticleSpikeCapture
     private static string before, after, reason, startedUtc, reportPath;
     private static readonly List<string> coverage = new();
     private static readonly object FrameGate = new();
-    private static SpikeCaptureData.Token mainFrameToken, renderFrameToken;
+    private static SpikeCaptureData.Token mainFrameToken;
 
     [DebugAction("RimUnity", "卡顿诊断 1 · 开始采集（60秒）", allowedGameStates = (AllowedGameStates)0)]
     private static void Start60() => Start(60);
@@ -84,8 +84,6 @@ internal static partial class ParticleSpikeCapture
             application.OnUpdate += Tick;
             application.PrePollEvents += MainFrameStart;
             application.FrameEnqueued += MainFrameEnd;
-            application.FrameRenderer.RenderThreadFrameStarting += RenderFrameStart;
-            application.FrameRenderer.RenderThreadFrameEnded += RenderFrameEnd;
             application.BeforeGraphicsShutdown += Shutdown;
             Runtime.NativeRuntime.ExceptionRaised += ScriptException;
             current.Mark("开始；探针安装已完成", observedFrame);
@@ -135,8 +133,6 @@ internal static partial class ParticleSpikeCapture
     private static void Shutdown(EngineApplication app) => Stop("图形设备关闭");
     private static void MainFrameStart(EngineApplication app) => BeginExternalFrame(ref mainFrameToken, "Host.MainFrame");
     private static void MainFrameEnd(EngineApplication app) => EndExternalFrame(ref mainFrameToken);
-    private static void RenderFrameStart() => BeginExternalFrame(ref renderFrameToken, "Host.RenderFrame");
-    private static void RenderFrameEnd(Waylith.Rendering.RenderFrame frame) => EndExternalFrame(ref renderFrameToken);
     private static void BeginExternalFrame(ref SpikeCaptureData.Token slot, string stage)
     {
         lock (FrameGate)
@@ -161,10 +157,8 @@ internal static partial class ParticleSpikeCapture
         {
             application.OnUpdate -= Tick; application.BeforeGraphicsShutdown -= Shutdown;
             application.PrePollEvents -= MainFrameStart; application.FrameEnqueued -= MainFrameEnd;
-            application.FrameRenderer.RenderThreadFrameStarting -= RenderFrameStart;
-            application.FrameRenderer.RenderThreadFrameEnded -= RenderFrameEnd;
         }
-        lock (FrameGate) { mainFrameToken = renderFrameToken = null; }
+        lock (FrameGate) { mainFrameToken = null; }
         Runtime.NativeRuntime.ExceptionRaised -= ScriptException;
         application = null;
     }

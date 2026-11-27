@@ -10,7 +10,7 @@
 - `-Baseline <A包目录> -Candidate <B包目录>` 使用两份独立版运行时包跑 `A1 → B1 → B2 → A2`。目录须包含 `About/About.xml`、`LoadFolders.xml`、`1.7/Assemblies`、`1.7/Defs`、`1.7/Shaders`。脚本核对实机加载的 RimUnity、Core 和 Spine 与暂存包的 SHA-256。
 - `-Seconds 60` 是每轮采样时长。`-CpuMode BridgeOnly` 可做低开销复测。`-Bloom:$false` 可用相同负载检查关闭 Bloom 的场景。
 - `-Baseline <A包目录> -BuildCandidate` 直接构建当前工作区的 Release 到本批次目录，打包后进入相同的 A/B 流程。每次改动可用相同基线重跑。
-- `-RenderTrace` 开启渲染线程诊断，额外导出取帧、呈现节奏等待、提交及呈现和队列完成通知。`other_ms` 包含指令录制和其余工作。最慢帧按相同单调时钟匹配与主线程积压等待重叠的渲染包，并记录最后一次队列完成通知到主线程恢复的时间。正式 A/B 默认关闭这组探针。
+- `-RenderTrace` 开启渲染线程诊断，额外导出取帧、呈现节奏等待、提交及呈现和队列完成通知。`acquire_before_window_ms` 记录调用窗口取图方法前的栅栏等待及宿主准备。 `window_acquire_ms` 记录窗口取图方法的完整耗时，路径可能是 Vulkan 取图及重试，也可能是直接复用已持有的图像。这两项只统计进入该方法的帧包。`other_ms` 包含指令录制和其余工作。最慢帧按相同单调时钟匹配与主线程积压等待重叠的渲染包，并记录最后一次队列完成通知到主线程恢复的时间。正式 A/B 默认关闭这组探针。
 
 批次开始时将源配置 XML 冻结到 `profile-config`。每轮从该快照复制配置，使用单独的 `-savedatafolder`，并由 `quicktest` 新建临时游戏。测试安装在本次专用的临时模组目录。脚本退出时清理这些目录。原始配置、存档和已安装模组继续使用原位置。
 

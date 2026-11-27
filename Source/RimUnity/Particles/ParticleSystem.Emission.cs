@@ -88,6 +88,9 @@ public sealed partial class ParticleSystem
         bool physics = collision.enabled || trigger.enabled;
         bool recordTrails = trails.enabled && trails.mode != ParticleSystemTrailMode.Ribbon;
         bool constantGravity = main.gravityModifier.mode == ParticleSystemCurveMode.Constant;
+        bool gravityOnly = constantGravity && !forceOverLifetime.enabled && !externalForces.enabled
+            && !inheritVelocity.enabled && !velocityOverLifetime.enabled && !limitVelocityOverLifetime.enabled
+            && !noise.enabled && !rotationOverLifetime.enabled && !rotationBySpeed.enabled;
         Vector3? systemGravity = null;
         for (int i = count - 1; i >= 0; i--)
         {
@@ -112,7 +115,10 @@ public sealed partial class ParticleSystem
             if (useSystemGravity && !systemGravity.HasValue)
                 systemGravity = ConvertSpace(new Vector3(0, -9.81f * main.gravityModifier.constant, 0),
                     ParticleSystemSimulationSpace.World, null);
-            Integrate(ref p, aliveDt, useSystemGravity ? systemGravity : null);
+            if (gravityOnly && useSystemGravity)
+                IntegrateGravityOnly(ref p, aliveDt, systemGravity.GetValueOrDefault());
+            else
+                Integrate(ref p, aliveDt, useSystemGravity ? systemGravity : null);
             if (physics) ApplyParticlePhysics(ref p, fromPosition, aliveDt, birthOffset);
             if (recordTrails) RecordTrail(p);
             if (subEmissionEvents.Count != 0) CaptureParentMotion(p, fromPosition, aliveDt);

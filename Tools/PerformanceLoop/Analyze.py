@@ -7,6 +7,7 @@ from collections import defaultdict
 from pathlib import Path
 
 RUNTIME_ASSEMBLIES = ("RimUnity", "RimUnity.Core", "RimUnity.Spine")
+WINDOW_ACQUIRE_METRICS = ("acquire_before_window_ms", "window_acquire_ms")
 
 
 def csv_rows(path):
@@ -42,6 +43,21 @@ def read_run(result):
     waits = {int(row["frame"]): row for row in csv_rows(prefix.with_suffix(".waits.csv"))}
     render_file = prefix.with_suffix(".render.csv")
     render = list(csv_rows(render_file)) if render_file.is_file() else []
+    for row in render:
+        if "swapchain_acquire_ms" in row:
+            # Older captures measured the same window method, including held images.
+            row["acquire_before_window_ms"] = row.pop("acquire_before_swapchain_ms")
+            row["window_acquire_ms"] = row.pop("swapchain_acquire_ms")
+    split_acquire = [row for row in render if int(row.get("window_acquires", 0)) > 0]
+    render_ms = {
+        key: stats([float(row[key]) for row in render])
+        for key in ("total_ms", "acquire_ms", "submit_present_ms", "pace_ms", "other_ms")
+    } if render else {}
+    if split_acquire:
+        render_ms.update({
+            key: stats([float(row[key]) for row in split_acquire])
+            for key in WINDOW_ACQUIRE_METRICS
+        })
     complete = [frame for frame in frames if len(windows[frame]) == 4]
     if not complete:
         raise ValueError(f"No complete frames: {prefix}")
@@ -98,8 +114,8 @@ def read_run(result):
                        for name in windows[complete[0]]},
         "waits_ms": wait_metrics,
         "render_trace_frames": len(render),
-        "render_ms": {key: stats([float(row[key]) for row in render])
-                      for key in ("total_ms", "acquire_ms", "submit_present_ms", "pace_ms", "other_ms")} if render else {},
+        "window_acquire_trace_frames": len(split_acquire),
+        "render_ms": render_ms,
         "over_33ms": sum(value > 33.333 for value in intervals),
         "workload": {key: statistics.mean(int(frames[frame][key]) for frame in complete)
                      for key in ("instances", "systems", "particles", "trail_points", "submitted_vertices", "submitted_indices")},
@@ -125,7 +141,9 @@ def render_overlap(wait, render):
             if start <= completion <= end:
                 last_completion = max(last_completion, completion)
             matches.append({"host_frame": int(packet["host_frame"]), "overlap_ms": overlap * ms_per_tick,
-                            **{key: float(value) for key, value in packet.items() if key.endswith("_ms")}})
+                            **{key: float(value) for key, value in packet.items() if key.endswith("_ms")
+                               and (key not in WINDOW_ACQUIRE_METRICS
+                                    or int(packet.get("window_acquires", 0)) > 0)}})
     return {
         "render_packet_overlap_ms": sum(row["overlap_ms"] for row in matches),
         "after_last_queue_completion_ms": (end - last_completion) * ms_per_tick if last_completion else None,

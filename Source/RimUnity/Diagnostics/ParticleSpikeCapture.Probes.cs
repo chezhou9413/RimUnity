@@ -13,6 +13,7 @@ namespace RimUnity.Diagnostics;
 internal static partial class ParticleSpikeCapture
 {
     private const string PatchId = "Chezhou.RimUnity.ParticleSpikeCapture";
+    private const string RenderFrameStage = "Host.RenderFrame";
     private static readonly Harmony ProbeHarmony = new(PatchId);
     private static readonly List<MethodBase> installed = new();
     private static readonly ConcurrentDictionary<MethodBase, Probe> probes = new();
@@ -80,7 +81,10 @@ internal static partial class ParticleSpikeCapture
         Native("Waylith.Rendering.TextureResidency", "MakeRoom", "GPU.ResidencyMakeRoom");
         Native("Waylith.Graphics.Meshes.MeshUploader", "UploadCore", "GPU.MeshUpload");
         Native("Waylith.Graphics.Meshes.MeshUploader", "UploadBatch", "GPU.MeshUploadBatch");
-        coverage.Add("EVENT Host.MainFrame: PrePollEvents -> FrameEnqueued; Host.RenderFrame: RenderThreadFrameStarting -> RenderThreadFrameEnded. Detached spans: overlap nested probes, not exclusive times.");
+        Native("Waylith.Rendering.RenderThread", "ConsumeFrame", RenderFrameStage,
+            filter: m => m.GetParameters().Select(p => p.ParameterType).SequenceEqual(new[] { typeof(Waylith.Rendering.RenderFrame) }),
+            prefix: nameof(RenderFramePrefix));
+        coverage.Add("EVENT Host.MainFrame: PrePollEvents -> FrameEnqueued. Detached spans: overlap nested probes, not exclusive times.");
         coverage.Add("NOT PATCHED: FrameRenderer.CaptureFrame/RecordFrame, CompositePass.Record, GpuTextureService.CreateTexture2D: current Harmony cannot preserve required readonly-reference call signatures. Frame events plus texture residency/upload/allocation provide enclosing timings.");
         coverage.Add("DIRECT Asset.OpenJson / Asset.DeserializeJson / Bloom.Prepare / HDR.Record: source scopes, including generic JSON loading without Harmony generic detours.");
     }
@@ -109,10 +113,11 @@ internal static partial class ParticleSpikeCapture
     private static string TextureNotes(object instance, object[] args) => instance is Waylith.Rendering.Texture2D texture
         ? "size=" + texture.width + "x" + texture.height + "; GPU_before=" + (texture.GpuResource != null) + "; CPU_before=" + texture.CpuData.HasData : "";
     private static void Native(string type, string method, string stage, Func<object, object[], string> detail = null,
-        Func<object, object[], string> notes = null, Func<MethodInfo, bool> filter = null, string postfix = null)
-        => Add(AccessTools.TypeByName(type), method, stage, detail, notes, filter, postfix, type);
+        Func<object, object[], string> notes = null, Func<MethodInfo, bool> filter = null, string postfix = null, string prefix = null)
+        => Add(AccessTools.TypeByName(type), method, stage, detail, notes, filter, postfix, type, prefix);
     private static void Add(Type type, string method, string stage, Func<object, object[], string> detail = null,
-        Func<object, object[], string> notes = null, Func<MethodInfo, bool> filter = null, string postfix = null, string expectedType = null)
+        Func<object, object[], string> notes = null, Func<MethodInfo, bool> filter = null, string postfix = null,
+        string expectedType = null, string prefix = null)
     {
         if (type == null) { coverage.Add("MISSING TYPE " + expectedType + " :: " + stage); return; }
         var methods = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly)
@@ -126,7 +131,8 @@ internal static partial class ParticleSpikeCapture
             {
                 probes.TryAdd(target, new Probe(stage, detail, notes));
                 bool opaqueArgs = target.GetParameters().Any(p => (p.ParameterType.IsByRef ? p.ParameterType.GetElementType() : p.ParameterType).IsByRefLike || p.ParameterType.IsPointer);
-                ProbeHarmony.Patch(target, prefix: new HarmonyMethod(typeof(ParticleSpikeCapture), opaqueArgs ? nameof(ProbePrefixLite) : nameof(ProbePrefix)),
+                ProbeHarmony.Patch(target, prefix: new HarmonyMethod(typeof(ParticleSpikeCapture),
+                        prefix ?? (opaqueArgs ? nameof(ProbePrefixLite) : nameof(ProbePrefix))),
                     postfix: postfix == null ? null : new HarmonyMethod(typeof(ParticleSpikeCapture), postfix),
                     finalizer: new HarmonyMethod(typeof(ParticleSpikeCapture), nameof(ProbeFinalizer)));
                 installed.Add(target); coverage.Add("OK " + stage + " :: " + label + (opaqueArgs ? " [timing only: opaque arguments]" : ""));
@@ -143,6 +149,18 @@ internal static partial class ParticleSpikeCapture
         foreach (var method in installed.ToArray())
             try { ProbeHarmony.Unpatch(method, HarmonyPatchType.All, PatchId); installed.Remove(method); }
             catch (Exception e) { coverage.Add("UNPATCH FAILED " + method + " :: " + e.GetType().Name); }
+    }
+    private static void RenderFramePrefix(Waylith.Rendering.RenderFrame __0, out SpikeCaptureData.Token __state)
+    {
+        __state = null;
+        var data = current;
+        if (data == null) return;
+        try
+        {
+            int frame = __0.Timing.FrameNumber;
+            __state = data.Begin(RenderFrameStage, "", frame, renderFrame: frame);
+        }
+        catch { data.ProbeError(); }
     }
     private static void ProbePrefix(object __instance, object[] __args, MethodBase __originalMethod, out SpikeCaptureData.Token __state)
     {

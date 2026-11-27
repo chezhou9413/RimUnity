@@ -123,11 +123,39 @@ if (args.Length >= 3)
             Check(events.Any(e => (string)e.GetType().GetProperty("Notes").GetValue(e) == "cache=hit"), "Real cache hit metadata must be recorded.");
             Check(events.Any(e => ((string)e.GetType().GetProperty("Outcome").GetValue(e)).StartsWith("exception:")), "Real thrown exception must finalize its span.");
             Check((long)snapshot.GetType().GetProperty("ProbeErrors").GetValue(snapshot) == 0, "Real probe metadata must not fail.");
+
+            var prefix = capture.GetMethod("RenderFramePrefix", flags);
+            Type packetType = prefix.GetParameters()[0].ParameterType;
+            var timing = packetType.GetProperty("Timing");
+            object packet = Activator.CreateInstance(packetType, nonPublic: true);
+            timing.SetValue(packet, Activator.CreateInstance(timing.PropertyType, 40, 0f, 0d, false));
+            capture.GetField("observedFrame", flags).SetValue(null, 42);
+            object[] prefixArgs = { packet, null };
+            prefix.Invoke(null, prefixArgs);
+            try
+            {
+                get.Invoke(catalog, new object[] { "cached" });
+            }
+            finally
+            {
+                capture.GetMethod("ProbeFinalizer", flags).Invoke(null, new[] { null, prefixArgs[1] });
+            }
+            get.Invoke(catalog, new object[] { "cached" });
+            snapshot = sessionType.GetMethod("Read", instanceFlags).Invoke(session, null);
+            events = ((Array)snapshot.GetType().GetProperty("Events").GetValue(snapshot)).Cast<object>().ToArray();
+            var renderRoot = events[^3];
+            var renderChild = events[^2];
+            Type eventType = renderRoot.GetType();
+            var frameNumber = eventType.GetProperty("Frame");
+            Check((int)frameNumber.GetValue(renderRoot) == 40 && (int)frameNumber.GetValue(renderChild) == 40
+                && (long)eventType.GetProperty("Parent").GetValue(renderChild) == (long)eventType.GetProperty("Id").GetValue(renderRoot),
+                "Queued render packets and nested probes must keep the packet number while the main thread advances.");
+            Check((int)frameNumber.GetValue(events[^1]) == 42, "A completed render scope must restore the frame fallback.");
         }
         finally { capture.GetField("current", flags).SetValue(null, null); sessionType.GetMethod("Close", instanceFlags).Invoke(session, null); }
-        Console.WriteLine("PASS: real resource cache hit, exception propagation, metadata and finalization.");
+        Console.WriteLine("PASS: real resource cache hit, exception propagation, frame packet attribution and finalization.");
 
-        capture.GetMethod("Add", flags).Invoke(null, new object[] { typeof(ProbeFixture), "Compile", "Test.OutCache", null, null, null, "CompilerCacheResult", null });
+        capture.GetMethod("Add", flags).Invoke(null, new object[] { typeof(ProbeFixture), "Compile", "Test.OutCache", null, null, null, "CompilerCacheResult", null, null });
         var outSession = Activator.CreateInstance(sessionType, true);
         capture.GetField("current", flags).SetValue(null, outSession);
         object outSnapshot;
